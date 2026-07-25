@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MIN_VIEW_SPAN,
   normalizeViewRange,
+  displayLimitForRange,
   RANGE_LIMIT,
   zoomViewRange
 } from './viewRange';
@@ -19,6 +20,13 @@ describe('normalizeViewRange', () => {
     const result = normalizeViewRange({ xMin: 1, xMax: 1, yMin: 2, yMax: 2 });
     expect(result.xMax).toBeGreaterThan(result.xMin);
     expect(result.yMax).toBeGreaterThan(result.yMin);
+  });
+});
+
+describe('displayLimitForRange', () => {
+  it('preserves the guarded default for ordinary views and expands for finite display-only ranges', () => {
+    expect(displayLimitForRange({ xMin: -2, xMax: 2, yMin: -1, yMax: 1 })).toBe(RANGE_LIMIT);
+    expect(displayLimitForRange({ xMin: -14, xMax: 18, yMin: -2, yMax: 12 })).toBe(18);
   });
 });
 

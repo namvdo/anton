@@ -12,6 +12,11 @@ export const DEFAULT_VIEW_RANGE = {
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+export const displayLimitForRange = (range, baseLimit = RANGE_LIMIT) => Math.max(
+  baseLimit,
+  ...Object.values(range || {}).filter(Number.isFinite).map(value => Math.abs(value))
+);
+
 export const normalizeViewRange = (range, limit = RANGE_LIMIT) => {
   let xMin = Number.isFinite(range.xMin) ? range.xMin : DEFAULT_VIEW_RANGE.xMin;
   let xMax = Number.isFinite(range.xMax) ? range.xMax : DEFAULT_VIEW_RANGE.xMax;
