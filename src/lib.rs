@@ -37,6 +37,3 @@ pub use continuous_ds::*;
 
 mod geometric_offsets;
 pub use geometric_offsets::*;
-
-mod geometric_epsilon_offset;
-pub use geometric_epsilon_offset::*;

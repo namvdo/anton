@@ -328,7 +328,7 @@ fn interpolate_extended_point(
     let right_theta = right.ny.atan2(right.nx);
     let theta = left_theta + fraction * circular_difference(right_theta, left_theta);
     ExtendedBoundaryPoint {
-        x: left.x + fraction * (right.x - left.x),  
+        x: left.x + fraction * (right.x - left.x),
         y: left.y + fraction * (right.y - left.y),
         nx: theta.cos(),
         ny: theta.sin(),
@@ -439,7 +439,7 @@ fn append_inverse_segment(
 
 fn invert_offset_component(
     source: &[ExtendedBoundaryPoint],
-    settings: &InverseSubdivisionSettings,   
+    settings: &InverseSubdivisionSettings,
 ) -> Result<
     (
         Vec<ExtendedBoundaryPoint>,
@@ -508,7 +508,7 @@ pub fn compute_inverse_geometric_offset_contours(
     if levels.is_empty() {
         return Err("Compute geometric offset contours before their inverse images".to_string());
     }
-    if iterations == 0 || iterations > 8 {  
+    if iterations == 0 || iterations > 8 {
         return Err("Inverse offset iterations must lie between 1 and 8".to_string());
     }
     if !position_tolerance.is_finite() || position_tolerance <= 0.0 {
