@@ -1,5 +1,8 @@
 use nalgebra::{Matrix2, Vector2};
 
+use crate::henon_extended_map::{
+    forward_henon_extended_point, inverse_henon_extended_point, HenonExtendedPoint,
+};
 use crate::parameters::ParameterSet;
 use crate::user_defined::ParsedEquations;
 
@@ -189,6 +192,52 @@ impl DynamicalSystem for HenonSystem {
 
     fn get_epsilon(&self) -> f64 {
         self.epsilon
+    }
+
+    fn extended_map(
+        &self,
+        state: ExtendedState,
+        n_periods: usize,
+    ) -> Result<ExtendedState, String> {
+        let mut current = HenonExtendedPoint {
+            x: state.pos.x,
+            y: state.pos.y,
+            nx: state.normal.x,
+            ny: state.normal.y,
+        };
+        for iteration in 0..n_periods {
+            current = forward_henon_extended_point(current, self.a, self.b, self.epsilon)?;
+            if current.x.abs() > 1000.0 || current.y.abs() > 1000.0 {
+                return Err(format!("Position diverged at iteration: {iteration}"));
+            }
+        }
+        Ok(ExtendedState {
+            pos: Vector2::new(current.x, current.y),
+            normal: Vector2::new(current.nx, current.ny),
+        })
+    }
+
+    fn extended_map_inverse(
+        &self,
+        state: ExtendedState,
+        n_periods: usize,
+    ) -> Result<ExtendedState, String> {
+        let mut current = HenonExtendedPoint {
+            x: state.pos.x,
+            y: state.pos.y,
+            nx: state.normal.x,
+            ny: state.normal.y,
+        };
+        for iteration in 0..n_periods {
+            current = inverse_henon_extended_point(current, self.a, self.b, self.epsilon)?;
+            if current.x.abs() > 1000.0 || current.y.abs() > 1000.0 {
+                return Err(format!("Position diverged at iteration: {iteration}"));
+            }
+        }
+        Ok(ExtendedState {
+            pos: Vector2::new(current.x, current.y),
+            normal: Vector2::new(current.nx, current.ny),
+        })
     }
 }
 

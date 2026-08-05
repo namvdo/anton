@@ -48,22 +48,6 @@ export const ManifoldsPanel = ({ manifoldState, setManifoldState, ORBIT_COLORS }
           })()}
         </div>
       )}
-
-      {/* Fixed point legend */}
-      <div style={{ marginTop: '8px', fontSize: '10px', color: 'var(--text-2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: ORBIT_COLORS.attractor, display: 'inline-block' }} />
-          <span>Attractor (|λ₁|,|λ₂| &lt; 1)</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: ORBIT_COLORS.saddlePoint, display: 'inline-block' }} />
-          <span>Saddle (|λ₁| &lt; 1 &lt; |λ₂|)</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: ORBIT_COLORS.repeller, display: 'inline-block' }} />
-          <span>Repeller (|λ₁|,|λ₂| &gt; 1)</span>
-        </div>
-      </div>
     </Collapsible>
   );
 };

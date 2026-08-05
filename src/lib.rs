@@ -30,11 +30,13 @@ mod user_defined;
 mod dynamical_systems;
 pub use dynamical_systems::*;
 
+mod henon_extended_map;
+
 mod continuous_ds;
 pub use continuous_ds::*;
 
 mod geometric_offsets;
 pub use geometric_offsets::*;
 
-mod basin_approximator;
-pub use basin_approximator::*;
+mod geometric_epsilon_offset;
+pub use geometric_epsilon_offset::*;

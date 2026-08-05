@@ -29,6 +29,7 @@ export const ParametersPanel = ({
               key={p.name}
               className="preset"
               onClick={() => applyPreset(p.vals)}
+              disabled={disabled}
             >
               {p.name}
             </button>

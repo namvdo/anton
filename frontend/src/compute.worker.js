@@ -467,20 +467,29 @@ const computeGeometricOffsets = async (payload) => {
   if (typeof wasm.computeGeometricOffsetContours !== 'function') {
     throw new Error('Geometric offset export is unavailable; rebuild WebAssembly');
   }
-  const { boundary, params, settings, viewRange } = payload;
+  const { boundary, params } = payload;
   return wasm.computeGeometricOffsetContours(
-    boundary, params.epsilon,
-    settings.numLevels, settings.resolution,
-    viewRange.xMin, viewRange.xMax, viewRange.yMin, viewRange.yMax
+    boundary,
+    params.epsilon
   );
 };
 
-const computeExtendedBasin = async (payload) => {
+const computeInverseGeometricOffsets = async (payload) => {
   const wasm = await ensureWasm();
-  if (typeof wasm.computeHenonExtendedBasin !== 'function') {
-    throw new Error('Extended Hénon basin export is unavailable; rebuild WebAssembly');
+  if (typeof wasm.computeInverseGeometricOffsetContours !== 'function') {
+    throw new Error('Inverse geometric offset export is unavailable; rebuild WebAssembly');
   }
-  return wasm.computeHenonExtendedBasin(payload.targetPoints, payload.config);
+  const { levels, params, settings } = payload;
+  return wasm.computeInverseGeometricOffsetContours(
+    levels,
+    params.a,
+    params.b,
+    params.epsilon,
+    settings.iterations,
+    settings.positionTolerance,
+    settings.normalTolerance,
+    settings.maxSubdivisionDepth
+  );
 };
 
 self.onmessage = async (event) => {
@@ -497,8 +506,8 @@ self.onmessage = async (event) => {
       result = await computeUlam(payload);
     } else if (kind === 'computeGeometricOffsets') {
       result = await computeGeometricOffsets(payload);
-    } else if (kind === 'computeExtendedBasin') {
-      result = await computeExtendedBasin(payload);
+    } else if (kind === 'computeInverseGeometricOffsets') {
+      result = await computeInverseGeometricOffsets(payload);
     } else if (kind === 'getUlamTransitions') {
       result = await getUlamTransitions(payload);
     } else {

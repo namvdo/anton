@@ -13,7 +13,6 @@ const baseProps = {
     showOrbits: false
   },
   geometricOffsetState: { showContours: false },
-  basinState: { showBasin: false },
   ulamState: { showUlamOverlay: false },
   displayRange: { xMin: -2, xMax: 2, yMin: -1.5, yMax: 1.5 },
   handleZoomIn: vi.fn(),
@@ -54,13 +53,29 @@ describe('Viewport', () => {
     expect(screen.queryByTitle('Place start point')).toBeNull();
   });
 
-  it('separates verified finite capture from unresolved outer coverage', () => {
-    render(<Viewport {...baseProps} basinState={{
-      showBasin: true,
-      result: { inner_cell_count: 12, unresolved_cell_count: 7 }
+  it('labels dynamically inverted offset curves separately from geometric offsets', () => {
+    render(<Viewport {...baseProps} geometricOffsetState={{
+      showContours: true,
+      result: { levels: [] },
+      showInverseContours: true,
+      inverseDisplayMode: 'final',
+      inverseResult: { curves: [{ inverse_iteration: 2 }] }
     }} />);
-    expect(screen.getByText('Verified finite capture')).toBeInTheDocument();
-    expect(screen.getByText('Possible / unresolved')).toBeInTheDocument();
-    expect(screen.queryByText('Basin approximation')).toBeNull();
+    expect(screen.getByText('Geometric ε-offsets')).toBeInTheDocument();
+    expect(screen.getByText('Inverse offset · step 2')).toBeInTheDocument();
+  });
+
+  it('shows distinct legend colors when every inverse step is displayed', () => {
+    const { container } = render(<Viewport {...baseProps} geometricOffsetState={{
+      showContours: false,
+      showInverseContours: true,
+      inverseDisplayMode: 'all',
+      inverseResult: { curves: [{ inverse_iteration: 1 }, { inverse_iteration: 2 }] }
+    }} />);
+    expect(screen.getByText('Inverse offset · step 1')).toBeInTheDocument();
+    expect(screen.getByText('Inverse offset · step 2')).toBeInTheDocument();
+    const swatches = container.querySelectorAll('.vp-legend .lg-line');
+    expect(swatches[0]).toHaveStyle({ background: '#ffd45a' });
+    expect(swatches[1]).toHaveStyle({ background: '#f5b942' });
   });
 });

@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { Shell } from './components/layout/Shell';
 import { Sidebar } from './components/layout/Sidebar';
 import { Viewport } from './components/layout/Viewport';
@@ -9,6 +12,7 @@ import {
     RANGE_LIMIT,
     ZOOM_IN_FACTOR,
     ZOOM_OUT_FACTOR,
+    displayLimitForRange,
     normalizeViewRange,
     zoomViewRange
 } from './utils/viewRange';
@@ -22,10 +26,22 @@ import {
     shouldRecordTrajectoryHistoryPoint
 } from './utils/trajectoryState';
 import { buildGeometricOffsetSeed } from './utils/geometricOffsetSeed';
-import { buildBasinTarget } from './utils/basinTarget';
-import { basinLayerOpacity, BASIN_COMPUTE_DEFAULTS, BASIN_LAYER_STYLES } from './utils/basinDisplay';
-import { describeBasinComputationError } from './utils/basinError';
-import { createCancelableWorkerTask, isAbortError } from './utils/cancelableWorkerTask';
+import {
+    buildSingleGeometricOffsetRequest,
+    geometricOffsetSampleSpacing
+} from './utils/geometricOffsetCompute';
+import {
+    fitInverseOffsetCurveRange,
+    inverseOffsetStepColor,
+    visibleInverseOffsetCurves
+} from './utils/inverseOffsetDisplay';
+import {
+    applyParameterAnimationValue,
+    beginPeriodicRefresh,
+    capturePeriodicSearchSettings,
+    isParameterAnimationStepSettled,
+    nextParameterAnimationStep
+} from './utils/parameterAnimationSync';
 
 const GRID_STYLE = {
     gridDivisions: 16,
@@ -274,7 +290,10 @@ const SetValuedViz = () => {
         orbits: [],
         isReady: false,
         showOrbits: false,
-        computeMethod: null
+        computeMethod: null,
+        resultRevision: 0,
+        renderedRevision: 0,
+        renderedPointCount: 0
     });
     const [periodicSearchSettings, setPeriodicSearchSettings] = useState(DEFAULT_PERIODIC_SEARCH_SETTINGS);
     const [draftPeriodicSearchSettings, setDraftPeriodicSearchSettings] = useState(DEFAULT_PERIODIC_SEARCH_SETTINGS);
@@ -287,6 +306,7 @@ const SetValuedViz = () => {
         intersections: [],
         isComputing: false,
         isReady: false,
+        sourcePeriodicRevision: 0,
         showOrbits: true,
         showUnstableManifold: false,
         showStableManifold: false,
@@ -301,21 +321,17 @@ const SetValuedViz = () => {
     });
 
     const [geometricOffsetState, setGeometricOffsetState] = useState({
-        numLevels: 5,
-        resolution: 256,
+        contourEpsilon: 0.1,
         showContours: true,
+        inverseIterations: 1,
+        inverseDisplayMode: 'final',
+        showInverseContours: true,
         isComputing: false,
+        isComputingInverse: false,
         result: null,
-        error: null
-    });
-
-    const [basinState, setBasinState] = useState({
-        showBasin: true,
-        isComputing: false,
-        result: null,
+        inverseResult: null,
         error: null,
-        notice: null,
-        settings: { ...BASIN_COMPUTE_DEFAULTS }
+        inverseError: null
     });
 
     const geometricOffsetSeed = useMemo(
@@ -325,22 +341,6 @@ const SetValuedViz = () => {
             { a: params.a, b: params.b, epsilon: params.epsilon }
         ),
         [manifoldState.rawManifolds, manifoldState.manifolds, params.a, params.b, params.epsilon]
-    );
-
-    const basinTarget = useMemo(
-        () => buildBasinTarget(
-            manifoldState.rawManifolds?.length > 0 ? manifoldState.rawManifolds : manifoldState.manifolds,
-            basinState.settings.targetSamples,
-            { a: params.a, b: params.b, epsilon: params.epsilon }
-        ),
-        [
-            manifoldState.rawManifolds,
-            manifoldState.manifolds,
-            basinState.settings.targetSamples,
-            params.a,
-            params.b,
-            params.epsilon
-        ]
     );
 
     const [filters, setFilters] = useState({
@@ -439,13 +439,16 @@ const SetValuedViz = () => {
     // Parameter animation state for manifold mode
     const [animationState, setAnimationState] = useState({
         isAnimating: false,
+        isPreparing: false,
         parameter: 'a', // 'a', 'b', or 'epsilon'
         rangeValue: 0.1, // the range amount (e.g., 0.1 means go from current to current+0.1 or current-0.1)
         direction: 1, // +1 for positive direction, -1 for negative direction
         steps: 10, // number of steps to divide the range
         currentStep: 0, // current step in the animation
         baseValue: null, // the original value when animation started
-        targetValue: null // the target value at the end of animation
+        targetValue: null, // the target value at the end of animation
+        awaitingResult: false,
+        expectedPeriodicRevision: null
     });
 
     // Video recording state
@@ -460,12 +463,15 @@ const SetValuedViz = () => {
 
     const recordedFramesRef = useRef([]);
     const encoderWorkerRef = useRef(null);
+    const animationSearchSettingsRef = useRef(null);
+    const pendingAnimationStartRef = useRef(false);
 
     const computeWorkerRef = useRef(null);
     const computeWorkerRequestIdRef = useRef(0);
     const computeWorkerPendingRef = useRef(new Map());
-    const basinWorkerTaskRef = useRef(null);
-    const basinWorkerRequestIdRef = useRef(0);
+    const periodicComputationRevisionRef = useRef(0);
+    const geometricOffsetRequestIdRef = useRef(0);
+    const inverseOffsetRequestIdRef = useRef(0);
     const ulamDebounceRef = useRef(null);
     const ulamSupportRef = useRef(null);
     const ulamTransitionsRequestRef = useRef(0);
@@ -529,32 +535,6 @@ const SetValuedViz = () => {
         });
     }, [initComputeWorker]);
 
-    const runBasinComputeTask = useCallback((payload) => {
-        if (basinWorkerTaskRef.current) {
-            throw new Error('A basin computation is already running');
-        }
-        const worker = new Worker(
-            new URL('./compute.worker.js', import.meta.url),
-            { type: 'module' }
-        );
-        const task = createCancelableWorkerTask({
-            worker,
-            id: ++basinWorkerRequestIdRef.current,
-            kind: 'computeExtendedBasin',
-            payload
-        });
-        basinWorkerTaskRef.current = task;
-        return task.promise.finally(() => {
-            if (basinWorkerTaskRef.current === task) {
-                basinWorkerTaskRef.current = null;
-            }
-        });
-    }, []);
-
-    const cancelBasinComputation = useCallback(() => {
-        basinWorkerTaskRef.current?.cancel('Basin computation cancelled before convergence.');
-    }, []);
-
     const updatePeriodicSearchSettings = useCallback((patch) => {
         setDraftPeriodicSearchSettings(prev => normalizePeriodicSearchSettings({ ...prev, ...patch }, prev));
     }, []);
@@ -591,7 +571,7 @@ const SetValuedViz = () => {
     }, []);
 
     const transitionViewRange = useCallback((targetRange) => {
-        const target = normalizeViewRange(targetRange);
+        const target = normalizeViewRange(targetRange, displayLimitForRange(targetRange));
         const start = { ...viewportRangeRef.current };
         cancelViewRangeTransition();
         viewportRangeTargetRef.current = target;
@@ -710,6 +690,14 @@ const SetValuedViz = () => {
             const range = viewportRangeRef.current;
             applyViewRangeToCamera(range);
             renderer.setSize(window.innerWidth - 268, window.innerHeight);
+            scene.traverse(object => {
+                if (object.material?.isLineMaterial) {
+                    object.material.resolution.set(
+                        Math.max(1, window.innerWidth - 268),
+                        Math.max(1, window.innerHeight)
+                    );
+                }
+            });
         };
         window.addEventListener('resize', handleResize);
 
@@ -768,8 +756,6 @@ const SetValuedViz = () => {
                 computeWorkerRef.current.terminate();
                 computeWorkerRef.current = null;
             }
-            basinWorkerTaskRef.current?.cancel('Basin computation cancelled because the application closed.');
-            basinWorkerTaskRef.current = null;
         };
     }, []);
 
@@ -1204,12 +1190,21 @@ const SetValuedViz = () => {
         if (!wasmModule) return;
 
         let cancelled = false;
+        const resultRevision = ++periodicComputationRevisionRef.current;
+        const requestSearchSettings = animationSearchSettingsRef.current
+            || periodicSearchSettings;
         if (dynamicSystem === 'custom' || dynamicSystem === 'custom_ode') {
             ulamSupportRef.current = null;
-            setPeriodicState(prev => ({ ...prev, isReady: true, orbits: [], computeMethod: null }));
+            setPeriodicState(prev => ({
+                ...prev,
+                isReady: true,
+                orbits: [],
+                computeMethod: null,
+                resultRevision
+            }));
             return;
         }
-        setPeriodicState(prev => ({ ...prev, isReady: false, orbits: [], showOrbits: false, computeMethod: null }));
+        setPeriodicState(beginPeriodicRefresh);
 
         const initSystem = async () => {
             try {
@@ -1231,10 +1226,10 @@ const SetValuedViz = () => {
                         yMax: viewRange.yMax
                     },
                     periodicSearchSettings: {
-                        gridSize: periodicSearchSettings.gridSize,
-                        thetaGridSize: periodicSearchSettings.thetaGridSize,
-                        residualThreshold: periodicSearchSettings.residualThreshold,
-                        useContinuation: periodicSearchSettings.useContinuation
+                        gridSize: requestSearchSettings.gridSize,
+                        thetaGridSize: requestSearchSettings.thetaGridSize,
+                        residualThreshold: requestSearchSettings.residualThreshold,
+                        useContinuation: requestSearchSettings.useContinuation
                     }
                 });
                 if (cancelled) return;
@@ -1244,13 +1239,20 @@ const SetValuedViz = () => {
                     ...prev,
                     orbits: result?.orbits || [],
                     isReady: true,
-                    computeMethod: result?.usedContinuation ? 'continuation' : 'grid'
+                    computeMethod: result?.usedContinuation ? 'continuation' : 'grid',
+                    resultRevision
                 }));
             } catch (err) {
                 if (cancelled) return;
                 console.error('Failed to compute periodic orbits:', err);
                 ulamSupportRef.current = null;
-                setPeriodicState(prev => ({ ...prev, isReady: true, orbits: [], computeMethod: null }));
+                setPeriodicState(prev => ({
+                    ...prev,
+                    isReady: true,
+                    orbits: [],
+                    computeMethod: null,
+                    resultRevision
+                }));
             }
         };
 
@@ -1263,11 +1265,19 @@ const SetValuedViz = () => {
             clearTimeout(manifoldDebounceRef.current);
         }
         let cancelled = false;
+        const sourcePeriodicRevision = periodicState.resultRevision;
 
         setManifoldState(prev => ({ ...prev, isComputing: true, rawManifolds: [] }));
 
         manifoldDebounceRef.current = setTimeout(() => {
-            if (!wasmModule) return;
+            if (!wasmModule) {
+                setManifoldState(prev => ({
+                    ...prev,
+                    isComputing: false,
+                    sourcePeriodicRevision
+                }));
+                return;
+            }
             const support = dynamicSystem === 'henon' ? ulamSupportRef.current : null;
 
             const manifoldsEnabled = manifoldState.showUnstableManifold || manifoldState.showStableManifold;
@@ -1291,7 +1301,8 @@ const SetValuedViz = () => {
                     fixedPoints: fixedPoints,
                     intersections: [],
                     isComputing: false,
-                    isReady: true
+                    isReady: true,
+                    sourcePeriodicRevision
                 }));
                 return;
             }
@@ -1304,7 +1315,8 @@ const SetValuedViz = () => {
                     rawManifolds: [],
                     stableManifolds: [],
                     fixedPoints: [],
-                    intersections: []
+                    intersections: [],
+                    sourcePeriodicRevision
                 }));
                 return;
             }
@@ -1329,7 +1341,8 @@ const SetValuedViz = () => {
                     stableManifolds: [],
                     fixedPoints: [],
                     isComputing: false,
-                    isReady: true
+                    isReady: true,
+                    sourcePeriodicRevision
                 }));
                 return;
             }
@@ -1354,11 +1367,16 @@ const SetValuedViz = () => {
                         stableManifolds: [],
                         fixedPoints: [],
                         isComputing: false,
-                        isReady: true
+                        isReady: true,
+                        sourcePeriodicRevision
                     }));
                 } catch (err) {
                     console.error('Manifold computation error:', err);
-                    setManifoldState(prev => ({ ...prev, isComputing: false }));
+                    setManifoldState(prev => ({
+                        ...prev,
+                        isComputing: false,
+                        sourcePeriodicRevision
+                    }));
                 }
                 return;
             }
@@ -1392,12 +1410,17 @@ const SetValuedViz = () => {
                     fixedPoints: result?.fixedPoints || [],
                     intersections: result?.intersections || [],
                     isComputing: false,
-                    isReady: true
+                    isReady: true,
+                    sourcePeriodicRevision
                 }));
             }).catch((err) => {
                 if (cancelled) return;
                 console.error('Manifold computation error:', err);
-                setManifoldState(prev => ({ ...prev, isComputing: false }));
+                setManifoldState(prev => ({
+                    ...prev,
+                    isComputing: false,
+                    sourcePeriodicRevision
+                }));
             });
         }, 500);
 
@@ -1407,44 +1430,71 @@ const SetValuedViz = () => {
                 clearTimeout(manifoldDebounceRef.current);
             }
         };
-    }, [dynamicSystem, params.a, params.b, params.delta, params.h, params.epsilon, periodicState.orbits, wasmModule, manifoldState.showStableManifold, manifoldState.showUnstableManifold, manifoldState.intersectionThreshold, activeAppliedCustomEquations, appliedParamValidation, manifoldState.startPoint.x, manifoldState.startPoint.y, viewRange, computeRequestId, runComputeTask]);
+    }, [dynamicSystem, params.a, params.b, params.delta, params.h, params.epsilon, periodicState.orbits, periodicState.resultRevision, wasmModule, manifoldState.showStableManifold, manifoldState.showUnstableManifold, manifoldState.intersectionThreshold, activeAppliedCustomEquations, appliedParamValidation, manifoldState.startPoint.x, manifoldState.startPoint.y, viewRange, computeRequestId, runComputeTask]);
 
     useEffect(() => {
-        if (!animationState.isAnimating) {
+        if (!animationState.isAnimating || animationState.awaitingResult) {
             return;
         }
 
-        if (manifoldState.isComputing) {
+        if (!periodicState.isReady || manifoldState.isComputing) {
             return;
         }
 
-        const { parameter, rangeValue, direction, steps, currentStep, baseValue } = animationState;
-
-        if (currentStep >= steps) {
+        const nextStep = nextParameterAnimationStep(animationState);
+        if (!nextStep) {
+            animationSearchSettingsRef.current = null;
             setAnimationState(prev => ({
                 ...prev,
-                isAnimating: false
+                isAnimating: false,
+                isPreparing: false,
+                expectedPeriodicRevision: null
             }));
             return;
         }
 
-        const stepSize = rangeValue / steps;
-        const nextStep = currentStep + 1;
-        const nextValue = baseValue + (direction * stepSize * nextStep);
+        const expectedPeriodicRevision = periodicComputationRevisionRef.current + 1;
 
-        setParams(p => ({ ...p, [parameter]: parseFloat(nextValue.toFixed(4)) }));
         setAnimationState(prev => ({
             ...prev,
-            currentStep: nextStep
+            currentStep: nextStep.step,
+            awaitingResult: true,
+            expectedPeriodicRevision
         }));
+        setParams(previous => applyParameterAnimationValue(
+            previous,
+            animationState.parameter,
+            nextStep.value
+        ));
+        setDraftParams(previous => applyParameterAnimationValue(
+            previous,
+            animationState.parameter,
+            nextStep.value
+        ));
+    }, [animationState, manifoldState.isComputing, periodicState.isReady]);
 
-    }, [animationState.isAnimating, animationState.currentStep, manifoldState.isComputing]);
+    const beginAnimationFromAppliedState = useCallback(async () => {
+        if (
+            !periodicState.isReady
+            || manifoldState.isComputing
+            || periodicState.renderedRevision !== periodicState.resultRevision
+            || manifoldState.sourcePeriodicRevision !== periodicState.resultRevision
+        ) return;
 
-    const startAnimation = useCallback(async () => {
         const baseVal = params[animationState.parameter];
         const targetVal = baseVal + (animationState.direction * animationState.rangeValue);
+        animationSearchSettingsRef.current = capturePeriodicSearchSettings(
+            periodicSearchSettings
+        );
 
         if (recordingState.recordingEnabled && canvasRef.current) {
+            recordedFramesRef.current = [];
+            setRecordingState(prev => ({
+                ...prev,
+                isRecording: true,
+                frameCount: 0,
+                error: null
+            }));
             try {
                 const canvas = canvasRef.current;
                 const width = 1280;
@@ -1471,17 +1521,73 @@ const SetValuedViz = () => {
         setAnimationState(prev => ({
             ...prev,
             isAnimating: true,
+            isPreparing: false,
             baseValue: baseVal,
             targetValue: targetVal,
-            currentStep: 0
+            currentStep: 0,
+            awaitingResult: false,
+            expectedPeriodicRevision: null
         }));
-    }, [params, animationState.parameter, animationState.direction, animationState.rangeValue, recordingState.recordingEnabled, systemLabel, paramOverlayText]);
+    }, [params, animationState.parameter, animationState.direction, animationState.rangeValue, recordingState.recordingEnabled, systemLabel, paramOverlayText, periodicState.isReady, periodicState.resultRevision, periodicState.renderedRevision, periodicSearchSettings, manifoldState.isComputing, manifoldState.sourcePeriodicRevision]);
+
+    const startAnimation = useCallback(() => {
+        if (animationState.isPreparing) return;
+        if (hasPendingInputChanges) {
+            pendingAnimationStartRef.current = true;
+            setAnimationState(previous => ({
+                ...previous,
+                isPreparing: true
+            }));
+            const applied = applyInputsAndRecompute();
+            if (!applied) {
+                pendingAnimationStartRef.current = false;
+                setAnimationState(previous => ({
+                    ...previous,
+                    isPreparing: false
+                }));
+            }
+            return;
+        }
+        return beginAnimationFromAppliedState();
+    }, [
+        animationState.isPreparing,
+        applyInputsAndRecompute,
+        beginAnimationFromAppliedState,
+        hasPendingInputChanges
+    ]);
+
+    useEffect(() => {
+        if (!pendingAnimationStartRef.current) return;
+        if (hasPendingInputChanges) return;
+        if (
+            !periodicState.isReady
+            || manifoldState.isComputing
+            || periodicState.renderedRevision !== periodicState.resultRevision
+            || manifoldState.sourcePeriodicRevision !== periodicState.resultRevision
+        ) return;
+
+        pendingAnimationStartRef.current = false;
+        void beginAnimationFromAppliedState();
+    }, [
+        beginAnimationFromAppliedState,
+        hasPendingInputChanges,
+        manifoldState.isComputing,
+        manifoldState.sourcePeriodicRevision,
+        periodicState.isReady,
+        periodicState.renderedRevision,
+        periodicState.resultRevision
+    ]);
 
     const stopAnimation = useCallback(() => {
+        pendingAnimationStartRef.current = false;
+        animationSearchSettingsRef.current = null;
         setAnimationState(prev => ({
             ...prev,
             isAnimating: false,
-            currentStep: 0
+            isPreparing: false,
+            currentStep: 0,
+            awaitingResult: false,
+            expectedPeriodicRevision: null
         }));
     }, []);
 
@@ -1656,36 +1762,54 @@ const SetValuedViz = () => {
         worker.postMessage({ type: 'finish' });
     }, [initEncoderWorker, generateFilename]);
 
-    const wasComputingRef = useRef(false);
-
     useEffect(() => {
-        const wasComputing = wasComputingRef.current;
-        const isComputing = manifoldState.isComputing;
-        wasComputingRef.current = isComputing;
-
-        if (!recordingState.recordingEnabled || !animationState.isAnimating) {
+        if (!isParameterAnimationStepSettled({
+            animationState,
+            periodicState,
+            manifoldState
+        })) {
             return;
         }
 
-        if (wasComputing && !isComputing) {
-            console.log(`[Recording] Manifold finished, capturing frame for step ${animationState.currentStep}...`);
-
-            requestAnimationFrame(async () => {
-                try {
+        let cancelled = false;
+        const expectedRevision = animationState.expectedPeriodicRevision;
+        const frameRequest = requestAnimationFrame(async () => {
+            try {
+                if (recordingState.recordingEnabled) {
                     const frame = await captureFrame();
-                    if (frame) {
+                    if (frame && !cancelled) {
                         recordedFramesRef.current.push(frame);
                         setRecordingState(prev => ({ ...prev, frameCount: recordedFramesRef.current.length }));
-                        console.log(`[Recording] Frame ${recordedFramesRef.current.length} captured`);
-                    } else {
-                        console.log('[Recording] captureFrame returned null');
                     }
-                } catch (err) {
-                    console.error('[Recording] Frame capture error:', err);
                 }
-            });
-        }
-    }, [manifoldState.isComputing, animationState.isAnimating, recordingState.recordingEnabled, animationState.currentStep, captureFrame]);
+            } catch (err) {
+                console.error('[Recording] Frame capture error:', err);
+                if (!cancelled) {
+                    setRecordingState(prev => ({
+                        ...prev,
+                        error: err instanceof Error ? err.message : String(err)
+                    }));
+                }
+            } finally {
+                if (!cancelled) {
+                    setAnimationState(prev => (
+                        prev.expectedPeriodicRevision === expectedRevision
+                            ? {
+                                ...prev,
+                                awaitingResult: false,
+                                expectedPeriodicRevision: null
+                            }
+                            : prev
+                    ));
+                }
+            }
+        });
+
+        return () => {
+            cancelled = true;
+            cancelAnimationFrame(frameRequest);
+        };
+    }, [animationState, periodicState, manifoldState, recordingState.recordingEnabled, captureFrame]);
 
     useEffect(() => {
         if (!animationState.isAnimating && recordingState.recordingEnabled && recordedFramesRef.current.length > 0 && !recordingState.isEncoding) {
@@ -1712,96 +1836,166 @@ const SetValuedViz = () => {
             setGeometricOffsetState(prev => ({ ...prev, error: 'A nondegenerate unstable-manifold boundary is required.' }));
             return;
         }
-        setGeometricOffsetState(prev => ({ ...prev, isComputing: true, error: null }));
+        const requestId = ++geometricOffsetRequestIdRef.current;
+        inverseOffsetRequestIdRef.current += 1;
+        setGeometricOffsetState(prev => ({
+            ...prev,
+            isComputing: true,
+            result: null,
+            inverseResult: null,
+            error: null,
+            inverseError: null
+        }));
         try {
-            const result = await runComputeTask('computeGeometricOffsets', {
-                boundary: geometricOffsetSeed,
-                params: { epsilon: params.epsilon },
-                settings: { numLevels: geometricOffsetState.numLevels, resolution: geometricOffsetState.resolution },
-                viewRange
-            });
-            setGeometricOffsetState(prev => ({ ...prev, isComputing: false, result, error: null }));
+            const request = buildSingleGeometricOffsetRequest(
+                geometricOffsetSeed,
+                geometricOffsetState.contourEpsilon
+            );
+            const result = await runComputeTask('computeGeometricOffsets', request);
+            if (requestId !== geometricOffsetRequestIdRef.current) return;
+            if (result?.completed_levels !== 1 || result?.levels?.length !== 1) {
+                throw new Error('The direct geometric contour was not completed.');
+            }
+            setGeometricOffsetState(prev => ({
+                ...prev,
+                isComputing: false,
+                result,
+                inverseResult: null,
+                error: null,
+                inverseError: null,
+                showContours: true
+            }));
+            const contourComponents = result.levels.flatMap(level => level.boundary_components || []);
+            const fittedRange = fitInverseOffsetCurveRange(
+                contourComponents,
+                Math.max(1, window.innerWidth - 268) / Math.max(1, window.innerHeight)
+            );
+            if (fittedRange) transitionViewRange(fittedRange);
         } catch (error) {
+            if (requestId !== geometricOffsetRequestIdRef.current) return;
             setGeometricOffsetState(prev => ({
                 ...prev,
                 isComputing: false,
                 result: null,
-                error: error instanceof Error ? error.message : String(error)
-            }));
-        }
-    }, [dynamicSystem, geometricOffsetSeed, params.epsilon, geometricOffsetState.numLevels, geometricOffsetState.resolution, runComputeTask, viewRange]);
-
-    const computeBasin = useCallback(async () => {
-        if (dynamicSystem !== 'henon' || basinTarget.length < 3) {
-            setBasinState(previous => ({
-                ...previous,
-                error: 'A closed MIS boundary with valid normal directions is required.'
-            }));
-            return;
-        }
-        setBasinState(previous => ({
-            ...previous,
-            isComputing: true,
-            result: null,
-            error: null,
-            notice: null
-        }));
-        try {
-            const result = await runBasinComputeTask({
-                targetPoints: basinTarget,
-                config: {
-                    a: params.a,
-                    b: params.b,
-                    epsilon: params.epsilon,
-                    bounds: {
-                        x_min: viewRange.xMin,
-                        x_max: viewRange.xMax,
-                        y_min: viewRange.yMin,
-                        y_max: viewRange.yMax
-                    },
-                    grid_x: basinState.settings.gridXY,
-                    grid_y: basinState.settings.gridXY,
-                    grid_theta: basinState.settings.gridTheta,
-                    refinement_rounds: basinState.settings.refinementRounds,
-                    target_position_radius: basinState.settings.targetPositionRadius,
-                    target_angle_radius: basinState.settings.targetAngleRadius
-                }
-            });
-            setBasinState(previous => ({ ...previous, isComputing: false, result, error: null, notice: null }));
-        } catch (error) {
-            if (isAbortError(error)) {
-                setBasinState(previous => ({
-                    ...previous,
-                    isComputing: false,
-                    notice: error.message,
-                    error: null
-                }));
-                return;
-            }
-            setBasinState(previous => ({
-                ...previous,
-                isComputing: false,
-                result: null,
-                notice: null,
-                error: describeBasinComputationError(error)
+                inverseResult: null,
+                error: error instanceof Error ? error.message : String(error),
+                inverseError: null
             }));
         }
     }, [
-        basinTarget,
         dynamicSystem,
+        geometricOffsetSeed,
+        geometricOffsetState.contourEpsilon,
+        runComputeTask,
+        transitionViewRange
+    ]);
+
+    const computeInverseGeometricOffsets = useCallback(async () => {
+        const levels = geometricOffsetState.result?.levels?.slice(0, 1) || [];
+        if (dynamicSystem !== 'henon' || !levels.length) {
+            setGeometricOffsetState(previous => ({
+                ...previous,
+                inverseError: 'Compute at least one closed geometric offset contour first.'
+            }));
+            return;
+        }
+        let sampleSpacing;
+        try {
+            sampleSpacing = geometricOffsetSampleSpacing(geometricOffsetState.result);
+        } catch (error) {
+            setGeometricOffsetState(previous => ({
+                ...previous,
+                inverseError: error instanceof Error ? error.message : String(error)
+            }));
+            return;
+        }
+        const requestId = ++inverseOffsetRequestIdRef.current;
+        setGeometricOffsetState(previous => ({
+            ...previous,
+            isComputingInverse: true,
+            inverseResult: null,
+            inverseError: null
+        }));
+        try {
+            const inverseResult = await runComputeTask('computeInverseGeometricOffsets', {
+                levels,
+                params: { a: params.a, b: params.b, epsilon: params.epsilon },
+                settings: {
+                    iterations: geometricOffsetState.inverseIterations,
+                    positionTolerance: Math.max(1e-5, 0.25 * sampleSpacing),
+                    normalTolerance: 0.02,
+                    maxSubdivisionDepth: 7
+                }
+            });
+            if (requestId !== inverseOffsetRequestIdRef.current) return;
+            setGeometricOffsetState(previous => ({
+                ...previous,
+                isComputingInverse: false,
+                inverseResult,
+                inverseError: null,
+                showInverseContours: true
+            }));
+            const visibleCurves = visibleInverseOffsetCurves(
+                inverseResult,
+                geometricOffsetState.inverseDisplayMode
+            );
+            const fittedRange = fitInverseOffsetCurveRange(
+                visibleCurves,
+                Math.max(1, window.innerWidth - 268) / Math.max(1, window.innerHeight)
+            );
+            if (fittedRange) transitionViewRange(fittedRange);
+        } catch (error) {
+            if (requestId !== inverseOffsetRequestIdRef.current) return;
+            setGeometricOffsetState(previous => ({
+                ...previous,
+                isComputingInverse: false,
+                inverseResult: null,
+                inverseError: error instanceof Error ? error.message : String(error)
+            }));
+        }
+    }, [
+        dynamicSystem,
+        geometricOffsetState.inverseDisplayMode,
+        geometricOffsetState.inverseIterations,
+        geometricOffsetState.result,
         params.a,
         params.b,
         params.epsilon,
-        basinState.settings,
-        runBasinComputeTask,
-        viewRange
+        runComputeTask,
+        transitionViewRange
+    ]);
+
+    const fitInverseGeometricOffsets = useCallback(() => {
+        const curves = visibleInverseOffsetCurves(
+            geometricOffsetState.inverseResult,
+            geometricOffsetState.inverseDisplayMode
+        );
+        const viewportWidth = Math.max(1, window.innerWidth - 268);
+        const viewportHeight = Math.max(1, window.innerHeight);
+        const fittedRange = fitInverseOffsetCurveRange(
+            curves,
+            viewportWidth / viewportHeight
+        );
+        if (fittedRange) transitionViewRange(fittedRange);
+    }, [
+        geometricOffsetState.inverseDisplayMode,
+        geometricOffsetState.inverseResult,
+        transitionViewRange
     ]);
 
     useEffect(() => {
-        setGeometricOffsetState(prev => ({ ...prev, result: null, error: null }));
-        basinWorkerTaskRef.current?.cancel('Basin computation cancelled because its inputs changed.');
-        setBasinState(prev => ({ ...prev, result: null, error: null, notice: null }));
-    }, [params.a, params.b, params.epsilon, manifoldState.manifolds, viewRange]);
+        geometricOffsetRequestIdRef.current += 1;
+        inverseOffsetRequestIdRef.current += 1;
+        setGeometricOffsetState(prev => ({
+            ...prev,
+            isComputing: false,
+            isComputingInverse: false,
+            result: null,
+            inverseResult: null,
+            error: null,
+            inverseError: null
+        }));
+    }, [params.a, params.b, params.epsilon, manifoldState.manifolds]);
 
     useEffect(() => {
         if (!sceneRef.current) return;
@@ -1809,7 +2003,7 @@ const SetValuedViz = () => {
 
         const toRemove = [];
         scene.traverse(child => {
-            if (child.userData.type === 'trajectory' || child.userData.type === 'orbit' || child.userData.type === 'manifold' || child.userData.type === 'geometricOffset' || child.userData.type === 'basin' || child.userData.type === 'fixedPoint' || child.userData.type === 'bde') {
+            if (child.userData.type === 'trajectory' || child.userData.type === 'manifold' || child.userData.type === 'geometricOffset' || child.userData.type === 'inverseGeometricOffset' || child.userData.type === 'fixedPoint' || child.userData.type === 'bde') {
                 toRemove.push(child);
             }
         });
@@ -1880,54 +2074,44 @@ const SetValuedViz = () => {
             });
         }
 
-        if (basinState.showBasin && basinState.result?.projection) {
-            const addBasinLayer = (cells, style) => {
-                if (cells.length === 0) return;
-                const geometry = new THREE.PlaneGeometry(
-                    basinState.result.dx * 0.985,
-                    basinState.result.dy * 0.985
+        if (geometricOffsetState.showInverseContours && geometricOffsetState.inverseResult?.curves) {
+            const visibleCurves = visibleInverseOffsetCurves(
+                geometricOffsetState.inverseResult,
+                geometricOffsetState.inverseDisplayMode
+            );
+            visibleCurves.forEach(curve => {
+                const points = (curve.points || []).filter(point => (
+                    Number.isFinite(point.x) && Number.isFinite(point.y)
+                ));
+                if (points.length < 3) return;
+                const closedPoints = [...points, points[0]];
+                const geometry = new LineGeometry();
+                geometry.setPositions(closedPoints.flatMap(point => [
+                    point.x,
+                    point.y,
+                    0.25 + 0.006 * curve.inverse_iteration
+                ]));
+                const material = new LineMaterial({
+                    color: inverseOffsetStepColor(curve.inverse_iteration),
+                    linewidth: 2.8,
+                    transparent: true,
+                    opacity: 0.98,
+                    depthTest: false
+                });
+                material.resolution.set(
+                    Math.max(1, window.innerWidth - 268),
+                    Math.max(1, window.innerHeight)
                 );
-                const buckets = Array.from({ length: 4 }, () => []);
-                cells.forEach(item => {
-                    const bucket = Math.min(3, Math.floor(Math.max(0, Math.min(0.999999, item.coverage)) * 4));
-                    buckets[bucket].push(item);
-                });
-                buckets.forEach((bucketCells, bucketIndex) => {
-                    if (bucketCells.length === 0) return;
-                    const representativeCoverage = (bucketIndex + 0.5) / buckets.length;
-                    const material = new THREE.MeshBasicMaterial({
-                        color: style.color,
-                        transparent: true,
-                        opacity: basinLayerOpacity(style, representativeCoverage),
-                        depthWrite: false,
-                        side: THREE.DoubleSide,
-                        toneMapped: false
-                    });
-                    const mesh = new THREE.InstancedMesh(geometry, material, bucketCells.length);
-                    const matrix = new THREE.Matrix4();
-                    bucketCells.forEach(({ cell }, index) => {
-                        matrix.makeTranslation(cell.x, cell.y, style.z);
-                        mesh.setMatrixAt(index, matrix);
-                    });
-                    mesh.instanceMatrix.needsUpdate = true;
-                    mesh.renderOrder = style.renderOrder;
-                    mesh.userData.type = 'basin';
-                    scene.add(mesh);
-                });
-            };
-
-            addBasinLayer(
-                basinState.result.projection
-                    .map(cell => ({ cell, coverage: Math.max(0, cell.outer_coverage - cell.inner_coverage) }))
-                    .filter(item => item.coverage > 1e-12),
-                BASIN_LAYER_STYLES.outer
-            );
-            addBasinLayer(
-                basinState.result.projection
-                    .map(cell => ({ cell, coverage: cell.inner_coverage }))
-                    .filter(item => item.coverage > 1e-12),
-                BASIN_LAYER_STYLES.inner
-            );
+                const line = new Line2(geometry, material);
+                line.computeLineDistances();
+                line.userData = {
+                    type: 'inverseGeometricOffset',
+                    sourceLevel: curve.source_level,
+                    sourceComponentId: curve.source_component_id,
+                    inverseIteration: curve.inverse_iteration
+                };
+                scene.add(line);
+            });
         }
 
         if (dynamicSystem === 'duffing_ode' && bdeState.points && bdeState.points.length > 1) {
@@ -2007,50 +2191,117 @@ const SetValuedViz = () => {
             scene.add(sphere);
         }
 
-        if (manifoldState.showOrbits && periodicState.orbits.length > 0) {
-            const visibleOrbits = periodicState.orbits.filter(o => isOrbitVisible(o));
+    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange]);
 
-            visibleOrbits.forEach((orbit, orbitIdx) => {
-                const orbitId = `orbit-${orbit.period}-${orbitIdx}`;
-                const pointColor = getOrbitColor(orbit);
+    useEffect(() => {
+        if (!sceneRef.current) return;
+        if (!periodicState.isReady && manifoldState.showOrbits) {
+            // Keep the last successfully rendered periodic points on screen
+            // while the worker searches at the new parameter value.
+            return;
+        }
 
-                orbit.points.forEach((pt, ptIdx) => {
-                    const geom = new THREE.SphereGeometry(0.02, 10, 10);
-                    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(pointColor) });
-                    const sphere = new THREE.Mesh(geom, mat);
-                    sphere.position.set(pt[0], pt[1], 0.05);
+        const scene = sceneRef.current;
+        const previousOrbitObjects = [];
+        scene.traverse(child => {
+            if (child.userData.type === 'orbit') {
+                previousOrbitObjects.push(child);
+            }
+        });
+        previousOrbitObjects.forEach(object => {
+            object.geometry?.dispose();
+            object.material?.dispose();
+            scene.remove(object);
+        });
+
+        if (!periodicState.isReady) return;
+
+        const resultRevision = periodicState.resultRevision;
+        let renderedPointCount = 0;
+        const isVisible = (orbit) => {
+            if (orbit.period === 1) return filters.period1;
+            if (orbit.period === 2) return filters.period2;
+            if (orbit.period === 3) return filters.period3;
+            if (orbit.period === 4) return filters.period4;
+            if (orbit.period === 5) return filters.period5;
+            return filters.period6plus;
+        };
+        const colorForOrbit = (orbit) => {
+            const stability = orbit.stability.toLowerCase();
+            if (stability === 'stable') return ORBIT_COLORS.attractor;
+            if (stability === 'saddle') return ORBIT_COLORS.saddlePoint;
+            if (stability === 'unstable') return ORBIT_COLORS.repeller;
+            return ORBIT_COLORS.periodicBlue;
+        };
+
+        if (manifoldState.showOrbits) {
+            periodicState.orbits.filter(isVisible).forEach((orbit, orbitIndex) => {
+                const orbitId = `orbit-${orbit.period}-${orbitIndex}`;
+                const pointColor = colorForOrbit(orbit);
+                orbit.points.forEach((point, pointIndex) => {
+                    const geometry = new THREE.SphereGeometry(0.02, 10, 10);
+                    const material = new THREE.MeshBasicMaterial({
+                        color: new THREE.Color(pointColor)
+                    });
+                    const sphere = new THREE.Mesh(geometry, material);
+                    sphere.position.set(point[0], point[1], 0.05);
                     sphere.userData = {
                         type: 'orbit',
-                        orbitId: orbitId,
+                        resultRevision,
+                        orbitId,
                         period: orbit.period,
                         stability: orbit.stability,
-                        pointIndex: ptIdx,
-                        pos: { x: pt[0], y: pt[1] },
+                        pointIndex,
+                        pos: { x: point[0], y: point[1] },
                         orbitPoints: orbit.points,
                         eigenvalues: orbit.eigenvalues || null
                     };
                     scene.add(sphere);
+                    renderedPointCount += 1;
                 });
             });
         }
-    }, [periodicState, manifoldState, geometricOffsetState, basinState, filters, bdeState, dynamicSystem, type, viewRange]);
 
-    const getOrbitColor = (orbit) => {
-        const { stability } = orbit;
-        if (stability.toLowerCase() === 'stable') return ORBIT_COLORS.attractor;
-        if (stability.toLowerCase() === 'saddle') return ORBIT_COLORS.saddlePoint;
-        if (stability.toLowerCase() === 'unstable') return ORBIT_COLORS.repeller;
-        return ORBIT_COLORS.periodicBlue;
-    };
+        rendererRef.current?.render(scene, cameraRef.current);
 
-    const isOrbitVisible = (orbit) => {
-        if (orbit.period === 1) return filters.period1;
-        if (orbit.period === 2) return filters.period2;
-        if (orbit.period === 3) return filters.period3;
-        if (orbit.period === 4) return filters.period4;
-        if (orbit.period === 5) return filters.period5;
-        return filters.period6plus;
-    };
+        // Acknowledge the revision only after a browser paint opportunity.
+        // The animation controller requires this acknowledgement before it
+        // can request the next parameter value.
+        let acknowledgementFrame = null;
+        const paintFrame = requestAnimationFrame(() => {
+            acknowledgementFrame = requestAnimationFrame(() => {
+                setPeriodicState(previous => {
+                    if (!previous.isReady || previous.resultRevision !== resultRevision) {
+                        return previous;
+                    }
+                    if (
+                        previous.renderedRevision === resultRevision
+                        && previous.renderedPointCount === renderedPointCount
+                    ) {
+                        return previous;
+                    }
+                    return {
+                        ...previous,
+                        renderedRevision: resultRevision,
+                        renderedPointCount
+                    };
+                });
+            });
+        });
+
+        return () => {
+            cancelAnimationFrame(paintFrame);
+            if (acknowledgementFrame !== null) {
+                cancelAnimationFrame(acknowledgementFrame);
+            }
+        };
+    }, [
+        filters,
+        manifoldState.showOrbits,
+        periodicState.isReady,
+        periodicState.orbits,
+        periodicState.resultRevision
+    ]);
 
     const stepForwardManifold = useCallback(() => {
         if (manifoldState.isRunning || !wasmModule) return;
@@ -2611,12 +2862,11 @@ const SetValuedViz = () => {
                 setGeometricOffsetState={setGeometricOffsetState}
                 canComputeGeometricOffsets={!manifoldState.isComputing && geometricOffsetSeed.length >= 3}
                 computeGeometricOffsets={computeGeometricOffsets}
-                basinState={basinState}
-                setBasinState={setBasinState}
-                canComputeBasin={!manifoldState.isComputing && !basinState.isComputing && basinTarget.length >= 3}
-                basinTargetPointCount={basinTarget.length}
-                computeBasin={computeBasin}
-                cancelBasinComputation={cancelBasinComputation}
+                computeInverseGeometricOffsets={computeInverseGeometricOffsets}
+                fitInverseGeometricOffsets={fitInverseGeometricOffsets}
+                canComputeInverseGeometricOffsets={Boolean(geometricOffsetState.result?.levels?.length)
+                    && !geometricOffsetState.isComputing
+                    && !geometricOffsetState.isComputingInverse}
                 ORBIT_COLORS={ORBIT_COLORS}
                 filters={filters}
                 setFilters={setFilters}
@@ -2648,7 +2898,6 @@ const SetValuedViz = () => {
                 tooltip={tooltip}
                 manifoldState={manifoldState}
                 geometricOffsetState={geometricOffsetState}
-                basinState={basinState}
                 ulamState={ulamState}
                 displayRange={viewportRange}
                 savePNG={savePNG}

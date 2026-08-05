@@ -9,7 +9,6 @@ vi.mock('../sidebar/EquationDisplay', () => ({ EquationDisplay: () => <div data-
 vi.mock('../sidebar/ParametersPanel', () => ({ ParametersPanel: () => <div data-testid="parameters-panel" /> }));
 vi.mock('../sidebar/ManifoldsPanel', () => ({ ManifoldsPanel: () => <div data-testid="manifolds-panel" /> }));
 vi.mock('../sidebar/GeometricOffsetsPanel', () => ({ GeometricOffsetsPanel: () => <div data-testid="geometric-offsets-panel" /> }));
-vi.mock('../sidebar/BasinApproximationPanel', () => ({ BasinApproximationPanel: () => <div data-testid="basin-panel" /> }));
 vi.mock('../sidebar/VisualizationPanel', () => ({ VisualizationPanel: () => <div data-testid="visualization-panel" /> }));
 vi.mock('../sidebar/StartingPoint', () => ({ StartingPoint: () => <div data-testid="starting-point" /> }));
 vi.mock('../sidebar/PeriodicOrbitsPanel', () => ({ PeriodicOrbitsPanel: () => <div data-testid="periodic-orbits" /> }));
@@ -55,11 +54,6 @@ const baseProps = {
   setGeometricOffsetState: vi.fn(),
   canComputeGeometricOffsets: false,
   computeGeometricOffsets: vi.fn(),
-  basinState: {},
-  setBasinState: vi.fn(),
-  canComputeBasin: false,
-  basinTargetPointCount: 0,
-  computeBasin: vi.fn(),
   ORBIT_COLORS: {},
   filters: {},
   setFilters: vi.fn(),
@@ -112,14 +106,6 @@ describe('Sidebar', () => {
 
     rerender(<Sidebar {...baseProps} type="discrete" dynamicSystem="standard" />);
     expect(screen.queryByTestId('geometric-offsets-panel')).toBeNull();
-  });
-
-  it('shows deterministic basin controls only for the Hénon boundary map', () => {
-    const { rerender } = render(<Sidebar {...baseProps} type="discrete" dynamicSystem="henon" />);
-    expect(screen.getByTestId('basin-panel')).toBeInTheDocument();
-
-    rerender(<Sidebar {...baseProps} type="discrete" dynamicSystem="standard" />);
-    expect(screen.queryByTestId('basin-panel')).toBeNull();
   });
 
   it('passes recompute controls into the bottom controls bar', () => {

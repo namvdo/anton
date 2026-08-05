@@ -11,13 +11,15 @@ import { UlamPanel } from '../sidebar/UlamPanel';
 import { AnimationPanel } from '../sidebar/AnimationPanel';
 import { ParameterSweepPanel } from '../sidebar/ParameterSweepPanel';
 import { GeometricOffsetsPanel } from '../sidebar/GeometricOffsetsPanel';
-import { BasinApproximationPanel } from '../sidebar/BasinApproximationPanel';
 import { InfoStrip } from './InfoStrip';
 import { ControlsBar } from './ControlsBar';
 
 export const Sidebar = (props) => {
   const { ORBIT_COLORS } = props;
   const logoSrc = `${import.meta.env.BASE_URL}bist_logo.png`;
+  const animationLocksConfiguration = Boolean(
+    props.animationState?.isAnimating || props.animationState?.isPreparing
+  );
 
   return (
     <div className="sidebar">
@@ -33,6 +35,7 @@ export const Sidebar = (props) => {
           systemId={props.dynamicSystem}
           setSystemId={props.setDynamicSystem}
           systems={props.SYSTEMS}
+          disabled={animationLocksConfiguration}
         />
 
         <EquationDisplay
@@ -40,14 +43,14 @@ export const Sidebar = (props) => {
           customEquations={props.customEquations}
           setCustomEquations={props.setCustomEquations}
           equationError={props.equationError}
-          disabled={props.manifoldState.isRunning}
+          disabled={props.manifoldState.isRunning || animationLocksConfiguration}
         />
 
         <ParametersPanel
           systemId={props.dynamicSystem}
           params={props.params}
           setParams={props.setParams}
-          disabled={props.manifoldState.isRunning}
+          disabled={props.manifoldState.isRunning || animationLocksConfiguration}
           systems={props.SYSTEMS}
           applyPreset={props.applyPreset}
           customParams={props.customParams}
@@ -61,7 +64,7 @@ export const Sidebar = (props) => {
             periodicSearchSettings={props.periodicSearchSettings}
             updatePeriodicSearchSettings={props.updatePeriodicSearchSettings}
             periodicState={props.periodicState}
-            disabled={props.manifoldState.isRunning}
+            disabled={props.manifoldState.isRunning || animationLocksConfiguration}
           />
         )}
 
@@ -88,14 +91,9 @@ export const Sidebar = (props) => {
                   setState={props.setGeometricOffsetState}
                   canCompute={props.canComputeGeometricOffsets}
                   compute={props.computeGeometricOffsets}
-                />
-                <BasinApproximationPanel
-                  state={props.basinState}
-                  setState={props.setBasinState}
-                  canCompute={props.canComputeBasin}
-                  targetPointCount={props.basinTargetPointCount}
-                  compute={props.computeBasin}
-                  cancel={props.cancelBasinComputation}
+                  canComputeInverse={props.canComputeInverseGeometricOffsets}
+                  computeInverse={props.computeInverseGeometricOffsets}
+                  fitInverse={props.fitInverseGeometricOffsets}
                 />
               </>
             )}
@@ -122,6 +120,7 @@ export const Sidebar = (props) => {
             animationState={props.animationState}
             setAnimationState={props.setAnimationState}
             manifoldState={props.manifoldState}
+            periodicState={props.periodicState}
             recordingState={props.recordingState}
             startAnimation={props.startAnimation}
             stopAnimation={props.stopAnimation}

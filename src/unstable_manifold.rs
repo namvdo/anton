@@ -596,6 +596,11 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
                 }
             }
 
+            // Preserve the geometric traversal order. The refined samples lie
+            // strictly between current_state and next_state, so the segment's
+            // starting endpoint must be stored before those samples.
+            trajectory.push(current_state);
+
             // Adaptive refinement if gap too large but not too huge
             if step_distance > spacing_tol && step_distance < self.config.spacing_upper {
                 match self.refine_segment(
@@ -627,7 +632,6 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
                 }
             }
 
-            trajectory.push(current_state);
             current_state = next_state;
             iteration += 1;
         }
@@ -2785,6 +2789,59 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Clone, Copy)]
+    struct LinearExpandingSystem;
+
+    impl DynamicalSystem for LinearExpandingSystem {
+        fn map(&self, pos: Vector2<f64>) -> Result<Vector2<f64>, String> {
+            Ok(Vector2::new(2.0 * pos.x, pos.y))
+        }
+
+        fn jacobian(&self, _pos: Vector2<f64>) -> Matrix2<f64> {
+            Matrix2::new(2.0, 0.0, 0.0, 1.0)
+        }
+
+        fn get_epsilon(&self) -> f64 {
+            0.0
+        }
+    }
+
+    #[test]
+    fn adaptive_refinement_preserves_segment_traversal_order() {
+        let config = ManifoldConfig {
+            spacing_tol: 1.5e-5,
+            max_iter: 2,
+            max_points: 100,
+            time_limit: 1.0,
+            ..ManifoldConfig::default()
+        };
+        let computer = UnstableManifoldComputer::new(LinearExpandingSystem, config);
+        let saddle = SaddlePoint::from_2d_eigenvector(
+            Vector2::new(0.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            1,
+            2.0,
+            SaddleType::Regular,
+            None,
+        );
+
+        let trajectory = computer.compute_direction(&saddle, 1.0, &[]).unwrap();
+        let x_positions = trajectory
+            .points
+            .iter()
+            .map(|state| state.pos.x)
+            .collect::<Vec<_>>();
+
+        assert!(
+            x_positions.len() >= 4,
+            "test setup must trigger adaptive refinement"
+        );
+        assert!(
+            x_positions.windows(2).all(|pair| pair[0] < pair[1]),
+            "refined trajectory must not jump backward: {x_positions:?}"
+        );
+    }
 
     #[test]
     fn test_henon_params_validation() {

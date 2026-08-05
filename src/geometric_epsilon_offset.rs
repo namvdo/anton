@@ -1,14 +1,8 @@
-//! Direct normal-projection contours around a closed MIS boundary.
-//!
-//! For each ordered boundary sample `p_i`, the implementation estimates the
-//! outward unit normal `n_i` from the two adjacent polygon edges and stores
-//! `p_i + epsilon * n_i`. No signed-distance grid or contour extraction is
-//! involved.
-
+use nalgebra::ComplexField;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
-use crate::henon_extended_map::{inverse_henon_extended_point, HenonExtendedPoint};
+use crate::{henon_extended_map::{inverse_henon_extended_point, HenonExtendedPoint}, ExtendedBoundaryPoint};
 
 const NORMAL_EPSILON: f64 = 1e-14;
 const MAX_INVERSE_CURVE_POINTS: usize = 250_000;
@@ -16,16 +10,8 @@ const MAX_INVERSE_CURVE_POINTS: usize = 250_000;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Orientation {
-    CounterClockwise,
     Clockwise,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct ExtendedBoundaryPoint {
-    pub x: f64,
-    pub y: f64,
-    pub nx: f64,
-    pub ny: f64,
+    CounterClockwise
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -36,13 +22,13 @@ pub struct BoundaryComponent {
     pub is_hole: bool,
     pub signed_area: f64,
     pub perimeter: f64,
-    pub is_simple: bool,
+    pub is_simple: bool
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GeometricOffsetStopReason {
-    RequestedLevelsCompleted,
+    RequestedLevelsCompleted
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,14 +38,6 @@ pub struct GeometricOffsetLevel {
     pub boundary_components: Vec<BoundaryComponent>,
     pub area: f64,
     pub component_count: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GeometricOffsetResult {
-    pub levels: Vec<GeometricOffsetLevel>,
-    pub completed_levels: usize,
-    pub epsilon: f64,
-    pub stop_reason: GeometricOffsetStopReason,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,9 +52,18 @@ pub struct InverseOffsetCurve {
     pub closure_position_residual: f64,
     pub closure_normal_residual: f64,
     pub max_position_chord_error: f64,
-    pub max_normal_chord_error: f64,
     pub subdivision_limit_reached: bool,
 }
+
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeometricOffsetResult {
+    pub levels: Vec<GeometricOffsetLevel>,
+    pub completed_levels: usize,
+    pub epsilon: f64,
+    pub stop_reason: GeometricOffsetStopReason,
+}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InverseOffsetResult {
@@ -92,7 +79,7 @@ pub struct InverseOffsetResult {
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct Point2 {
     x: f64,
-    y: f64,
+    y: f64
 }
 
 impl Point2 {
@@ -103,17 +90,20 @@ impl Point2 {
     fn distance(self, other: Self) -> f64 {
         (self.x - other.x).hypot(self.y - other.y)
     }
+
+
 }
 
 fn signed_area(points: &[Point2]) -> f64 {
     if points.len() < 3 {
         return 0.0;
     }
+
     let mut sum = 0.0;
     for index in 0..points.len() {
         let current = points[index];
         let next = points[(index + 1) % points.len()];
-        sum += current.x * next.y - next.x * current.y;
+        sum += current.x * next.y  - next.x * current.y;
     }
     0.5 * sum
 }
@@ -136,45 +126,40 @@ fn cross(a: Point2, b: Point2, c: Point2) -> f64 {
     (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
 }
 
-fn segments_intersect(a: Point2, b: Point2, c: Point2, d: Point2) -> bool {
+fn segment_intersect(a: Point2, b: Point2, c: Point2, d: Point2) -> bool {
     let (ab_c, ab_d, cd_a, cd_b) = (
         cross(a, b, c),
         cross(a, b, d),
         cross(c, d, a),
         cross(c, d, b),
     );
-    ab_c * ab_d < -1e-12 && cd_a * cd_b < -1e-12
+    ab_c * ab_d < 1e-12 && cd_a * cd_b < -1e-12
 }
 
 fn has_self_intersection(points: &[Point2]) -> bool {
     if points.len() > 6000 {
         return true;
     }
+
     for left in 0..points.len() {
         for right in left + 1..points.len() {
-            if right == left
-                || right == (left + 1) % points.len()
-                || left == (right + 1) % points.len()
-            {
-                continue;
+            if right == left || right == (left + 1) % points.len() || left == (right + 1) % points.len() {
+                    continue;
             }
-            if segments_intersect(
-                points[left],
-                points[(left + 1) % points.len()],
-                points[right],
-                points[(right + 1) % points.len()],
-            ) {
-                return true;
-            }
+            if segment_intersect(points[left], points[(left + 1) % points.len()],
+                    points[right], points[(right + 1) % points.len()]) {
+                        return true;
+            }   
         }
     }
     false
 }
 
+
 fn normalize_vector(x: f64, y: f64, context: &str) -> Result<(f64, f64), String> {
     let length = x.hypot(y);
     if !length.is_finite() || length < NORMAL_EPSILON {
-        return Err(format!("{context} produced a degenerate direction"));
+        return Err(format!("{context} produced a degenerate direction"))
     }
     Ok((x / length, y / length))
 }
@@ -185,6 +170,7 @@ fn clean_seed(seed: &[(f64, f64)]) -> Result<Vec<Point2>, String> {
     }
 
     let mut points = Vec::with_capacity(seed.len());
+
     for &(x, y) in seed {
         if !x.is_finite() || !y.is_finite() {
             return Err("MIS boundary seed contains non-finite points".to_string());
@@ -200,22 +186,25 @@ fn clean_seed(seed: &[(f64, f64)]) -> Result<Vec<Point2>, String> {
     if points
         .first()
         .zip(points.last())
-        .is_some_and(|(first, last)| first.distance(*last) <= NORMAL_EPSILON)
-    {
-        points.pop();
+        .is_some_and(|(first, last)| first.distance(*last) <= NORMAL_EPSILON) {
+            points.pop();
     }
+
     if points.len() < 3 {
         return Err("MIS boundary seed needs at least three distinct points".to_string());
     }
+
     if signed_area(&points).abs() < NORMAL_EPSILON {
         return Err("MIS boundary seed has degenerate signed area".to_string());
     }
+
     Ok(points)
 }
 
+
 fn outward_edge_normal(
     start: Point2,
-    end: Point2,
+    end: Point2, 
     counter_clockwise: bool,
 ) -> Result<(f64, f64), String> {
     let (tx, ty) = normalize_vector(end.x - start.x, end.y - start.y, "MIS boundary edge")?;
@@ -226,26 +215,21 @@ fn outward_edge_normal(
     })
 }
 
-/// Estimate the outward normal at one polygon vertex by averaging the outward
-/// normals of its incoming and outgoing edges. This is the standard vertex
-/// normal for a sampled oriented polygon.
-fn outward_vertex_normal(
-    previous: Point2,
-    current: Point2,
-    next: Point2,
-    counter_clockwise: bool,
-) -> Result<(f64, f64), String> {
+
+// estimate outward normal at one polygon vertex by averaging outward normals of its incoming 
+// and outgoing edges, this is the standard vertex normal for a sampled oriented polygon.
+fn outward_vertex_normal(previous: Point2, current: Point2, next: Point2, counter_clockwise: bool) -> Result<(f64, f64), String> {
     let incoming = outward_edge_normal(previous, current, counter_clockwise)?;
     let outgoing = outward_edge_normal(current, next, counter_clockwise)?;
     let sum_x = incoming.0 + outgoing.0;
     let sum_y = incoming.1 + outgoing.1;
 
     if sum_x.hypot(sum_y) >= NORMAL_EPSILON {
-        normalize_vector(sum_x, sum_y, "MIS boundary vertex normal")
+        normalize_vector(sum_x, sum_y, "MIS boundary vertext normal")
     } else {
-        // A 180-degree reversal has no unique bisector. Using the outgoing
-        // edge normal keeps the construction deterministic without inventing
-        // a signed-distance reconstruction.
+        // 180-degree reversal has no unique bisector. using outgoing edge normal keeps 
+        // the construction deterministic
+
         Ok(outgoing)
     }
 }
@@ -254,7 +238,7 @@ fn direct_normal_projection(seed: &[Point2], epsilon: f64) -> Result<BoundaryCom
     let seed_area = signed_area(seed);
     let counter_clockwise = seed_area > 0.0;
     let mut points = Vec::with_capacity(seed.len());
-    let mut projected_positions = Vec::with_capacity(seed.len());
+    let mut projected_position = Vec::with_capacity(seed.len());
 
     for index in 0..seed.len() {
         let previous = seed[(index + seed.len() - 1) % seed.len()];
@@ -263,35 +247,33 @@ fn direct_normal_projection(seed: &[Point2], epsilon: f64) -> Result<BoundaryCom
         let (nx, ny) = outward_vertex_normal(previous, current, next, counter_clockwise)?;
         let projected = Point2::new(current.x + epsilon * nx, current.y + epsilon * ny);
         if !projected.x.is_finite() || !projected.y.is_finite() {
-            return Err("Direct normal projection produced a non-finite point".to_string());
-        }
-        projected_positions.push(projected);
+            return Err("Direct normal projection produced non-finite point".to_string());
+        } 
+        projected_position.push(projected);
         points.push(ExtendedBoundaryPoint {
             x: projected.x,
             y: projected.y,
-            nx,
-            ny,
+            nx, 
+            ny
         });
     }
 
-    let projected_area = signed_area(&projected_positions);
+    let projected_area = signed_area(&projected_position);
     Ok(BoundaryComponent {
         id: 0,
         points,
         orientation: orientation(projected_area),
         is_hole: false,
         signed_area: projected_area,
-        perimeter: perimeter(&projected_positions),
-        is_simple: !has_self_intersection(&projected_positions),
+        perimeter: perimeter(&projected_position),
+        is_simple: !has_self_intersection(&projected_position)
     })
 }
 
-/// Construct one closed offset polygon by projecting every MIS boundary
-/// sample exactly `epsilon` along its estimated outward unit normal.
-pub fn compute_geometric_offset_contours(
-    seed: &[(f64, f64)],
-    epsilon: f64,
-) -> Result<GeometricOffsetResult, String> {
+
+// construct one closed offset polygon by projecting every MIS boundary
+// sample exactly `epsilon` along its estimated outward unit normal.
+pub fn compute_geometric_offset_contours(seed: &[(f64, f64)], epsilon: f64) -> Result<GeometricOffsetResult, String> {
     if !epsilon.is_finite() || epsilon <= 0.0 {
         return Err("Geometric offset distance must be positive and finite".to_string());
     }
@@ -315,6 +297,7 @@ pub fn compute_geometric_offset_contours(
     })
 }
 
+
 fn circular_difference(left: f64, right: f64) -> f64 {
     (left - right).sin().atan2((left - right).cos())
 }
@@ -328,10 +311,10 @@ fn interpolate_extended_point(
     let right_theta = right.ny.atan2(right.nx);
     let theta = left_theta + fraction * circular_difference(right_theta, left_theta);
     ExtendedBoundaryPoint {
-        x: left.x + fraction * (right.x - left.x),  
+        x: left.x + fraction * (right.x - left.x),
         y: left.y + fraction * (right.y - left.y),
         nx: theta.cos(),
-        ny: theta.sin(),
+        ny: theta.sin() 
     }
 }
 
@@ -339,25 +322,27 @@ fn inverse_offset_point(
     point: ExtendedBoundaryPoint,
     a: f64,
     b: f64,
-    epsilon: f64,
+    epsilon: f64
 ) -> Result<ExtendedBoundaryPoint, String> {
     let mapped = inverse_henon_extended_point(
         HenonExtendedPoint {
             x: point.x,
             y: point.y,
             nx: point.nx,
-            ny: point.ny,
+            ny: point.ny
         },
         a,
         b,
-        epsilon,
+        epsilon
     )?;
+
     Ok(ExtendedBoundaryPoint {
         x: mapped.x,
         y: mapped.y,
         nx: mapped.nx,
-        ny: mapped.ny,
+        ny: mapped.ny
     })
+
 }
 
 #[derive(Default)]
@@ -367,63 +352,73 @@ struct InverseSubdivisionDiagnostics {
     subdivision_limit_reached: bool,
 }
 
+
 struct InverseSubdivisionSettings {
     a: f64,
     b: f64,
     epsilon: f64,
     position_tolerance: f64,
     normal_tolerance: f64,
-    max_depth: usize,
+    max_depth: usize
 }
 
 fn append_inverse_segment(
     source_left: ExtendedBoundaryPoint,
     source_right: ExtendedBoundaryPoint,
-    mapped_left: ExtendedBoundaryPoint,
+    mapped_left: ExtendedBoundaryPoint, 
     mapped_right: ExtendedBoundaryPoint,
     depth: usize,
     settings: &InverseSubdivisionSettings,
     diagnostics: &mut InverseSubdivisionDiagnostics,
     output: &mut Vec<ExtendedBoundaryPoint>,
 ) -> Result<(), String> {
-    let source_midpoint = interpolate_extended_point(source_left, source_right, 0.5);
-    let mapped_midpoint =
-        inverse_offset_point(source_midpoint, settings.a, settings.b, settings.epsilon)?;
+    let source_mid_point = interpolate_extended_point(source_left, source_right, 0.5);
+    let mapped_midpoint = inverse_offset_point(
+        source_mid_point, settings.a, settings.b, settings.epsilon
+    )?;
+
     let chord_midpoint_x = 0.5 * (mapped_left.x + mapped_right.x);
     let chord_midpoint_y = 0.5 * (mapped_left.y + mapped_right.y);
-    let position_error =
+
+    let position_error = 
         (mapped_midpoint.x - chord_midpoint_x).hypot(mapped_midpoint.y - chord_midpoint_y);
+    
     let left_theta = mapped_left.ny.atan2(mapped_left.nx);
     let right_theta = mapped_right.ny.atan2(mapped_right.nx);
-    let chord_midpoint_theta = left_theta + 0.5 * circular_difference(right_theta, left_theta);
+
+    let chord_midpoint_theta = left_theta * 0.5 * circular_difference(right_theta, left_theta);
     let mapped_midpoint_theta = mapped_midpoint.ny.atan2(mapped_midpoint.nx);
     let normal_error = circular_difference(mapped_midpoint_theta, chord_midpoint_theta).abs();
-    let requires_subdivision =
+    
+    let requires_subdivision = 
         position_error > settings.position_tolerance || normal_error > settings.normal_tolerance;
-
+    
     if requires_subdivision && depth < settings.max_depth {
         append_inverse_segment(
             source_left,
-            source_midpoint,
+            source_mid_point,
             mapped_left,
             mapped_midpoint,
             depth + 1,
             settings,
             diagnostics,
-            output,
+            output
         )?;
+
         append_inverse_segment(
-            source_midpoint,
+            source_mid_point,
             source_right,
             mapped_midpoint,
             mapped_right,
             depth + 1,
-            settings,
-            diagnostics,
-            output,
+        settings,
+        diagnostics,
+        output
         )?;
+
         return Ok(());
     }
+
 
     diagnostics.max_position_chord_error = diagnostics.max_position_chord_error.max(position_error);
     diagnostics.max_normal_chord_error = diagnostics.max_normal_chord_error.max(normal_error);
@@ -433,22 +428,22 @@ fn append_inverse_segment(
             "Inverse offset curve exceeds the {MAX_INVERSE_CURVE_POINTS}-point safety limit"
         ));
     }
+
     output.push(mapped_right);
     Ok(())
+
+
 }
 
-fn invert_offset_component(
-    source: &[ExtendedBoundaryPoint],
-    settings: &InverseSubdivisionSettings,   
-) -> Result<
+
+fn inverse_offset_component(source: &[ExtendedBoundaryPoint], settings: &InverseSubdivisionSettings) -> Result<
     (
         Vec<ExtendedBoundaryPoint>,
         f64,
         f64,
-        InverseSubdivisionDiagnostics,
-    ),
-    String,
-> {
+        InverseSubdivisionDiagnostics
+    ), String
+>{
     if source.len() < 3 {
         return Err("An inverse offset component requires at least three points".to_string());
     }
@@ -457,8 +452,8 @@ fn invert_offset_component(
     output.push(mapped_first);
     let mut diagnostics = InverseSubdivisionDiagnostics::default();
     for index in 0..source.len() {
-        let next_index = (index + 1) % source.len();
-        let mapped_left =
+        let next_index = (index + 1) % source.len() ;
+        let mapped_left = 
             inverse_offset_point(source[index], settings.a, settings.b, settings.epsilon)?;
         let mapped_right = if next_index == 0 {
             mapped_first
@@ -477,21 +472,19 @@ fn invert_offset_component(
         )?;
     }
 
-    let repeated_first = output
-        .pop()
+    let repeated_first = output.pop()
         .ok_or("Inverse offset component unexpectedly became empty")?;
-    let closure_position_residual =
+    let closure_position_residual = 
         (repeated_first.x - mapped_first.x).hypot(repeated_first.y - mapped_first.y);
     let closure_normal_residual = circular_difference(
         repeated_first.ny.atan2(repeated_first.nx),
-        mapped_first.ny.atan2(mapped_first.nx),
-    )
-    .abs();
+        mapped_first.ny.atan2(mapped_first.nx)
+    ).abs();
     Ok((
         output,
         closure_position_residual,
         closure_normal_residual,
-        diagnostics,
+        diagnostics
     ))
 }
 
@@ -503,14 +496,16 @@ pub fn compute_inverse_geometric_offset_contours(
     iterations: usize,
     position_tolerance: f64,
     normal_tolerance: f64,
-    max_subdivision_depth: usize,
+    max_subdivision_depth: usize
 ) -> Result<InverseOffsetResult, String> {
     if levels.is_empty() {
         return Err("Compute geometric offset contours before their inverse images".to_string());
     }
-    if iterations == 0 || iterations > 8 {  
+
+    if iterations == 0 || iterations > 8 {
         return Err("Inverse offset iterations must lie between 1 and 8".to_string());
     }
+
     if !position_tolerance.is_finite() || position_tolerance <= 0.0 {
         return Err("Inverse offset position tolerance must be positive and finite".to_string());
     }
@@ -522,17 +517,19 @@ pub fn compute_inverse_geometric_offset_contours(
     }
 
     let settings = InverseSubdivisionSettings {
-        a,
+        a, 
         b,
         epsilon,
         position_tolerance,
         normal_tolerance,
-        max_depth: max_subdivision_depth,
+        max_depth: max_subdivision_depth
     };
-    let source_curve_count = levels
-        .iter()
+
+    let source_curve_count = levels 
+        .iter() 
         .map(|level| level.boundary_components.len())
         .sum();
+
     let mut curves = Vec::with_capacity(source_curve_count * iterations);
     let mut total_output_points = 0usize;
     let mut global_position_error: f64 = 0.0;
@@ -544,242 +541,26 @@ pub fn compute_inverse_geometric_offset_contours(
             let mut source_points = component.points.clone();
             for inverse_iteration in 1..=iterations {
                 let input_point_count = source_points.len();
-                let (points, closure_position_residual, closure_normal_residual, diagnostics) =
-                    invert_offset_component(&source_points, &settings)?;
+                let (points, closure_position_residual, closure_normal_residual, diagnostics) 
+                = inverse_offset_component(&source_points, &settings)?;
                 total_output_points = total_output_points
                     .checked_add(points.len())
                     .ok_or("Inverse offset point count overflow")?;
                 if total_output_points > MAX_INVERSE_CURVE_POINTS {
                     return Err(format!(
                         "Inverse offset result exceeds the {MAX_INVERSE_CURVE_POINTS}-point safety limit"
-                    ));
+                    ))
                 }
-                global_position_error =
+                global_position_error = 
                     global_position_error.max(diagnostics.max_position_chord_error);
-                global_normal_error = global_normal_error.max(diagnostics.max_normal_chord_error);
+                global_normal_error = 
+                    global_normal_error.max(diagnostics.max_normal_chord_error);
+                
                 any_limit_reached |= diagnostics.subdivision_limit_reached;
                 curves.push(InverseOffsetCurve {
-                    source_level: level.level,
-                    source_component_id: component.id,
-                    inverse_iteration,
-                    is_hole: component.is_hole,
-                    input_point_count,
-                    output_point_count: points.len(),
-                    points: points.clone(),
-                    closure_position_residual,
-                    closure_normal_residual,
-                    max_position_chord_error: diagnostics.max_position_chord_error,
-                    max_normal_chord_error: diagnostics.max_normal_chord_error,
-                    subdivision_limit_reached: diagnostics.subdivision_limit_reached,
-                });
-                source_points = points;
+                    source_level
+                })
             }
         }
-    }
-
-    Ok(InverseOffsetResult {
-        curves,
-        source_curve_count,
-        completed_iterations: iterations,
-        total_output_points,
-        max_position_chord_error: global_position_error,
-        max_normal_chord_error: global_normal_error,
-        subdivision_limit_reached: any_limit_reached,
-    })
-}
-
-#[wasm_bindgen(js_name = "computeInverseGeometricOffsetContours")]
-pub fn compute_inverse_geometric_offset_contours_js(
-    levels_js: JsValue,
-    a: f64,
-    b: f64,
-    epsilon: f64,
-    iterations: usize,
-    position_tolerance: f64,
-    normal_tolerance: f64,
-    max_subdivision_depth: usize,
-) -> Result<JsValue, JsValue> {
-    let levels: Vec<GeometricOffsetLevel> = serde_wasm_bindgen::from_value(levels_js)
-        .map_err(|error| JsValue::from_str(&format!("Invalid geometric offset levels: {error}")))?;
-    let result = compute_inverse_geometric_offset_contours(
-        &levels,
-        a,
-        b,
-        epsilon,
-        iterations,
-        position_tolerance,
-        normal_tolerance,
-        max_subdivision_depth,
-    )
-    .map_err(|error| JsValue::from_str(&error))?;
-    serde_wasm_bindgen::to_value(&result).map_err(|error| {
-        JsValue::from_str(&format!("Failed to serialize inverse contours: {error}"))
-    })
-}
-
-#[wasm_bindgen(js_name = "computeGeometricOffsetContours")]
-pub fn compute_geometric_offset_contours_js(
-    boundary: JsValue,
-    epsilon: f64,
-) -> Result<JsValue, JsValue> {
-    let seed: Vec<(f64, f64)> = serde_wasm_bindgen::from_value(boundary)
-        .map_err(|error| JsValue::from_str(&format!("Invalid MIS boundary: {error}")))?;
-    let result = compute_geometric_offset_contours(&seed, epsilon)
-        .map_err(|error| JsValue::from_str(&error))?;
-    serde_wasm_bindgen::to_value(&result).map_err(|error| {
-        JsValue::from_str(&format!("Failed to serialize offset contours: {error}"))
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn circle(radius: f64, count: usize, clockwise: bool) -> Vec<(f64, f64)> {
-        let mut points = (0..count)
-            .map(|index| {
-                let angle = std::f64::consts::TAU * index as f64 / count as f64;
-                (radius * angle.cos(), radius * angle.sin())
-            })
-            .collect::<Vec<_>>();
-        if clockwise {
-            points.reverse();
-        }
-        points
-    }
-
-    #[test]
-    fn invalid_direct_projection_inputs_fail_fast() {
-        assert!(compute_geometric_offset_contours(&[(0.0, 0.0), (1.0, 0.0)], 0.1).is_err());
-        assert!(compute_geometric_offset_contours(&circle(1.0, 64, false), 0.0).is_err());
-        assert!(
-            compute_geometric_offset_contours(&[(0.0, 0.0), (1.0, 0.0), (f64::NAN, 1.0)], 0.1)
-                .is_err()
-        );
-    }
-
-    #[test]
-    fn projects_each_counterclockwise_circle_sample_outward_by_epsilon() {
-        let radius = 0.75;
-        let epsilon = 0.2;
-        let seed = circle(radius, 128, false);
-        let result = compute_geometric_offset_contours(&seed, epsilon).unwrap();
-        let component = &result.levels[0].boundary_components[0];
-
-        assert_eq!(result.completed_levels, 1);
-        assert_eq!(component.points.len(), seed.len());
-        assert_eq!(component.orientation, Orientation::CounterClockwise);
-        for ((source_x, source_y), projected) in seed.iter().zip(&component.points) {
-            let displacement_x = projected.x - source_x;
-            let displacement_y = projected.y - source_y;
-            assert!((displacement_x.hypot(displacement_y) - epsilon).abs() < 1e-12);
-            assert!((projected.nx.hypot(projected.ny) - 1.0).abs() < 1e-12);
-            assert!(source_x * projected.nx + source_y * projected.ny > 0.74);
-            assert!((projected.x.hypot(projected.y) - (radius + epsilon)).abs() < 1e-10);
-        }
-    }
-
-    #[test]
-    fn clockwise_input_still_projects_outward() {
-        let radius = 0.5;
-        let epsilon = 0.1;
-        let seed = circle(radius, 96, true);
-        let result = compute_geometric_offset_contours(&seed, epsilon).unwrap();
-        let component = &result.levels[0].boundary_components[0];
-
-        assert_eq!(component.orientation, Orientation::Clockwise);
-        for ((source_x, source_y), projected) in seed.iter().zip(&component.points) {
-            assert!(source_x * projected.nx + source_y * projected.ny > 0.49);
-            assert!((projected.x.hypot(projected.y) - (radius + epsilon)).abs() < 1e-10);
-        }
-    }
-
-    #[test]
-    fn square_vertices_use_outward_edge_normal_bisectors() {
-        let seed = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
-        let result = compute_geometric_offset_contours(&seed, 0.5).unwrap();
-        let points = &result.levels[0].boundary_components[0].points;
-        let scale = 0.5 / 2.0_f64.sqrt();
-
-        assert!((points[0].x - (-1.0 - scale)).abs() < 1e-12);
-        assert!((points[0].y - (-1.0 - scale)).abs() < 1e-12);
-        assert!((points[0].nx + 1.0 / 2.0_f64.sqrt()).abs() < 1e-12);
-        assert!((points[0].ny + 1.0 / 2.0_f64.sqrt()).abs() < 1e-12);
-    }
-
-    #[test]
-    fn duplicate_closing_sample_is_removed() {
-        let mut seed = circle(0.5, 32, false);
-        seed.push(seed[0]);
-        let result = compute_geometric_offset_contours(&seed, 0.1).unwrap();
-        assert_eq!(
-            result.levels[0].boundary_components[0].points.len(),
-            seed.len() - 1
-        );
-    }
-
-    #[test]
-    fn inverse_offset_curves_preserve_cyclic_components_and_unit_normals() {
-        let offsets = compute_geometric_offset_contours(&circle(0.5, 128, false), 0.1).unwrap();
-        let inverse = compute_inverse_geometric_offset_contours(
-            &offsets.levels,
-            0.4,
-            0.3,
-            0.1,
-            2,
-            1e-3,
-            0.02,
-            7,
-        )
-        .unwrap();
-
-        assert_eq!(inverse.source_curve_count, 1);
-        assert_eq!(inverse.completed_iterations, 2);
-        assert_eq!(inverse.curves.len(), 2);
-        assert!(inverse.total_output_points > 0);
-        for curve in &inverse.curves {
-            assert!(curve.points.len() >= 3);
-            assert!(curve.closure_position_residual < 1e-12);
-            assert!(curve.closure_normal_residual < 1e-12);
-            assert!(curve.points.iter().all(|point| {
-                [point.x, point.y, point.nx, point.ny]
-                    .iter()
-                    .all(|value| value.is_finite())
-                    && (point.nx.hypot(point.ny) - 1.0).abs() < 1e-12
-            }));
-        }
-    }
-
-    #[test]
-    fn inverse_offset_validation_fails_before_mapping() {
-        let empty: Vec<GeometricOffsetLevel> = Vec::new();
-        assert!(
-            compute_inverse_geometric_offset_contours(&empty, 0.4, 0.3, 0.1, 1, 1e-3, 0.02, 6)
-                .is_err()
-        );
-
-        let offsets = compute_geometric_offset_contours(&circle(0.5, 64, false), 0.1).unwrap();
-        assert!(compute_inverse_geometric_offset_contours(
-            &offsets.levels,
-            0.4,
-            0.0,
-            0.1,
-            1,
-            1e-3,
-            0.02,
-            6
-        )
-        .is_err());
-        assert!(compute_inverse_geometric_offset_contours(
-            &offsets.levels,
-            0.4,
-            0.3,
-            0.1,
-            0,
-            1e-3,
-            0.02,
-            6
-        )
-        .is_err());
     }
 }

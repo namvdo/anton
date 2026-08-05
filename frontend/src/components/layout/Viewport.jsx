@@ -1,10 +1,19 @@
 import React from 'react';
-import { BASIN_LAYER_STYLES } from '../../utils/basinDisplay';
+import { inverseOffsetStepColor, visibleInverseOffsetCurves } from '../../utils/inverseOffsetDisplay';
 
-export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOffsetState, basinState, ulamState, displayRange, handleZoomIn, handleZoomOut, handleResetView, handlePanMode, savePNG }) => {
+export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOffsetState, ulamState, displayRange, handleZoomIn, handleZoomOut, handleResetView, handlePanMode, savePNG }) => {
   const serializedDisplayRange = displayRange
     ? `${displayRange.xMin},${displayRange.xMax},${displayRange.yMin},${displayRange.yMax}`
     : undefined;
+  const inverseCurves = geometricOffsetState?.showInverseContours
+    ? visibleInverseOffsetCurves(
+      geometricOffsetState?.inverseResult,
+      geometricOffsetState?.inverseDisplayMode || 'final'
+    )
+    : [];
+  const inverseIterations = [...new Set(inverseCurves.map(curve => (
+    Number(curve.inverse_iteration) || 1
+  )))].sort((left, right) => left - right);
 
   return (
     <div className="viewport" data-view-range={serializedDisplayRange}>
@@ -28,8 +37,12 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
         {manifoldState.showUnstableManifold && <div className="lg-item"><div className="lg-line" style={{ background: '#5b88b5' }}></div>Unstable manifold</div>}
         {manifoldState.showStableManifold && <div className="lg-item"><div className="lg-line" style={{ background: '#b8904a' }}></div>Stable manifold</div>}
         {geometricOffsetState?.showContours && geometricOffsetState?.result && <div className="lg-item"><div className="lg-line" style={{ background: '#3f9186' }}></div>Geometric ε-offsets</div>}
-        {basinState?.showBasin && basinState?.result?.inner_cell_count > 0 && <div className="lg-item"><div className="lg-box" style={{ background: BASIN_LAYER_STYLES.inner.color }}></div>Verified finite capture</div>}
-        {basinState?.showBasin && basinState?.result?.unresolved_cell_count > 0 && <div className="lg-item"><div className="lg-box" style={{ background: BASIN_LAYER_STYLES.outer.color, opacity: BASIN_LAYER_STYLES.outer.opacity }}></div>Possible / unresolved</div>}
+        {inverseIterations.map(iteration => (
+          <div className="lg-item" key={`inverse-offset-${iteration}`}>
+            <div className="lg-line" style={{ background: inverseOffsetStepColor(iteration), height: '3px' }}></div>
+            Inverse offset · step {iteration}
+          </div>
+        ))}
         {manifoldState.showOrbits && (
           <>
             <div className="lg-item"><div className="lg-dot" style={{ background: '#b8904a' }}></div>Saddle</div>
