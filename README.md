@@ -25,17 +25,6 @@ Rather than tracking every possible point within the noise ball $B_\epsilon(f(x)
 
 ![Set-valued dynamical system with additive bounded noise Visualization](./images/unstable_manifold_for_boundary_map.png)
 
-<<<<<<< Updated upstream
-=======
-### Geometric offset contours around the MIS
-
-After computing an ordered closed unstable-manifold approximation \(p_i\) of the MIS boundary, the **Geometric offsets** panel estimates the outward unit normal \(n_i\) from the adjacent polygon edges and computes
-
-$$q_i=p_i+\epsilon_g n_i.$$
-
-The **Contour ε** control sets \(\epsilon_g\) independently of the main system noise radius \(\epsilon_s\). There is no signed-distance grid, marching-squares extraction, level count, or resolution control: BIST directly connects the projected samples \(q_i\) cyclically and renders them as a dashed `LineLoop`. This is a sampled normal-offset curve, not a guaranteed Minkowski boundary; if the requested distance exceeds the local reach of the sampled MIS boundary, the projected polygon can fold or self-intersect. After projection, choose the inverse-step count and press **Show inverse curve**. The inverse extended Hénon map uses \(\epsilon_s\), and adaptive midpoint subdivision keeps its displayed curves smooth. See the mathematical and technical note as [LaTeX source](./docs/geometric_offset_contours.tex), [compiled PDF](./output/pdf/geometric_offset_contours.pdf), or [concise implementation note](./docs/geometric_offset_contours.md).
-
->>>>>>> Stashed changes
 ### An example of a 4-periodic point found for the boundary map with A = 1.4 and B = 0.3, epsilon=0.0625
 
 ![4-periodic point](./images/periodic_orbit_visualization.png)
