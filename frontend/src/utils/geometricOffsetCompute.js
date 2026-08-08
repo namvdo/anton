@@ -4,6 +4,12 @@ const coordinatePair = (point) => (
     : [Number(point?.x), Number(point?.y)]
 );
 
+const extendedPoint = (point) => (
+  Array.isArray(point)
+    ? [Number(point[0]), Number(point[1]), Number(point[2]), Number(point[3])]
+    : [Number(point?.x), Number(point?.y), Number(point?.nx), Number(point?.ny)]
+);
+
 const validateDirectProjectionInput = (boundary, contourEpsilon) => {
   const epsilon = Number(contourEpsilon);
   if (!Number.isFinite(epsilon) || epsilon <= 0) {
@@ -14,9 +20,12 @@ const validateDirectProjectionInput = (boundary, contourEpsilon) => {
   }
 
   boundary.forEach(point => {
-    const [x, y] = coordinatePair(point);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) {
-      throw new Error('The unstable-manifold boundary contains a non-finite point.');
+    const [x, y, nx, ny] = extendedPoint(point);
+    if (![x, y, nx, ny].every(Number.isFinite)) {
+      throw new Error('The unstable-manifold boundary contains a non-finite position or normal.');
+    }
+    if (Math.hypot(nx, ny) < 1e-14) {
+      throw new Error('The unstable-manifold boundary contains a degenerate attached normal.');
     }
   });
   return epsilon;

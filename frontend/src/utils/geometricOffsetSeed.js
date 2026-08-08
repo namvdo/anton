@@ -9,10 +9,6 @@ const signedArea = (points) => {
   return area * 0.5;
 };
 
-const cleanPoints = (points) => (points || []).filter(
-  point => Array.isArray(point) && point.length >= 2 && Number.isFinite(point[0]) && Number.isFinite(point[1])
-);
-
 const distance = (left, right) => Math.hypot(left[0] - right[0], left[1] - right[1]);
 
 const closureTolerance = (points) => {
@@ -78,16 +74,16 @@ const completeNegativeMultiplierPhase = (trajectory, eigenvalue, params) => {
   const image = extended.map(point => forwardBoundaryPoint(point, params));
   if (image.some(point => point === null)) return null;
   return [
-    ...extended.map(([x, y]) => [x, y]),
-    ...image.reverse().map(([x, y]) => [x, y])
+    ...extended,
+    ...image.reverse()
   ];
 };
 
 export const buildGeometricOffsetSeed = (manifolds, maxPoints = 4000, params = {}) => {
   const candidates = [];
   for (const manifold of manifolds || []) {
-    const plus = cleanPoints(manifold?.plus?.points);
-    const minus = cleanPoints(manifold?.minus?.points);
+    const plus = cleanExtendedPoints(manifold?.plus?.extended_points);
+    const minus = cleanExtendedPoints(manifold?.minus?.extended_points);
     if (plus.length >= 3) candidates.push(plus);
     if (minus.length >= 3) candidates.push(minus);
     const joined = joinClosedBranches(plus, minus);

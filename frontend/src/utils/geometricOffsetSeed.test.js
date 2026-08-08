@@ -11,23 +11,29 @@ import {
 describe('geometricOffsetSeed', () => {
   it('selects the largest closed manifold candidate', () => {
     const manifolds = [{
-      plus: { points: [[0, 0], [2, 0], [2, 2], [0, 2]] },
-      minus: { points: [[0, 0], [0.2, 0], [0, 0.2]] },
+      plus: { extended_points: [[0, 0, -1, -1], [2, 0, 1, -1], [2, 2, 1, 1], [0, 2, -1, 1]] },
+      minus: { extended_points: [[0, 0, -1, -1], [0.2, 0, 1, -1], [0, 0.2, -1, 1]] },
     }];
     const seed = buildGeometricOffsetSeed(manifolds);
     expect(seed).toHaveLength(4);
     expect(Math.abs(signedArea(seed))).toBe(4);
+    expect(seed[0]).toEqual([0, 0, -1, -1]);
+    expect(seed.every(point => point.length === 4)).toBe(true);
   });
 
   it('rejects missing and degenerate seeds', () => {
     expect(buildGeometricOffsetSeed([])).toEqual([]);
-    expect(buildGeometricOffsetSeed([{ plus: { points: [[0, 0], [1, 0], [2, 0]] } }])).toEqual([]);
+    expect(buildGeometricOffsetSeed([{ plus: { points: [[0, 0], [1, 0], [0, 1]] } }])).toEqual([]);
+    expect(buildGeometricOffsetSeed([{
+      plus: { extended_points: [[0, 0, 1, 0], [1, 0, 1, 0], [2, 0, 1, 0]] }
+    }])).toEqual([]);
   });
 
   it('rejects an open trajectory whose artificial closing edge is too long', () => {
     const openArc = Array.from({ length: 40 }, (_, i) => [i / 39, Math.sin(i / 39)]);
     expect(isClosedCandidate(openArc)).toBe(false);
-    expect(buildGeometricOffsetSeed([{ plus: { points: openArc } }])).toEqual([]);
+    const extendedOpenArc = openArc.map(([x, y]) => [x, y, 0, 1]);
+    expect(buildGeometricOffsetSeed([{ plus: { extended_points: extendedOpenArc } }])).toEqual([]);
   });
 
   it('accepts two closed seams even when adaptive sampling has long internal edges', () => {
@@ -35,7 +41,11 @@ describe('geometricOffsetSeed', () => {
     const minus = [[0, 0.001], [0.01, -0.02], [0.02, -0.04], [1, -1], [4, 0.001]];
     const joined = joinClosedBranches(plus, minus);
     expect(joined).not.toBeNull();
-    expect(buildGeometricOffsetSeed([{ plus: { points: plus }, minus: { points: minus } }])).toHaveLength(10);
+    const withNormals = points => points.map(([x, y]) => [x, y, 0, 1]);
+    expect(buildGeometricOffsetSeed([{
+      plus: { extended_points: withNormals(plus) },
+      minus: { extended_points: withNormals(minus) }
+    }])).toHaveLength(10);
   });
 
   it('completes the missing phase for a negative multiplier', () => {
@@ -48,15 +58,17 @@ describe('geometricOffsetSeed', () => {
         [1.1, 0.5, 0, 1]
       ]
     };
-    expect(completeNegativeMultiplierPhase(trajectory, -1.05, params)).toHaveLength(6);
+    const completed = completeNegativeMultiplierPhase(trajectory, -1.05, params);
+    expect(completed).toHaveLength(6);
+    expect(completed.every(point => point.length === 4)).toBe(true);
     expect(completeNegativeMultiplierPhase(trajectory, 1.05, params)).toBeNull();
   });
 
   it('bounds the seed size for worker transfer', () => {
-    const points = Array.from({ length: 100 }, (_, i) => {
+    const extendedPoints = Array.from({ length: 100 }, (_, i) => {
       const angle = Math.PI * 2 * i / 100;
-      return [Math.cos(angle), Math.sin(angle)];
+      return [Math.cos(angle), Math.sin(angle), Math.cos(angle), Math.sin(angle)];
     });
-    expect(buildGeometricOffsetSeed([{ plus: { points } }], 20).length).toBeLessThanOrEqual(20);
+    expect(buildGeometricOffsetSeed([{ plus: { extended_points: extendedPoints } }], 20).length).toBeLessThanOrEqual(20);
   });
 });

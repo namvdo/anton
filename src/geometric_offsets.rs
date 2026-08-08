@@ -1,8 +1,9 @@
 //! Direct normal-projection contours around a closed MIS boundary.
 //!
-//! For each ordered boundary sample `p_i`, the implementation estimates the
-//! outward unit normal `n_i` from the two adjacent polygon edges and stores
-//! `p_i + epsilon * n_i`. No signed-distance grid or contour extraction is
+//! For each ordered extended boundary sample `(p_i, n_i)`, the implementation
+//! normalizes the attached outward normal and stores `p_i + epsilon * n_i`.
+//! It does not replace the dynamically transported MIS normal with a polygonal
+//! edge-normal estimate. No signed-distance grid or contour extraction is
 //! involved.
 
 use serde::{Deserialize, Serialize};
@@ -12,13 +13,6 @@ use crate::henon_extended_map::{inverse_henon_extended_point, HenonExtendedPoint
 
 const NORMAL_EPSILON: f64 = 1e-14;
 const MAX_INVERSE_CURVE_POINTS: usize = 250_000;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Orientation {
-    CounterClockwise,
-    Clockwise,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ExtendedBoundaryPoint {
@@ -32,9 +26,7 @@ pub struct ExtendedBoundaryPoint {
 pub struct BoundaryComponent {
     pub id: usize,
     pub points: Vec<ExtendedBoundaryPoint>,
-    pub orientation: Orientation,
     pub is_hole: bool,
-    pub signed_area: f64,
     pub perimeter: f64,
     pub is_simple: bool,
 }
@@ -50,7 +42,6 @@ pub struct GeometricOffsetLevel {
     pub level: usize,
     pub target_distance: f64,
     pub boundary_components: Vec<BoundaryComponent>,
-    pub area: f64,
     pub component_count: usize,
 }
 
@@ -105,31 +96,10 @@ impl Point2 {
     }
 }
 
-fn signed_area(points: &[Point2]) -> f64 {
-    if points.len() < 3 {
-        return 0.0;
-    }
-    let mut sum = 0.0;
-    for index in 0..points.len() {
-        let current = points[index];
-        let next = points[(index + 1) % points.len()];
-        sum += current.x * next.y - next.x * current.y;
-    }
-    0.5 * sum
-}
-
 fn perimeter(points: &[Point2]) -> f64 {
     (0..points.len())
         .map(|index| points[index].distance(points[(index + 1) % points.len()]))
         .sum()
-}
-
-fn orientation(area: f64) -> Orientation {
-    if area >= 0.0 {
-        Orientation::CounterClockwise
-    } else {
-        Orientation::Clockwise
-    }
 }
 
 fn cross(a: Point2, b: Point2, c: Point2) -> f64 {
@@ -179,89 +149,55 @@ fn normalize_vector(x: f64, y: f64, context: &str) -> Result<(f64, f64), String>
     Ok((x / length, y / length))
 }
 
-fn clean_seed(seed: &[(f64, f64)]) -> Result<Vec<Point2>, String> {
+fn clean_seed(seed: &[(f64, f64, f64, f64)]) -> Result<Vec<ExtendedBoundaryPoint>, String> {
     if seed.len() < 3 {
-        return Err("MIS boundary seed needs at least three points".to_string());
+        return Err("MIS boundary seed needs at least three extended points".to_string());
     }
 
     let mut points = Vec::with_capacity(seed.len());
-    for &(x, y) in seed {
-        if !x.is_finite() || !y.is_finite() {
-            return Err("MIS boundary seed contains non-finite points".to_string());
+    for &(x, y, nx, ny) in seed {
+        if ![x, y, nx, ny].iter().all(|value| value.is_finite()) {
+            return Err("MIS boundary seed contains a non-finite position or normal".to_string());
         }
-        let point = Point2::new(x, y);
-        if points.last().map_or(true, |previous: &Point2| {
-            previous.distance(point) > NORMAL_EPSILON
-        }) {
-            points.push(point);
+        let position = Point2::new(x, y);
+        if points
+            .last()
+            .map_or(true, |previous: &ExtendedBoundaryPoint| {
+                Point2::new(previous.x, previous.y).distance(position) > NORMAL_EPSILON
+            })
+        {
+            let (nx, ny) = normalize_vector(nx, ny, "Attached MIS boundary normal")?;
+            points.push(ExtendedBoundaryPoint { x, y, nx, ny });
         }
     }
 
     if points
         .first()
         .zip(points.last())
-        .is_some_and(|(first, last)| first.distance(*last) <= NORMAL_EPSILON)
+        .is_some_and(|(first, last)| {
+            Point2::new(first.x, first.y).distance(Point2::new(last.x, last.y)) <= NORMAL_EPSILON
+        })
     {
         points.pop();
     }
     if points.len() < 3 {
-        return Err("MIS boundary seed needs at least three distinct points".to_string());
-    }
-    if signed_area(&points).abs() < NORMAL_EPSILON {
-        return Err("MIS boundary seed has degenerate signed area".to_string());
+        return Err("MIS boundary seed needs at least three distinct extended points".to_string());
     }
     Ok(points)
 }
 
-fn outward_edge_normal(
-    start: Point2,
-    end: Point2,
-    counter_clockwise: bool,
-) -> Result<(f64, f64), String> {
-    let (tx, ty) = normalize_vector(end.x - start.x, end.y - start.y, "MIS boundary edge")?;
-    Ok(if counter_clockwise {
-        (ty, -tx)
-    } else {
-        (-ty, tx)
-    })
-}
-
-/// Estimate the outward normal at one polygon vertex by averaging the outward
-/// normals of its incoming and outgoing edges. This is the standard vertex
-/// normal for a sampled oriented polygon.
-fn outward_vertex_normal(
-    previous: Point2,
-    current: Point2,
-    next: Point2,
-    counter_clockwise: bool,
-) -> Result<(f64, f64), String> {
-    let incoming = outward_edge_normal(previous, current, counter_clockwise)?;
-    let outgoing = outward_edge_normal(current, next, counter_clockwise)?;
-    let sum_x = incoming.0 + outgoing.0;
-    let sum_y = incoming.1 + outgoing.1;
-
-    if sum_x.hypot(sum_y) >= NORMAL_EPSILON {
-        normalize_vector(sum_x, sum_y, "MIS boundary vertex normal")
-    } else {
-        // A 180-degree reversal has no unique bisector. Using the outgoing
-        // edge normal keeps the construction deterministic without inventing
-        // a signed-distance reconstruction.
-        Ok(outgoing)
-    }
-}
-
-fn direct_normal_projection(seed: &[Point2], epsilon: f64) -> Result<BoundaryComponent, String> {
-    let seed_area = signed_area(seed);
-    let counter_clockwise = seed_area > 0.0;
+fn direct_normal_projection(
+    seed: &[ExtendedBoundaryPoint],
+    epsilon: f64,
+) -> Result<BoundaryComponent, String> {
     let mut points = Vec::with_capacity(seed.len());
     let mut projected_positions = Vec::with_capacity(seed.len());
 
-    for index in 0..seed.len() {
-        let previous = seed[(index + seed.len() - 1) % seed.len()];
-        let current = seed[index];
-        let next = seed[(index + 1) % seed.len()];
-        let (nx, ny) = outward_vertex_normal(previous, current, next, counter_clockwise)?;
-        let projected = Point2::new(current.x + epsilon * nx, current.y + epsilon * ny);
+    for current in seed {
+        let projected = Point2::new(
+            current.x + epsilon * current.nx,
+            current.y + epsilon * current.ny,
+        );
         if !projected.x.is_finite() || !projected.y.is_finite() {
             return Err("Direct normal projection produced a non-finite point".to_string());
         }
@@ -269,27 +205,24 @@ fn direct_normal_projection(seed: &[Point2], epsilon: f64) -> Result<BoundaryCom
         points.push(ExtendedBoundaryPoint {
             x: projected.x,
             y: projected.y,
-            nx,
-            ny,
+            nx: current.nx,
+            ny: current.ny,
         });
     }
 
-    let projected_area = signed_area(&projected_positions);
     Ok(BoundaryComponent {
         id: 0,
         points,
-        orientation: orientation(projected_area),
         is_hole: false,
-        signed_area: projected_area,
         perimeter: perimeter(&projected_positions),
         is_simple: !has_self_intersection(&projected_positions),
     })
 }
 
 /// Construct one closed offset polygon by projecting every MIS boundary
-/// sample exactly `epsilon` along its estimated outward unit normal.
+/// sample exactly `epsilon` along its attached outward unit normal.
 pub fn compute_geometric_offset_contours(
-    seed: &[(f64, f64)],
+    seed: &[(f64, f64, f64, f64)],
     epsilon: f64,
 ) -> Result<GeometricOffsetResult, String> {
     if !epsilon.is_finite() || epsilon <= 0.0 {
@@ -298,12 +231,10 @@ pub fn compute_geometric_offset_contours(
 
     let seed = clean_seed(seed)?;
     let component = direct_normal_projection(&seed, epsilon)?;
-    let area = component.signed_area.abs();
     let level = GeometricOffsetLevel {
         level: 1,
         target_distance: epsilon,
         boundary_components: vec![component],
-        area,
         component_count: 1,
     };
 
@@ -376,6 +307,11 @@ struct InverseSubdivisionSettings {
     max_depth: usize,
 }
 
+/// Adaptively sample the inverse image of one source-curve segment.
+///
+/// The caller has already stored the mapped left endpoint. Each accepted leaf
+/// appends only its mapped right endpoint, so left-first recursion preserves
+/// curve order without duplicating shared endpo  ints.
 fn append_inverse_segment(
     source_left: ExtendedBoundaryPoint,
     source_right: ExtendedBoundaryPoint,
@@ -444,7 +380,7 @@ fn invert_offset_component(
     (
         Vec<ExtendedBoundaryPoint>,
         f64,
-        f64,
+        f64,  
         InverseSubdivisionDiagnostics,
     ),
     String,
@@ -622,7 +558,7 @@ pub fn compute_geometric_offset_contours_js(
     boundary: JsValue,
     epsilon: f64,
 ) -> Result<JsValue, JsValue> {
-    let seed: Vec<(f64, f64)> = serde_wasm_bindgen::from_value(boundary)
+    let seed: Vec<(f64, f64, f64, f64)> = serde_wasm_bindgen::from_value(boundary)
         .map_err(|error| JsValue::from_str(&format!("Invalid MIS boundary: {error}")))?;
     let result = compute_geometric_offset_contours(&seed, epsilon)
         .map_err(|error| JsValue::from_str(&error))?;
@@ -635,14 +571,19 @@ pub fn compute_geometric_offset_contours_js(
 mod tests {
     use super::*;
 
-    fn circle(radius: f64, count: usize, clockwise: bool) -> Vec<(f64, f64)> {
+    fn circle(radius: f64, count: usize, reverse_order: bool) -> Vec<(f64, f64, f64, f64)> {
         let mut points = (0..count)
             .map(|index| {
                 let angle = std::f64::consts::TAU * index as f64 / count as f64;
-                (radius * angle.cos(), radius * angle.sin())
+                (
+                    radius * angle.cos(),
+                    radius * angle.sin(),
+                    2.0 * angle.cos(),
+                    2.0 * angle.sin(),
+                )
             })
             .collect::<Vec<_>>();
-        if clockwise {
+        if reverse_order {
             points.reverse();
         }
         points
@@ -650,16 +591,34 @@ mod tests {
 
     #[test]
     fn invalid_direct_projection_inputs_fail_fast() {
-        assert!(compute_geometric_offset_contours(&[(0.0, 0.0), (1.0, 0.0)], 0.1).is_err());
+        assert!(compute_geometric_offset_contours(
+            &[(0.0, 0.0, 1.0, 0.0), (1.0, 0.0, 1.0, 0.0)],
+            0.1
+        )
+        .is_err());
         assert!(compute_geometric_offset_contours(&circle(1.0, 64, false), 0.0).is_err());
-        assert!(
-            compute_geometric_offset_contours(&[(0.0, 0.0), (1.0, 0.0), (f64::NAN, 1.0)], 0.1)
-                .is_err()
-        );
+        assert!(compute_geometric_offset_contours(
+            &[
+                (0.0, 0.0, 1.0, 0.0),
+                (1.0, 0.0, 1.0, 0.0),
+                (f64::NAN, 1.0, 1.0, 0.0),
+            ],
+            0.1
+        )
+        .is_err());
+        assert!(compute_geometric_offset_contours(
+            &[
+                (0.0, 0.0, 1.0, 0.0),
+                (1.0, 0.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0, 1.0),
+            ],
+            0.1
+        )
+        .is_err());
     }
 
     #[test]
-    fn projects_each_counterclockwise_circle_sample_outward_by_epsilon() {
+    fn projects_each_circle_sample_outward_by_epsilon() {
         let radius = 0.75;
         let epsilon = 0.2;
         let seed = circle(radius, 128, false);
@@ -668,8 +627,7 @@ mod tests {
 
         assert_eq!(result.completed_levels, 1);
         assert_eq!(component.points.len(), seed.len());
-        assert_eq!(component.orientation, Orientation::CounterClockwise);
-        for ((source_x, source_y), projected) in seed.iter().zip(&component.points) {
+        for ((source_x, source_y, _, _), projected) in seed.iter().zip(&component.points) {
             let displacement_x = projected.x - source_x;
             let displacement_y = projected.y - source_y;
             assert!((displacement_x.hypot(displacement_y) - epsilon).abs() < 1e-12);
@@ -680,31 +638,66 @@ mod tests {
     }
 
     #[test]
-    fn clockwise_input_still_projects_outward() {
+    fn reversed_sample_order_still_projects_outward() {
         let radius = 0.5;
         let epsilon = 0.1;
         let seed = circle(radius, 96, true);
         let result = compute_geometric_offset_contours(&seed, epsilon).unwrap();
         let component = &result.levels[0].boundary_components[0];
 
-        assert_eq!(component.orientation, Orientation::Clockwise);
-        for ((source_x, source_y), projected) in seed.iter().zip(&component.points) {
+        for ((source_x, source_y, _, _), projected) in seed.iter().zip(&component.points) {
             assert!(source_x * projected.nx + source_y * projected.ny > 0.49);
             assert!((projected.x.hypot(projected.y) - (radius + epsilon)).abs() < 1e-10);
         }
     }
 
     #[test]
-    fn square_vertices_use_outward_edge_normal_bisectors() {
-        let seed = [(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)];
+    fn projection_uses_attached_normals_instead_of_polygon_bisectors() {
+        let seed = [
+            (-1.0, -1.0, -2.0, 0.0),
+            (1.0, -1.0, 0.0, -3.0),
+            (1.0, 1.0, 4.0, 0.0),
+            (-1.0, 1.0, 0.0, 5.0),
+        ];
         let result = compute_geometric_offset_contours(&seed, 0.5).unwrap();
         let points = &result.levels[0].boundary_components[0].points;
-        let scale = 0.5 / 2.0_f64.sqrt();
 
-        assert!((points[0].x - (-1.0 - scale)).abs() < 1e-12);
-        assert!((points[0].y - (-1.0 - scale)).abs() < 1e-12);
-        assert!((points[0].nx + 1.0 / 2.0_f64.sqrt()).abs() < 1e-12);
-        assert!((points[0].ny + 1.0 / 2.0_f64.sqrt()).abs() < 1e-12);
+        assert_eq!(
+            points[0],
+            ExtendedBoundaryPoint {
+                x: -1.5,
+                y: -1.0,
+                nx: -1.0,
+                ny: 0.0
+            }
+        );
+        assert_eq!(
+            points[1],
+            ExtendedBoundaryPoint {
+                x: 1.0,
+                y: -1.5,
+                nx: 0.0,
+                ny: -1.0
+            }
+        );
+        assert_eq!(
+            points[2],
+            ExtendedBoundaryPoint {
+                x: 1.5,
+                y: 1.0,
+                nx: 1.0,
+                ny: 0.0
+            }
+        );
+        assert_eq!(
+            points[3],
+            ExtendedBoundaryPoint {
+                x: -1.0,
+                y: 1.5,
+                nx: 0.0,
+                ny: 1.0
+            }
+        );
     }
 
     #[test]

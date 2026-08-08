@@ -1833,7 +1833,10 @@ const SetValuedViz = () => {
 
     const computeGeometricOffsets = useCallback(async () => {
         if (dynamicSystem !== 'henon' || geometricOffsetSeed.length < 3) {
-            setGeometricOffsetState(prev => ({ ...prev, error: 'A nondegenerate unstable-manifold boundary is required.' }));
+            setGeometricOffsetState(prev => ({
+                ...prev,
+                error: 'A nondegenerate unstable-manifold boundary with attached normals is required.'
+            }));
             return;
         }
         const requestId = ++geometricOffsetRequestIdRef.current;

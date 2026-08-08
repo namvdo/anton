@@ -22,7 +22,7 @@ const result = {
   epsilon: 0.1,
   stop_reason: 'requested_levels_completed',
   levels: [
-    { level: 1, target_distance: 0.1, area: 1.2, component_count: 1, offset_residual: 0.001, gap_residual: 0.0015, uncertainty: 0.01 }
+    { level: 1, target_distance: 0.1, component_count: 1, offset_residual: 0.001, gap_residual: 0.0015, uncertainty: 0.01 }
   ]
 };
 
