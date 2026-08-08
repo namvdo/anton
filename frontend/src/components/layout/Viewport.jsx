@@ -8,7 +8,7 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
   const inverseCurves = geometricOffsetState?.showInverseContours
     ? visibleInverseOffsetCurves(
       geometricOffsetState?.inverseResult,
-      geometricOffsetState?.inverseDisplayMode || 'final'
+      geometricOffsetState?.inverseDisplayMode || 'all'
     )
     : [];
   const inverseIterations = [...new Set(inverseCurves.map(curve => (
@@ -40,7 +40,7 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
         {inverseIterations.map(iteration => (
           <div className="lg-item" key={`inverse-offset-${iteration}`}>
             <div className="lg-line" style={{ background: inverseOffsetStepColor(iteration), height: '3px' }}></div>
-            Inverse offset · step {iteration}
+            Boundary-map preimage · step {iteration}
           </div>
         ))}
         {manifoldState.showOrbits && (

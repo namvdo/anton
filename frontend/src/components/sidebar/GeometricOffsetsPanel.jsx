@@ -2,14 +2,22 @@ import React from 'react';
 import { Collapsible } from '../ui/Collapsible';
 import { Slider } from '../ui/Slider';
 import { Toggle } from '../ui/Toggle';
-import { inverseOffsetStepColor, visibleInverseOffsetCurves } from '../../utils/inverseOffsetDisplay';
+import {
+  inverseOffsetStepColor,
+  visibleInverseOffsetCurves
+} from '../../utils/inverseOffsetDisplay';
 
 export const GeometricOffsetsPanel = ({ state, setState, canCompute, compute, canComputeInverse, computeInverse, fitInverse }) => {
   const result = state.result;
   const inverseResult = state.inverseResult;
-  const inverseDisplayMode = state.inverseDisplayMode || 'final';
+  const inverseDisplayMode = state.inverseDisplayMode || 'all';
   const visibleInverseCurves = visibleInverseOffsetCurves(inverseResult, inverseDisplayMode);
-  const visibleIteration = visibleInverseCurves.at(-1)?.inverse_iteration || state.inverseIterations;
+  const visibleIterations = [...new Set(visibleInverseCurves.map(curve => (
+    Number(curve.inverse_iteration) || 1
+  )))].sort((left, right) => left - right);
+  const inverseToggleSwatch = visibleIterations.length > 1
+    ? `linear-gradient(90deg, ${visibleIterations.map(inverseOffsetStepColor).join(', ')})`
+    : inverseOffsetStepColor(visibleIterations[0] || state.inverseIterations);
   return (
     <Collapsible title="Geometric offsets" defaultOpen={true}>
       <Slider label="Contour ε" hint="normal distance" min={0.001} max={1} step={0.001}
@@ -31,7 +39,7 @@ export const GeometricOffsetsPanel = ({ state, setState, canCompute, compute, ca
       {state.error && <div className="geometric-offset-status error" role="alert">{state.error}</div>}
       {result && !state.error && (
         <div className="inverse-offset-controls">
-          <Slider label="Inverse steps" min={1} max={6} step={1} value={state.inverseIterations}
+          <Slider label="Preimage steps" min={1} max={8} step={1} value={state.inverseIterations}
             disabled={state.isComputingInverse}
             onChange={inverseIterations => setState(previous => ({
               ...previous,
@@ -47,35 +55,23 @@ export const GeometricOffsetsPanel = ({ state, setState, canCompute, compute, ca
                 const inverseDisplayMode = event.target.value;
                 setState(previous => ({ ...previous, inverseDisplayMode }));
               }}>
-              <option value="final">Final inverse step only</option>
-              <option value="all">All inverse steps</option>
+              <option value="all">All computed preimage steps</option>
+              <option value="final">Latest preimage step only</option>
             </select>
           </label>
-          <Toggle label="Show inverse offset curves" colorLine={inverseOffsetStepColor(visibleIteration)}
+          <Toggle label="Show inverse-map curves" colorLine={inverseToggleSwatch}
             checked={state.showInverseContours} disabled={!inverseResult}
             onChange={showInverseContours => setState(previous => ({ ...previous, showInverseContours }))} />
           <button className="param-apply-btn inverse-offset-compute" type="button" onClick={computeInverse}
             disabled={!canComputeInverse || state.isComputingInverse}>
-            {state.isComputingInverse ? 'Generating inverse curves…' : 'Show inverse curve'}
+            {state.isComputingInverse ? 'Computing preimages…' : 'Compute boundary-map preimage'}
           </button>
           {inverseResult && (
             <button className="param-apply-btn inverse-offset-fit" type="button" onClick={fitInverse}>
-              Fit inverse curve in view
+              Fit preimage in view
             </button>
           )}
           {state.inverseError && <div className="geometric-offset-status error" role="alert">{state.inverseError}</div>}
-          {inverseResult && !state.inverseError && (
-            <div className={`geometric-offset-status ${inverseResult.subdivision_limit_reached ? 'warning' : 'ready'}`}
-              aria-live="polite">
-              <div>{visibleInverseCurves.length} shown · {inverseResult.curves.length} generated closed curve{inverseResult.curves.length === 1 ? '' : 's'}</div>
-              <div className="geometric-offset-metrics">
-                <span>{inverseResult.total_output_points.toLocaleString()} stored samples</span>
-                <span>position chord error {inverseResult.max_position_chord_error.toExponential(2)}</span>
-                <span>normal chord error {inverseResult.max_normal_chord_error.toExponential(2)} rad</span>
-                <span>subdivision limit {inverseResult.subdivision_limit_reached ? 'reached' : 'clear'}</span>
-              </div>
-            </div>
-          )}
         </div>
       )}
     </Collapsible>

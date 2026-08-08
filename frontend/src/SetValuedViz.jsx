@@ -324,7 +324,7 @@ const SetValuedViz = () => {
         contourEpsilon: 0.1,
         showContours: true,
         inverseIterations: 1,
-        inverseDisplayMode: 'final',
+        inverseDisplayMode: 'all',
         showInverseContours: true,
         isComputing: false,
         isComputingInverse: false,

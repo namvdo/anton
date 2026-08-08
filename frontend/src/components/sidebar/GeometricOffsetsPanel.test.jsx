@@ -7,7 +7,7 @@ const state = {
   contourEpsilon: 0.08,
   showContours: true,
   inverseIterations: 1,
-  inverseDisplayMode: 'final',
+  inverseDisplayMode: 'all',
   showInverseContours: true,
   isComputing: false,
   isComputingInverse: false,
@@ -85,16 +85,22 @@ describe('GeometricOffsetsPanel', () => {
     const computeInverse = vi.fn();
     render(<GeometricOffsetsPanel state={{ ...state, result }} setState={vi.fn()}
       canCompute compute={vi.fn()} canComputeInverse computeInverse={computeInverse} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Show inverse curve' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Compute boundary-map preimage' }));
     expect(computeInverse).toHaveBeenCalledOnce();
-    expect(screen.getByText('Inverse steps')).toBeInTheDocument();
+    expect(screen.getByText('Preimage steps')).toBeInTheDocument();
     expect(screen.getByLabelText('Display')).toBeDisabled();
-    expect(screen.getByLabelText('Show inverse offset curves')).toBeDisabled();
+    expect(screen.getByLabelText('Show inverse-map curves')).toBeDisabled();
   });
 
-  it('reports inverse curve sampling and closure-oriented refinement diagnostics', () => {
+  it('keeps inverse sampling diagnostics out of the compact sidebar', () => {
     const inverseResult = {
-      curves: [{ source_level: 1, source_component_id: 0, inverse_iteration: 1, points: [] }],
+      curves: [{
+        source_level: 1,
+        source_component_id: 0,
+        inverse_iteration: 1,
+        source_relation: 'nested_outside',
+        points: []
+      }],
       total_output_points: 842,
       max_position_chord_error: 0.0004,
       max_normal_chord_error: 0.003,
@@ -102,14 +108,55 @@ describe('GeometricOffsetsPanel', () => {
       completed_iterations: 1
     };
     const fitInverse = vi.fn();
-    render(<GeometricOffsetsPanel state={{ ...state, result, inverseResult }} setState={vi.fn()}
+    const { container } = render(<GeometricOffsetsPanel state={{ ...state, result, inverseResult }} setState={vi.fn()}
       canCompute compute={vi.fn()} canComputeInverse computeInverse={vi.fn()} fitInverse={fitInverse} />);
-    expect(screen.getByText('1 shown · 1 generated closed curve')).toBeInTheDocument();
-    expect(screen.getByText(/842 stored samples/)).toBeInTheDocument();
-    expect(screen.getByText(/position chord error 4.00e-4/)).toBeInTheDocument();
-    expect(screen.getByText(/subdivision limit clear/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Show inverse offset curves')).toBeChecked();
-    fireEvent.click(screen.getByRole('button', { name: 'Fit inverse curve in view' }));
+    expect(screen.queryByText(/generated closed preimage/)).toBeNull();
+    expect(screen.queryByText(/stored samples/)).toBeNull();
+    expect(screen.queryByText(/position chord error/)).toBeNull();
+    expect(screen.queryByText(/subdivision limit/)).toBeNull();
+    expect(screen.queryByText(/source-nesting/)).toBeNull();
+    expect(container.querySelector('.geometric-offset-status')).toBeNull();
+    expect(screen.getByLabelText('Show inverse-map curves')).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Fit preimage in view' }));
     expect(fitInverse).toHaveBeenCalledOnce();
+  });
+
+  it('shows all computed steps by default and toggles the curve group as one overlay', () => {
+    const inverseResult = {
+      curves: [
+        { inverse_iteration: 1, source_relation: 'nested_outside', points: [] },
+        { inverse_iteration: 2, source_relation: 'nested_outside', points: [] },
+        { inverse_iteration: 3, source_relation: 'nested_outside', points: [] }
+      ],
+      total_output_points: 900,
+      max_position_chord_error: 0.0004,
+      max_normal_chord_error: 0.003,
+      subdivision_limit_reached: false,
+      completed_iterations: 3
+    };
+    const setState = vi.fn();
+    render(<GeometricOffsetsPanel state={{ ...state, result, inverseResult }} setState={setState}
+      canCompute compute={vi.fn()} canComputeInverse computeInverse={vi.fn()} fitInverse={vi.fn()} />);
+
+    expect(screen.getByLabelText('Display')).toHaveValue('all');
+    fireEvent.click(screen.getByLabelText('Show inverse-map curves'));
+    const update = setState.mock.calls[0][0];
+    expect(update({ ...state, inverseResult })).toMatchObject({ showInverseContours: false });
+  });
+
+  it('does not show a warning box when an inverse curve fails the nesting diagnostic', () => {
+    const inverseResult = {
+      curves: [{ inverse_iteration: 1, source_relation: 'crosses_source', points: [] }],
+      total_output_points: 1640,
+      max_position_chord_error: 0.000114,
+      max_normal_chord_error: 0.00051,
+      subdivision_limit_reached: false,
+      completed_iterations: 1
+    };
+    const { container } = render(<GeometricOffsetsPanel state={{ ...state, result, inverseResult }} setState={vi.fn()}
+      canCompute compute={vi.fn()} canComputeInverse computeInverse={vi.fn()} fitInverse={vi.fn()} />);
+
+    expect(screen.queryByText('Preimage crosses its source; it is not a nested basin boundary.')).toBeNull();
+    expect(container.querySelector('.geometric-offset-status')).toBeNull();
   });
 });

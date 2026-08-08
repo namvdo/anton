@@ -1,30 +1,90 @@
 import { MIN_VIEW_SPAN, normalizeViewRange, RANGE_LIMIT } from './viewRange';
 
-export const INVERSE_OFFSET_STEP_COLORS = [
-  '#ffd45a',
-  '#f5b942',
-  '#ed9638',
-  '#e27635',
-  '#d45a3d',
-  '#c54848'
-];
+const GOLDEN_ANGLE_DEGREES = 137.50776405003785;
 
-export const inverseOffsetStepColor = (iteration) => {
-  const index = Math.max(0, Math.min(
-    INVERSE_OFFSET_STEP_COLORS.length - 1,
-    Math.trunc(Number(iteration) || 1) - 1
-  ));
-  return INVERSE_OFFSET_STEP_COLORS[index];
+const hslToHex = (hue, saturation, lightness) => {
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const hueSector = hue / 60;
+  const secondary = chroma * (1 - Math.abs((hueSector % 2) - 1));
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+
+  if (hueSector < 1) [red, green] = [chroma, secondary];
+  else if (hueSector < 2) [red, green] = [secondary, chroma];
+  else if (hueSector < 3) [green, blue] = [chroma, secondary];
+  else if (hueSector < 4) [green, blue] = [secondary, chroma];
+  else if (hueSector < 5) [red, blue] = [secondary, chroma];
+  else [red, blue] = [chroma, secondary];
+
+  const lightnessOffset = lightness - chroma / 2;
+  const channelHex = channel => Math.round((channel + lightnessOffset) * 255)
+    .toString(16)
+    .padStart(2, '0');
+  return `#${channelHex(red)}${channelHex(green)}${channelHex(blue)}`;
 };
 
-export const visibleInverseOffsetCurves = (inverseResult, displayMode = 'final') => {
+export const inverseOffsetStepColor = (iteration) => {
+  const numericIteration = Number(iteration);
+  const step = Number.isFinite(numericIteration) && numericIteration >= 1
+    ? Math.trunc(numericIteration)
+    : 1;
+  const hue = (42 + (step - 1) * GOLDEN_ANGLE_DEGREES) % 360;
+  return hslToHex(hue, 0.78, 0.62);
+};
+
+export const visibleInverseOffsetCurves = (inverseResult, displayMode = 'all') => {
   const curves = Array.isArray(inverseResult?.curves) ? inverseResult.curves : [];
-  if (displayMode === 'all' || curves.length === 0) return curves;
+  if (displayMode !== 'final' || curves.length === 0) return curves;
 
   const finalIteration = Math.max(
     ...curves.map(curve => Number(curve.inverse_iteration)).filter(Number.isFinite)
   );
   return curves.filter(curve => Number(curve.inverse_iteration) === finalIteration);
+};
+
+export const inverseCurveNestingSummary = (curves) => {
+  const relations = (curves || []).map(curve => curve?.source_relation);
+  if (relations.length === 0 || relations.some(relation => typeof relation !== 'string')) {
+    return {
+      passed: false,
+      message: 'Raw boundary-map preimage; source nesting was not checked.'
+    };
+  }
+  if (relations.includes('source_not_simple')) {
+    return {
+      passed: false,
+      message: 'Source curve is not simple; this preimage is not a basin boundary.'
+    };
+  }
+  if (relations.includes('inverse_not_simple')) {
+    return {
+      passed: false,
+      message: 'Preimage self-intersects; it is not a simple basin boundary.'
+    };
+  }
+  if (relations.includes('crosses_source')) {
+    return {
+      passed: false,
+      message: 'Preimage crosses its source; it is not a nested basin boundary.'
+    };
+  }
+  if (relations.includes('source_not_enclosed')) {
+    return {
+      passed: false,
+      message: 'Preimage does not enclose its source; it is not an expanding basin boundary.'
+    };
+  }
+  if (relations.every(relation => relation === 'nested_outside')) {
+    return {
+      passed: true,
+      message: 'Polygonal source-nesting check passed.'
+    };
+  }
+  return {
+    passed: false,
+    message: 'Raw boundary-map preimage; basin-boundary nesting is unverified.'
+  };
 };
 
 export const inverseOffsetCurveBounds = (curves) => {

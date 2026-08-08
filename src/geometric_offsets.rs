@@ -7,12 +7,12 @@
 //! involved.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 
 use crate::henon_extended_map::{inverse_henon_extended_point, HenonExtendedPoint};
 
 const NORMAL_EPSILON: f64 = 1e-14;
-const MAX_INVERSE_CURVE_POINTS: usize = 250_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ExtendedBoundaryPoint {
@@ -67,6 +67,22 @@ pub struct InverseOffsetCurve {
     pub max_position_chord_error: f64,
     pub max_normal_chord_error: f64,
     pub subdivision_limit_reached: bool,
+    pub source_relation: InverseCurveSourceRelation,
+}
+
+/// Polygonal relation between one inverse image and the curve mapped into it.
+///
+/// Only `NestedOutside` has the geometry required of an expanding candidate
+/// predecessor boundary. The relation is diagnostic: it does not certify the
+/// trapping-set assumptions required for a robust basin computation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InverseCurveSourceRelation {
+    NestedOutside,
+    CrossesSource,
+    SourceNotEnclosed,
+    SourceNotSimple,
+    InverseNotSimple,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -106,39 +122,236 @@ fn cross(a: Point2, b: Point2, c: Point2) -> f64 {
     (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
 }
 
-fn segments_intersect(a: Point2, b: Point2, c: Point2, d: Point2) -> bool {
+#[derive(Clone, Copy)]
+struct Segment {
+    start: Point2,
+    end: Point2,
+}
+
+impl Segment {
+    fn x_bounds(self) -> (f64, f64) {
+        (self.start.x.min(self.end.x), self.start.x.max(self.end.x))
+    }
+
+    fn y_bounds(self) -> (f64, f64) {
+        (self.start.y.min(self.end.y), self.start.y.max(self.end.y))
+    }
+}
+
+fn polygon_segments(points: &[Point2]) -> Vec<Segment> {
+    (0..points.len())
+        .map(|index| Segment {
+            start: points[index],
+            end: points[(index + 1) % points.len()],
+        })
+        .collect()
+}
+
+fn point_lies_on_segment(point: Point2, segment: Segment) -> bool {
+    let coordinate_scale = point
+        .x
+        .abs()
+        .max(point.y.abs())
+        .max(segment.start.x.abs())
+        .max(segment.start.y.abs())
+        .max(segment.end.x.abs())
+        .max(segment.end.y.abs());
+    let tolerance = 1e-12 * (1.0 + coordinate_scale * coordinate_scale);
+    if cross(segment.start, segment.end, point).abs() > tolerance {
+        return false;
+    }
+    let (x_min, x_max) = segment.x_bounds();
+    let (y_min, y_max) = segment.y_bounds();
+    point.x >= x_min - tolerance
+        && point.x <= x_max + tolerance
+        && point.y >= y_min - tolerance
+        && point.y <= y_max + tolerance
+}
+
+fn segments_intersect_or_touch(left: Segment, right: Segment) -> bool {
+    let a = left.start;
+    let b = left.end;
+    let c = right.start;
+    let d = right.end;
     let (ab_c, ab_d, cd_a, cd_b) = (
         cross(a, b, c),
         cross(a, b, d),
         cross(c, d, a),
         cross(c, d, b),
     );
-    ab_c * ab_d < -1e-12 && cd_a * cd_b < -1e-12
+    (ab_c * ab_d < 0.0 && cd_a * cd_b < 0.0)
+        || point_lies_on_segment(c, left)
+        || point_lies_on_segment(d, left)
+        || point_lies_on_segment(a, right)
+        || point_lies_on_segment(b, right)
 }
 
-fn has_self_intersection(points: &[Point2]) -> bool {
-    if points.len() > 6000 {
-        return true;
-    }
-    for left in 0..points.len() {
-        for right in left + 1..points.len() {
-            if right == left
-                || right == (left + 1) % points.len()
-                || left == (right + 1) % points.len()
-            {
-                continue;
+struct SegmentGrid {
+    cells: HashMap<(usize, usize), Vec<usize>>,
+    x_min: f64,
+    x_max: f64,
+    y_min: f64,
+    y_max: f64,
+    side: usize,
+}
+
+impl SegmentGrid {
+    fn new(segments: &[Segment]) -> Self {
+        let mut x_min = f64::INFINITY;
+        let mut x_max = f64::NEG_INFINITY;
+        let mut y_min = f64::INFINITY;
+        let mut y_max = f64::NEG_INFINITY;
+        for segment in segments {
+            let (segment_x_min, segment_x_max) = segment.x_bounds();
+            let (segment_y_min, segment_y_max) = segment.y_bounds();
+            x_min = x_min.min(segment_x_min);
+            x_max = x_max.max(segment_x_max);
+            y_min = y_min.min(segment_y_min);
+            y_max = y_max.max(segment_y_max);
+        }
+        let side = (segments.len() as f64).sqrt().ceil().max(1.0) as usize;
+        let mut grid = Self {
+            cells: HashMap::new(),
+            x_min,
+            x_max,
+            y_min,
+            y_max,
+            side,
+        };
+        for (index, segment) in segments.iter().copied().enumerate() {
+            if let Some((x_start, x_end, y_start, y_end)) = grid.cell_range(segment) {
+                for x_cell in x_start..=x_end {
+                    for y_cell in y_start..=y_end {
+                        grid.cells.entry((x_cell, y_cell)).or_default().push(index);
+                    }
+                }
             }
-            if segments_intersect(
-                points[left],
-                points[(left + 1) % points.len()],
-                points[right],
-                points[(right + 1) % points.len()],
-            ) {
-                return true;
+        }
+        grid
+    }
+
+    fn coordinate_cell(value: f64, minimum: f64, maximum: f64, side: usize) -> usize {
+        let span = maximum - minimum;
+        if span <= NORMAL_EPSILON {
+            return 0;
+        }
+        (((value - minimum) / span * side as f64).floor() as isize).clamp(0, side as isize - 1)
+            as usize
+    }
+
+    fn cell_range(&self, segment: Segment) -> Option<(usize, usize, usize, usize)> {
+        let (segment_x_min, segment_x_max) = segment.x_bounds();
+        let (segment_y_min, segment_y_max) = segment.y_bounds();
+        if segment_x_max < self.x_min
+            || segment_x_min > self.x_max
+            || segment_y_max < self.y_min
+            || segment_y_min > self.y_max
+        {
+            return None;
+        }
+        let clipped_x_min = segment_x_min.max(self.x_min);
+        let clipped_x_max = segment_x_max.min(self.x_max);
+        let clipped_y_min = segment_y_min.max(self.y_min);
+        let clipped_y_max = segment_y_max.min(self.y_max);
+        Some((
+            Self::coordinate_cell(clipped_x_min, self.x_min, self.x_max, self.side),
+            Self::coordinate_cell(clipped_x_max, self.x_min, self.x_max, self.side),
+            Self::coordinate_cell(clipped_y_min, self.y_min, self.y_max, self.side),
+            Self::coordinate_cell(clipped_y_max, self.y_min, self.y_max, self.side),
+        ))
+    }
+}
+
+fn segment_sets_intersect(indexed: &[Segment], queries: &[Segment], same_polygon: bool) -> bool {
+    if indexed.is_empty() || queries.is_empty() {
+        return false;
+    }
+    let grid = SegmentGrid::new(indexed);
+    let mut last_query_seen = vec![usize::MAX; indexed.len()];
+    for (query_index, query) in queries.iter().copied().enumerate() {
+        let Some((x_start, x_end, y_start, y_end)) = grid.cell_range(query) else {
+            continue;
+        };
+        for x_cell in x_start..=x_end {
+            for y_cell in y_start..=y_end {
+                let Some(candidate_indices) = grid.cells.get(&(x_cell, y_cell)) else {
+                    continue;
+                };
+                for &candidate_index in candidate_indices {
+                    if last_query_seen[candidate_index] == query_index {
+                        continue;
+                    }
+                    last_query_seen[candidate_index] = query_index;
+                    if same_polygon {
+                        if candidate_index <= query_index
+                            || candidate_index == (query_index + 1) % queries.len()
+                            || query_index == (candidate_index + 1) % indexed.len()
+                        {
+                            continue;
+                        }
+                    }
+                    if segments_intersect_or_touch(indexed[candidate_index], query) {
+                        return true;
+                    }
+                }
             }
         }
     }
     false
+}
+
+fn has_self_intersection(points: &[Point2]) -> bool {
+    let segments = polygon_segments(points);
+    segment_sets_intersect(&segments, &segments, true)
+}
+
+fn boundaries_intersect(left: &[Point2], right: &[Point2]) -> bool {
+    segment_sets_intersect(&polygon_segments(left), &polygon_segments(right), false)
+}
+
+fn polygon_contains_point(polygon: &[Point2], point: Point2) -> bool {
+    let mut inside = false;
+    for index in 0..polygon.len() {
+        let current = polygon[index];
+        let next = polygon[(index + 1) % polygon.len()];
+        if (current.y > point.y) != (next.y > point.y) {
+            let x_at_ray =
+                current.x + (point.y - current.y) * (next.x - current.x) / (next.y - current.y);
+            if point.x < x_at_ray {
+                inside = !inside;
+            }
+        }
+    }
+    inside
+}
+
+fn positions(points: &[ExtendedBoundaryPoint]) -> Vec<Point2> {
+    points
+        .iter()
+        .map(|point| Point2::new(point.x, point.y))
+        .collect()
+}
+
+fn classify_inverse_source_relation(
+    source: &[ExtendedBoundaryPoint],
+    inverse: &[ExtendedBoundaryPoint],
+) -> InverseCurveSourceRelation {
+    let source_positions = positions(source);
+    let inverse_positions = positions(inverse);
+    if has_self_intersection(&source_positions) {
+        return InverseCurveSourceRelation::SourceNotSimple;
+    }
+    if has_self_intersection(&inverse_positions) {
+        return InverseCurveSourceRelation::InverseNotSimple;
+    }
+    if boundaries_intersect(&source_positions, &inverse_positions) {
+        return InverseCurveSourceRelation::CrossesSource;
+    }
+    if polygon_contains_point(&inverse_positions, source_positions[0]) {
+        InverseCurveSourceRelation::NestedOutside
+    } else {
+        InverseCurveSourceRelation::SourceNotEnclosed
+    }
 }
 
 fn normalize_vector(x: f64, y: f64, context: &str) -> Result<(f64, f64), String> {
@@ -364,11 +577,6 @@ fn append_inverse_segment(
     diagnostics.max_position_chord_error = diagnostics.max_position_chord_error.max(position_error);
     diagnostics.max_normal_chord_error = diagnostics.max_normal_chord_error.max(normal_error);
     diagnostics.subdivision_limit_reached |= requires_subdivision;
-    if output.len() >= MAX_INVERSE_CURVE_POINTS {
-        return Err(format!(
-            "Inverse offset curve exceeds the {MAX_INVERSE_CURVE_POINTS}-point safety limit"
-        ));
-    }
     output.push(mapped_right);
     Ok(())
 }
@@ -380,7 +588,7 @@ fn invert_offset_component(
     (
         Vec<ExtendedBoundaryPoint>,
         f64,
-        f64,  
+        f64,
         InverseSubdivisionDiagnostics,
     ),
     String,
@@ -482,14 +690,10 @@ pub fn compute_inverse_geometric_offset_contours(
                 let input_point_count = source_points.len();
                 let (points, closure_position_residual, closure_normal_residual, diagnostics) =
                     invert_offset_component(&source_points, &settings)?;
+                let source_relation = classify_inverse_source_relation(&source_points, &points);
                 total_output_points = total_output_points
                     .checked_add(points.len())
                     .ok_or("Inverse offset point count overflow")?;
-                if total_output_points > MAX_INVERSE_CURVE_POINTS {
-                    return Err(format!(
-                        "Inverse offset result exceeds the {MAX_INVERSE_CURVE_POINTS}-point safety limit"
-                    ));
-                }
                 global_position_error =
                     global_position_error.max(diagnostics.max_position_chord_error);
                 global_normal_error = global_normal_error.max(diagnostics.max_normal_chord_error);
@@ -507,6 +711,7 @@ pub fn compute_inverse_geometric_offset_contours(
                     max_position_chord_error: diagnostics.max_position_chord_error,
                     max_normal_chord_error: diagnostics.max_normal_chord_error,
                     subdivision_limit_reached: diagnostics.subdivision_limit_reached,
+                    source_relation,
                 });
                 source_points = points;
             }
@@ -587,6 +792,23 @@ mod tests {
             points.reverse();
         }
         points
+    }
+
+    fn square(x_min: f64, x_max: f64, y_min: f64, y_max: f64) -> Vec<ExtendedBoundaryPoint> {
+        [
+            (x_min, y_min),
+            (x_max, y_min),
+            (x_max, y_max),
+            (x_min, y_max),
+        ]
+        .into_iter()
+        .map(|(x, y)| ExtendedBoundaryPoint {
+            x,
+            y,
+            nx: 1.0,
+            ny: 0.0,
+        })
+        .collect()
     }
 
     #[test]
@@ -741,6 +963,67 @@ mod tests {
                     && (point.nx.hypot(point.ny) - 1.0).abs() < 1e-12
             }));
         }
+    }
+
+    #[test]
+    fn inverse_source_relation_distinguishes_nesting_crossing_and_contraction() {
+        let source = square(-1.0, 1.0, -1.0, 1.0);
+        let enclosing = square(-2.0, 2.0, -2.0, 2.0);
+        let crossing = square(0.5, 2.0, -0.5, 0.5);
+        let enclosed = square(-0.5, 0.5, -0.5, 0.5);
+
+        assert_eq!(
+            classify_inverse_source_relation(&source, &enclosing),
+            InverseCurveSourceRelation::NestedOutside
+        );
+        assert_eq!(
+            classify_inverse_source_relation(&source, &crossing),
+            InverseCurveSourceRelation::CrossesSource
+        );
+        assert_eq!(
+            classify_inverse_source_relation(&source, &enclosed),
+            InverseCurveSourceRelation::SourceNotEnclosed
+        );
+    }
+
+    #[test]
+    fn inverse_source_relation_rejects_non_simple_curves() {
+        let source = square(-1.0, 1.0, -1.0, 1.0);
+        let bow_tie = vec![
+            ExtendedBoundaryPoint {
+                x: -2.0,
+                y: -2.0,
+                nx: 1.0,
+                ny: 0.0,
+            },
+            ExtendedBoundaryPoint {
+                x: 2.0,
+                y: 2.0,
+                nx: 1.0,
+                ny: 0.0,
+            },
+            ExtendedBoundaryPoint {
+                x: -2.0,
+                y: 2.0,
+                nx: 1.0,
+                ny: 0.0,
+            },
+            ExtendedBoundaryPoint {
+                x: 2.0,
+                y: -2.0,
+                nx: 1.0,
+                ny: 0.0,
+            },
+        ];
+
+        assert_eq!(
+            classify_inverse_source_relation(&source, &bow_tie),
+            InverseCurveSourceRelation::InverseNotSimple
+        );
+        assert_eq!(
+            classify_inverse_source_relation(&bow_tie, &source),
+            InverseCurveSourceRelation::SourceNotSimple
+        );
     }
 
     #[test]

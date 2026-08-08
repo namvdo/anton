@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   fitInverseOffsetCurveRange,
   inverseOffsetCurveBounds,
+  inverseCurveNestingSummary,
   inverseOffsetStepColor,
   visibleInverseOffsetCurves
 } from './inverseOffsetDisplay';
@@ -15,12 +16,30 @@ describe('inverse offset display utilities', () => {
   it('shows only the final inverse iteration unless all steps are requested', () => {
     expect(visibleInverseOffsetCurves({ curves }, 'final')).toEqual([curves[1]]);
     expect(visibleInverseOffsetCurves({ curves }, 'all')).toEqual(curves);
+    expect(visibleInverseOffsetCurves({ curves })).toEqual(curves);
   });
 
-  it('uses a distinct high-contrast color for each supported step', () => {
-    expect(inverseOffsetStepColor(1)).toBe('#ffd45a');
-    expect(inverseOffsetStepColor(6)).toBe('#c54848');
-    expect(inverseOffsetStepColor(99)).toBe('#c54848');
+  it('distinguishes nested preimages from crossing raw inverse images', () => {
+    expect(inverseCurveNestingSummary([
+      { source_relation: 'nested_outside' }
+    ])).toEqual({
+      passed: true,
+      message: 'Polygonal source-nesting check passed.'
+    });
+    expect(inverseCurveNestingSummary([
+      { source_relation: 'crosses_source' }
+    ])).toEqual({
+      passed: false,
+      message: 'Preimage crosses its source; it is not a nested basin boundary.'
+    });
+  });
+
+  it('generates deterministic distinct colors without a fixed palette size', () => {
+    const colors = Array.from({ length: 32 }, (_, index) => inverseOffsetStepColor(index + 1));
+    expect(new Set(colors).size).toBe(colors.length);
+    expect(colors.every(color => /^#[0-9a-f]{6}$/.test(color))).toBe(true);
+    expect(inverseOffsetStepColor(32)).toBe(colors[31]);
+    expect(inverseOffsetStepColor('invalid')).toBe(colors[0]);
   });
 
   it('computes finite bounds and an aspect-aware padded camera range', () => {

@@ -62,7 +62,7 @@ describe('Viewport', () => {
       inverseResult: { curves: [{ inverse_iteration: 2 }] }
     }} />);
     expect(screen.getByText('Geometric ε-offsets')).toBeInTheDocument();
-    expect(screen.getByText('Inverse offset · step 2')).toBeInTheDocument();
+    expect(screen.getByText('Boundary-map preimage · step 2')).toBeInTheDocument();
   });
 
   it('shows distinct legend colors when every inverse step is displayed', () => {
@@ -72,10 +72,19 @@ describe('Viewport', () => {
       inverseDisplayMode: 'all',
       inverseResult: { curves: [{ inverse_iteration: 1 }, { inverse_iteration: 2 }] }
     }} />);
-    expect(screen.getByText('Inverse offset · step 1')).toBeInTheDocument();
-    expect(screen.getByText('Inverse offset · step 2')).toBeInTheDocument();
+    expect(screen.getByText('Boundary-map preimage · step 1')).toBeInTheDocument();
+    expect(screen.getByText('Boundary-map preimage · step 2')).toBeInTheDocument();
     const swatches = container.querySelectorAll('.vp-legend .lg-line');
-    expect(swatches[0]).toHaveStyle({ background: '#ffd45a' });
-    expect(swatches[1]).toHaveStyle({ background: '#f5b942' });
+    expect(swatches[0].style.background).not.toBe(swatches[1].style.background);
+  });
+
+  it('shows all inverse steps when older state has no display preference', () => {
+    render(<Viewport {...baseProps} geometricOffsetState={{
+      showContours: false,
+      showInverseContours: true,
+      inverseResult: { curves: [{ inverse_iteration: 1 }, { inverse_iteration: 7 }] }
+    }} />);
+    expect(screen.getByText('Boundary-map preimage · step 1')).toBeInTheDocument();
+    expect(screen.getByText('Boundary-map preimage · step 7')).toBeInTheDocument();
   });
 });
