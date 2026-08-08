@@ -61,6 +61,12 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
           </div>
           <div className="vp-tt-grid">
             <span className="tt-k">Position</span><span className="tt-v em">({tooltip.data.pos.x.toFixed(4)}, {tooltip.data.pos.y.toFixed(4)})</span>
+            {tooltip.data.normal && (
+              <>
+                <span className="tt-k">Normal</span>
+                <span className="tt-v em">({tooltip.data.normal.x.toFixed(4)}, {tooltip.data.normal.y.toFixed(4)})</span>
+              </>
+            )}
             <span className="tt-k">Stability</span>
             <span className="tt-v" style={{ color: tooltip.data.stability === 'stable' ? 'var(--green)' : tooltip.data.stability === 'saddle' ? 'var(--amber)' : 'var(--red)' }}>
               {tooltip.data.stability?.charAt(0).toUpperCase() + tooltip.data.stability?.slice(1)}

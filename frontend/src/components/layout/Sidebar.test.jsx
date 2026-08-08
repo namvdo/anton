@@ -90,9 +90,9 @@ describe('Sidebar', () => {
     expect(screen.getByTestId('starting-point')).toBeInTheDocument();
   });
 
-  it('hides the starting point panel for discrete systems', () => {
+  it('shows the starting point panel for discrete systems', () => {
     render(<Sidebar {...baseProps} type="discrete" dynamicSystem="henon" />);
-    expect(screen.queryByTestId('starting-point')).toBeNull();
+    expect(screen.getByTestId('starting-point')).toBeInTheDocument();
   });
 
   it('shows periodic search section for discrete boundary systems', () => {

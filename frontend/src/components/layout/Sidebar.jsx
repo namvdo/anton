@@ -77,6 +77,13 @@ export const Sidebar = (props) => {
           resetViewRange={props.resetViewRange}
         />
 
+        <StartingPoint
+          type={props.type}
+          startPoint={props.manifoldState.startPoint}
+          updateStartPoint={props.updateStartPoint}
+          disabled={props.manifoldState.isRunning || animationLocksConfiguration}
+        />
+
         {props.type === 'discrete' && (
           <>
             <ManifoldsPanel
@@ -105,14 +112,6 @@ export const Sidebar = (props) => {
               periodicState={props.periodicState}
             />
           </>
-        )}
-
-        {props.type === 'continuous' && (
-          <StartingPoint
-            type={props.type}
-            startPoint={props.manifoldState.startPoint}
-            updateStartPoint={props.updateStartPoint}
-          />
         )}
 
         {props.type === 'discrete' && props.dynamicSystem !== 'custom' && (

@@ -1,6 +1,16 @@
 import React from 'react';
 import { Collapsible } from '../ui/Collapsible';
 import { Toggle } from '../ui/Toggle';
+import { fixedPointSolutionsFromOrbits, orbitExtendedStates } from '../../utils/extendedOrbitState';
+
+const formatComponent = value => Number.isFinite(value) ? value.toFixed(4) : '—';
+
+const ExtendedCoordinates = ({ state }) => (
+  <div className="solution-coordinates">
+    <span>p = ({formatComponent(state.x)}, {formatComponent(state.y)})</span>
+    <span>n = ({formatComponent(state.nx)}, {formatComponent(state.ny)})</span>
+  </div>
+);
 
 export const PeriodicOrbitsPanel = ({
   manifoldState,
@@ -34,6 +44,12 @@ export const PeriodicOrbitsPanel = ({
       active: filters[key]
     };
   });
+  const periodicOrbits = periodicState.orbits || [];
+  const fixedSolutions = fixedPointSolutionsFromOrbits(periodicOrbits);
+  const displayedFixedPoints = fixedSolutions.length > 0
+    ? fixedSolutions
+    : (manifoldState.fixedPoints || []);
+  const higherPeriodSolutions = periodicOrbits.filter(orbit => orbit.period > 1);
 
   return (
     <Collapsible title="Periodic orbits" defaultOpen={true}>
@@ -73,21 +89,50 @@ export const PeriodicOrbitsPanel = ({
         </span>
       </div>
 
-      {(manifoldState.fixedPoints && manifoldState.fixedPoints.length > 0) && (
+      {displayedFixedPoints.length > 0 && (
         <>
-          <div className="small-label" style={{ marginTop: '10px' }}>Fixed points ({manifoldState.fixedPoints.length})</div>
+          <div className="small-label solution-label">Extended fixed points ({displayedFixedPoints.length})</div>
           <div className="fp-list">
-            {manifoldState.fixedPoints.map((fp, i) => {
-              const bg = fp.stability === 'stable' ? '#5a9668' : fp.stability === 'saddle' ? '#b8904a' : '#a85252';
+            {displayedFixedPoints.map((fp, i) => {
+              const stability = (fp.stability || '').toLowerCase();
+              const bg = stability === 'stable' ? '#5a9668' : stability === 'saddle' ? '#b8904a' : '#a85252';
               return (
                 <div key={i} className="fp-row">
                   <div className="fp-dot" style={{ background: bg }}></div>
-                  ({fp.x.toFixed(3)}, {fp.y.toFixed(3)})
+                  <ExtendedCoordinates state={fp} />
                   <span className="fp-stab">
-                    {fp.stability.charAt(0).toUpperCase() + fp.stability.slice(1)}
+                    {stability.charAt(0).toUpperCase() + stability.slice(1)}
                     {fp.eigenvalues && fp.eigenvalues.length > 0 && ` · λ=${Math.max(...fp.eigenvalues).toFixed(2)}`}
                   </span>
                 </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {higherPeriodSolutions.length > 0 && (
+        <>
+          <div className="small-label solution-label">Extended periodic orbits ({higherPeriodSolutions.length})</div>
+          <div className="solution-orbit-list">
+            {higherPeriodSolutions.map((orbit, orbitIndex) => {
+              const states = orbitExtendedStates(orbit);
+              const stability = (orbit.stability || '').toLowerCase();
+              return (
+                <details className="solution-orbit" key={`${orbit.period}-${orbitIndex}`}>
+                  <summary>
+                    <span>Period {orbit.period}</span>
+                    <span>{stability || 'unclassified'} · {states.length} states</span>
+                  </summary>
+                  <div className="solution-state-list">
+                    {states.map(state => (
+                      <div className="solution-state-row" key={state.pointIndex}>
+                        <span className="solution-state-index">z{state.pointIndex}</span>
+                        <ExtendedCoordinates state={state} />
+                      </div>
+                    ))}
+                  </div>
+                </details>
               );
             })}
           </div>

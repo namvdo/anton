@@ -36,6 +36,11 @@ import {
     visibleInverseOffsetCurves
 } from './utils/inverseOffsetDisplay';
 import {
+    enrichSolutionPointsWithOrbitNormals,
+    fixedPointSolutionsFromOrbits,
+    orbitExtendedStates
+} from './utils/extendedOrbitState';
+import {
     applyParameterAnimationValue,
     beginPeriodicRefresh,
     capturePeriodicSearchSettings,
@@ -1102,6 +1107,7 @@ const SetValuedViz = () => {
                     period: data.period,
                     stability: data.stability,
                     pos: data.pos,
+                    normal: data.normal,
                     eigenvalues: data.eigenvalues,
                     jacobian: jac,
                     orbitSize: data.orbitPoints?.length || 1
@@ -1284,14 +1290,7 @@ const SetValuedViz = () => {
 
             if (!manifoldsEnabled && (dynamicSystem === 'henon' || dynamicSystem === 'duffing' || dynamicSystem === 'custom')) {
                 const orbits = periodicState.orbits || [];
-                const fixedPoints = orbits
-                    .filter(o => o.period === 1)
-                    .map(o => ({
-                        x: o.points[0][0],
-                        y: o.points[0][1],
-                        stability: o.stability.toLowerCase(),
-                        eigenvalues: o.eigenvalues || [0, 0]
-                    }));
+                const fixedPoints = fixedPointSolutionsFromOrbits(orbits);
 
                 setManifoldState(prev => ({
                     ...prev,
@@ -1407,7 +1406,10 @@ const SetValuedViz = () => {
                     manifolds: clipManifoldsBySupport(result?.manifolds || [], support),
                     rawManifolds: result?.manifolds || [],
                     stableManifolds: clipManifoldsBySupport(result?.stableManifolds || [], support),
-                    fixedPoints: result?.fixedPoints || [],
+                    fixedPoints: enrichSolutionPointsWithOrbitNormals(
+                        result?.fixedPoints || [],
+                        periodicState.orbits || []
+                    ),
                     intersections: result?.intersections || [],
                     isComputing: false,
                     isReady: true,
@@ -2150,6 +2152,9 @@ const SetValuedViz = () => {
                 period: 1,
                 stability: fp.stability,
                 pos: { x: fp.x, y: fp.y },
+                normal: Number.isFinite(fp.nx) && Number.isFinite(fp.ny)
+                    ? { x: fp.nx, y: fp.ny }
+                    : null,
                 eigenvalues: fp.eigenvalues || null
             };
             scene.add(sphere);
@@ -2241,13 +2246,13 @@ const SetValuedViz = () => {
             periodicState.orbits.filter(isVisible).forEach((orbit, orbitIndex) => {
                 const orbitId = `orbit-${orbit.period}-${orbitIndex}`;
                 const pointColor = colorForOrbit(orbit);
-                orbit.points.forEach((point, pointIndex) => {
+                orbitExtendedStates(orbit).forEach((extendedPoint, pointIndex) => {
                     const geometry = new THREE.SphereGeometry(0.02, 10, 10);
                     const material = new THREE.MeshBasicMaterial({
                         color: new THREE.Color(pointColor)
                     });
                     const sphere = new THREE.Mesh(geometry, material);
-                    sphere.position.set(point[0], point[1], 0.05);
+                    sphere.position.set(extendedPoint.x, extendedPoint.y, 0.05);
                     sphere.userData = {
                         type: 'orbit',
                         resultRevision,
@@ -2255,7 +2260,10 @@ const SetValuedViz = () => {
                         period: orbit.period,
                         stability: orbit.stability,
                         pointIndex,
-                        pos: { x: point[0], y: point[1] },
+                        pos: { x: extendedPoint.x, y: extendedPoint.y },
+                        normal: Number.isFinite(extendedPoint.nx) && Number.isFinite(extendedPoint.ny)
+                            ? { x: extendedPoint.nx, y: extendedPoint.ny }
+                            : null,
                         orbitPoints: orbit.points,
                         eigenvalues: orbit.eigenvalues || null
                     };
@@ -2813,15 +2821,16 @@ const SetValuedViz = () => {
         if (newType === 'discrete') setDynamicSystem('henon');
     };
 
-    const updateStartPoint = (key, value) => {
+    const updateStartPoint = (extendedPoint) => {
         setManifoldState(prev => {
-            const newStart = { ...prev.startPoint, [key]: value };
-            return applyStartPointUpdate(prev, newStart);
+            return applyStartPointUpdate(prev, extendedPoint);
         });
         if (typeof window.update_start_point === 'function') {
             window.update_start_point(
-                key === 'x' ? value : manifoldState.startPoint.x,
-                key === 'y' ? value : manifoldState.startPoint.y,
+                extendedPoint.x,
+                extendedPoint.y,
+                extendedPoint.nx,
+                extendedPoint.ny
             );
         }
     };

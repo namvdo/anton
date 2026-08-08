@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyStartPointUpdate } from '../utils/startPointState';
+import { applyStartPointUpdate, normalizeExtendedStartPoint } from '../utils/startPointState';
 
 describe('applyStartPointUpdate', () => {
   it('resets trajectory and uses new start point', () => {
@@ -19,5 +19,16 @@ describe('applyStartPointUpdate', () => {
     expect(next.iteration).toBe(0);
     expect(next.hasStarted).toBe(false);
     expect(next.isRunning).toBe(false);
+  });
+
+  it('normalizes the normal and rejects incomplete extended states', () => {
+    expect(normalizeExtendedStartPoint({ x: 1, y: 2, nx: 3, ny: 4 })).toEqual({
+      x: 1,
+      y: 2,
+      nx: 0.6,
+      ny: 0.8
+    });
+    expect(() => normalizeExtendedStartPoint({ x: 1, y: 2, nx: 0, ny: 0 }))
+      .toThrow('normal must have nonzero length');
   });
 });

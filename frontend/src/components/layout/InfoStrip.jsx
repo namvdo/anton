@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const InfoStrip = ({ type, manifoldState, ulamState, params, periodicState }) => {
+export const InfoStrip = ({ type, manifoldState, params, periodicState }) => {
   return (
     <div className="info-strip">
       <div className="info-cell">
@@ -28,6 +28,11 @@ export const InfoStrip = ({ type, manifoldState, ulamState, params, periodicStat
       </div>
 
       <div className="info-cell">
+        <span className="info-cell-k">Normal</span>
+        <span className="info-cell-v">({manifoldState.currentPoint.nx.toFixed(3)}, {manifoldState.currentPoint.ny.toFixed(3)})</span>
+      </div>
+
+      <div className="info-cell info-cell-wide">
         <span className="info-cell-k">Iteration</span>
         <span className="info-cell-v">{type === 'continuous' ? manifoldState.iteration : `${manifoldState.iteration} / ${params.maxIterations}`}</span>
       </div>

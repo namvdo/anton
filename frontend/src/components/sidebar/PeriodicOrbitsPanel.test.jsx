@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PeriodicOrbitsPanel } from './PeriodicOrbitsPanel';
 
 const baseProps = {
@@ -42,12 +42,14 @@ describe('PeriodicOrbitsPanel', () => {
           period: 1,
           stability: 'saddle',
           points: [[1.219, 0.789]],
+          extended_points: [[1.219, 0.789, 0.6, 0.8]],
           eigenvalues: [0.43]
         },
         {
           period: 2,
           stability: 'stable',
           points: [[1.522, -0.184], [-1.331, 1.154]],
+          extended_points: [[1.522, -0.184, 1, 0], [-1.331, 1.154, 0, 1]],
           eigenvalues: [0.22, 0.31]
         }
       ]
@@ -60,24 +62,44 @@ describe('PeriodicOrbitsPanel', () => {
     expect(screen.getByRole('button', { name: /6\+/ })).toBeInTheDocument();
   });
 
-  it('shows fixed point rows when manifold fixed points are available', () => {
-    const manifoldState = {
-      ...baseProps.manifoldState,
-      fixedPoints: [
-        { x: 0.5, y: 0.25, stability: 'saddle', eigenvalues: [1.2] }
-      ]
+  it('shows fixed points with their complete extended state', () => {
+    const periodicState = {
+      orbits: [{
+        period: 1,
+        stability: 'saddle',
+        points: [[0.5, 0.25]],
+        extended_points: [[0.5, 0.25, 0.6, 0.8]],
+        eigenvalues: [1.2]
+      }]
     };
 
     render(
       <PeriodicOrbitsPanel
         {...baseProps}
-        manifoldState={manifoldState}
-        periodicState={{ orbits: [] }}
+        periodicState={periodicState}
       />
     );
 
-    expect(screen.getByText('Fixed points (1)')).toBeInTheDocument();
-    expect(screen.getByText('(0.500, 0.250)')).toBeInTheDocument();
+    expect(screen.getByText('Extended fixed points (1)')).toBeInTheDocument();
+    expect(screen.getByText('p = (0.5000, 0.2500)')).toBeInTheDocument();
+    expect(screen.getByText('n = (0.6000, 0.8000)')).toBeInTheDocument();
+  });
+
+  it('provides compact expandable extended states for higher-period solutions', () => {
+    render(<PeriodicOrbitsPanel {...baseProps} periodicState={{
+      orbits: [{
+        period: 2,
+        stability: 'stable',
+        points: [[1, 2], [3, 4]],
+        extended_points: [[1, 2, 0.6, 0.8], [3, 4, -0.8, 0.6]],
+        eigenvalues: [0.2, 0.3]
+      }]
+    }} />);
+
+    expect(screen.getByText('Extended periodic orbits (1)')).toBeInTheDocument();
+    expect(screen.getByText('Period 2')).toBeInTheDocument();
+    expect(screen.getByText('stable · 2 states')).toBeInTheDocument();
+    expect(screen.getByText('n = (-0.8000, 0.6000)')).toBeInTheDocument();
   });
 
   it('does not render periodic search controls in this panel', () => {

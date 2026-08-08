@@ -87,4 +87,22 @@ describe('Viewport', () => {
     expect(screen.getByText('Boundary-map preimage · step 1')).toBeInTheDocument();
     expect(screen.getByText('Boundary-map preimage · step 7')).toBeInTheDocument();
   });
+
+  it('shows the complete extended state in a solution tooltip', () => {
+    render(<Viewport {...baseProps} tooltip={{
+      visible: true,
+      x: 10,
+      y: 10,
+      data: {
+        type: 'Periodic Point',
+        period: 2,
+        stability: 'saddle',
+        pos: { x: 0.25, y: -0.5 },
+        normal: { x: 0.6, y: 0.8 }
+      }
+    }} />);
+
+    expect(screen.getByText('(0.2500, -0.5000)')).toBeInTheDocument();
+    expect(screen.getByText('(0.6000, 0.8000)')).toBeInTheDocument();
+  });
 });
