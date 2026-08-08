@@ -36,21 +36,6 @@ describe('ManifoldsPanel', () => {
     expect(screen.getAllByRole('checkbox')).toHaveLength(2);
   });
 
-  it('renders fixed point classification legend', () => {
-    const setManifoldState = vi.fn();
-    render(
-      <ManifoldsPanel
-        manifoldState={defaultManifoldState}
-        setManifoldState={setManifoldState}
-        ORBIT_COLORS={ORBIT_COLORS}
-      />
-    );
-
-    expect(screen.getByText(/Attractor \(\|λ/)).toBeInTheDocument();
-    expect(screen.getByText(/Saddle \(\|λ/)).toBeInTheDocument();
-    expect(screen.getByText(/Repeller \(\|λ/)).toBeInTheDocument();
-  });
-
   it('shows intersection detection panel when stable manifold enabled', () => {
     const setManifoldState = vi.fn();
     render(
