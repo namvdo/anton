@@ -1,4 +1,4 @@
-name: Rust
+name: Verify BIST
 
 on:
   push:
@@ -10,31 +10,62 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  rust:
+    name: Rust checks
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
+    - name: Install Rust quality components
+      run: rustup component add clippy rustfmt
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+    - name: Run Clippy
+      run: cargo clippy --all-targets -- -D warnings
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test --all-targets --locked
+    - name: Run scientific validation
+      run: cargo run --release --locked --bin scientific_validation -- --out validation/ci_results.json
+    - name: Run Wei thesis smoke reproduction
+      run: cargo run --release --locked --bin wei_thesis_reproduction -- --out validation/wei_reproduction_ci.json
+    - name: Upload scientific validation report
+      uses: actions/upload-artifact@v4
+      with:
+        name: scientific-validation
+        path: |
+          validation/ci_results.json
+          validation/wei_reproduction_ci.json
 
   frontend-tests:
+    name: WebAssembly and frontend checks
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 20
+        node-version-file: .nvmrc
         cache: npm
         cache-dependency-path: frontend/package-lock.json
     - name: Install dependencies
       working-directory: frontend
       run: npm ci
-    - name: Run frontend tests
+    - name: Install wasm-pack
+      run: cargo install wasm-pack --version 0.13.1 --locked
+    - name: Build WebAssembly
+      working-directory: frontend
+      run: npm run build:wasm
+    - name: Type-check frontend
+      working-directory: frontend
+      run: npm run typecheck
+    - name: Lint frontend
+      working-directory: frontend
+      run: npm run lint
+    - name: Audit production dependencies
+      working-directory: frontend
+      run: npm audit --omit=dev --audit-level=high
+    - name: Test frontend
       working-directory: frontend
       run: npm test
+    - name: Build production frontend
+      working-directory: frontend
+      run: npm run build
