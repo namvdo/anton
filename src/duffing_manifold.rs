@@ -137,7 +137,6 @@ impl DuffingManifoldComputer {
             }
         };
 
-        let dist_vec_0 = state_1.pos - state_0.pos;
         let mut traj_add = vec![state_0, state_1];
         let mut vec_iter_old = state_1;
 
@@ -315,7 +314,7 @@ pub fn compute_duffing_manifold_simple(
     let mut all_fixed_points_pos = Vec::new();
     let mut unstable_points_indices = Vec::new();
 
-    for (idx, &(x, y)) in fixed_points_raw.iter().enumerate() {
+    for &(x, y) in &fixed_points_raw {
         // Skip points outside display range
         if x < x_min || x > x_max || y < y_min || y > y_max {
             continue;

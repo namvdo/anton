@@ -1,4 +1,6 @@
-use henon_periodic_orbits::{
+#![allow(clippy::too_many_arguments, clippy::vec_init_then_push)]
+
+use bist::{
     BoundaryHenonSystemAnalysis, DuffingODE, HenonParams, ManifoldConfig, SaddlePoint, SaddleType,
     UlamComputer, UnstableManifoldComputer,
 };

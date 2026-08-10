@@ -34,10 +34,6 @@ impl ParsedEquations {
     pub fn eval(&self, x: f64, y: f64) -> Result<(f64, f64), String> {
         eval_pair(&self.x_node, &self.y_node, x, y, &self.params)
     }
-
-    pub fn params(&self) -> &ParameterSet {
-        &self.params
-    }
 }
 
 fn preprocess_abs(input: &str) -> String {
@@ -57,10 +53,8 @@ fn preprocess_abs(input: &str) -> String {
             let end = pair[1];
             let span = end - start;
             let inner = &s[start + 1..end];
-            if !inner.is_empty() {
-                if best.is_none() || span < best.unwrap().2 {
-                    best = Some((start, end, span));
-                }
+            if !inner.is_empty() && (best.is_none() || span < best.unwrap().2) {
+                best = Some((start, end, span));
             }
         }
         if let Some((start, end, _)) = best {
@@ -124,7 +118,7 @@ fn eval_pair(
 
         for entry in params.entries() {
             context
-                .set_value(entry.name.clone().into(), Value::Float(entry.value))
+                .set_value(entry.name.clone(), Value::Float(entry.value))
                 .map_err(|e| e.to_string())?;
         }
 

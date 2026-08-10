@@ -1,12 +1,9 @@
 use nalgebra::{Matrix2, Vector2};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
-use crate::dynamical_systems::{DynamicalSystem, ExtendedState};
+use crate::dynamical_systems::DynamicalSystem;
 use crate::parameters::{parameter_set_from_js, ParameterSet};
-use crate::unstable_manifold::{
-    ManifoldConfig, SaddlePoint, SaddleType, StopReason, Trajectory, UnstableManifoldComputer,
-};
 use crate::user_defined::ParsedEquations;
 
 #[wasm_bindgen]
@@ -17,28 +14,10 @@ extern "C" {
     fn error(s: &str);
 }
 
-macro_rules! console_log {
-    ($($t:tt)*) => {
-        log(&format!($($t)*))
-    }
-}
-
 macro_rules! console_error {
     ($($t:tt)*) => {
         error(&format!($($t)*))
     }
-}
-
-#[cfg(target_arch = "wasm32")]
-fn get_time_secs() -> f64 {
-    js_sys::Date::now() / 1000.0
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn get_time_secs() -> f64 {
-    use std::time::Instant;
-    static START: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
-    START.get_or_init(Instant::now).elapsed().as_secs_f64()
 }
 
 #[derive(Clone, Debug)]
@@ -279,124 +258,6 @@ pub fn rk4_bde_step<S: OdeSystem>(
     let np = (nhat + (k1n + k2n * 2.0 + k3n * 2.0 + k4n) * (h / 6.0)).normalize();
 
     Ok((xp, np))
-}
-
-/// find fixed points of the ODE (which are fixed points of the Euler map)
-fn find_euler_map_fixed_points() -> Vec<(f64, f64)> {
-    vec![(0.0, 0.0), (1.0, 0.0), (-1.0, 0.0)]
-}
-
-/// classify stability of a fixed point based on discrete-time Jacobian eigenvalues
-fn classify_euler_map_stability(l1: f64, l2: f64) -> &'static str {
-    let abs_l1 = l1.abs();
-    let abs_l2 = l2.abs();
-
-    if abs_l1 < 1.0 && abs_l2 < 1.0 {
-        "Attractor"
-    } else if abs_l1 > 1.0 && abs_l2 > 1.0 {
-        "Repeller"
-    } else {
-        "Saddle"
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EulerMapTrajectoryRet {
-    pub points: Vec<(f64, f64)>,
-    pub stop_reason: String,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EulerMapManifoldResult {
-    pub plus: EulerMapTrajectoryRet,
-    pub minus: EulerMapTrajectoryRet,
-    pub saddle_point: (f64, f64),
-    pub eigenvalue: f64,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EulerMapFixedPointResult {
-    pub x: f64,
-    pub y: f64,
-    pub eigenvalues: (f64, f64),
-    pub stability: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct EulerMapComputeResult {
-    pub manifolds: Vec<EulerMapManifoldResult>,
-    pub fixed_points: Vec<EulerMapFixedPointResult>,
-}
-
-#[wasm_bindgen]
-pub struct EulerMapSystemWasm {
-    delta: f64,
-    h: f64,
-    epsilon: f64,
-    max_period: usize,
-}
-
-#[wasm_bindgen]
-impl EulerMapSystemWasm {
-    #[wasm_bindgen(constructor)]
-    pub fn new(
-        delta: f64,
-        h: f64,
-        epsilon: f64,
-        max_period: usize,
-    ) -> Result<EulerMapSystemWasm, JsValue> {
-        Ok(EulerMapSystemWasm {
-            delta,
-            h,
-            epsilon,
-            max_period,
-        })
-    }
-
-    #[wasm_bindgen(js_name = getPeriodicOrbits)]
-    pub fn get_periodic_orbits(&self) -> Result<JsValue, JsValue> {
-        let orbits: Vec<()> = Vec::new();
-        serde_wasm_bindgen::to_value(&orbits)
-            .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
-    }
-
-    #[wasm_bindgen(js_name = trackTrajectory)]
-    pub fn track_trajectory(&mut self, _initial_x: f64, _initial_y: f64, _max_iterations: usize) {}
-
-    #[wasm_bindgen(js_name = getCurrentPoint)]
-    pub fn get_current_point(&self) -> Result<JsValue, JsValue> {
-        Ok(JsValue::NULL)
-    }
-
-    #[wasm_bindgen(js_name = getTrajectory)]
-    pub fn get_trajectory(&self, _start: usize, _end: usize) -> Result<JsValue, JsValue> {
-        let points: Vec<()> = Vec::new();
-        serde_wasm_bindgen::to_value(&points)
-            .map_err(|e| JsValue::from_str(&format!("Serialization error: {}", e)))
-    }
-
-    #[wasm_bindgen]
-    pub fn step(&mut self) -> bool {
-        false
-    }
-
-    #[wasm_bindgen]
-    pub fn reset(&mut self) {}
-
-    #[wasm_bindgen(js_name = getTotalIterations)]
-    pub fn get_total_iterations(&self) -> usize {
-        0
-    }
-
-    #[wasm_bindgen(js_name = getCurrentIteration)]
-    pub fn get_current_iteration(&self) -> usize {
-        0
-    }
-
-    #[wasm_bindgen(js_name = getOrbitCount)]
-    pub fn get_orbit_count(&self) -> usize {
-        0
-    }
 }
 
 use crate::boundary_periodic::ExtendedPoint;
@@ -642,7 +503,7 @@ impl BdeSimulatorUserDefinedWasm {
 mod tests {
     use super::*;
     use crate::parameters::ParameterEntry;
-    use nalgebra::{Matrix2, Vector2};
+    use nalgebra::Vector2;
 
     #[test]
     fn test_duffing_ode_eval() {

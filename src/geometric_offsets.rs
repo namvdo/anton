@@ -282,13 +282,12 @@ fn segment_sets_intersect(indexed: &[Segment], queries: &[Segment], same_polygon
                         continue;
                     }
                     last_query_seen[candidate_index] = query_index;
-                    if same_polygon {
-                        if candidate_index <= query_index
+                    if same_polygon
+                        && (candidate_index <= query_index
                             || candidate_index == (query_index + 1) % queries.len()
-                            || query_index == (candidate_index + 1) % indexed.len()
-                        {
-                            continue;
-                        }
+                            || query_index == (candidate_index + 1) % indexed.len())
+                    {
+                        continue;
                     }
                     if segments_intersect_or_touch(indexed[candidate_index], query) {
                         return true;

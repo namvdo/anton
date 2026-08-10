@@ -1,12 +1,15 @@
-# React + Vite
+# BIST frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The supported browser application is React 19 with strict TypeScript, Vite, Three.js, a dedicated compute worker, and the Rust-generated WebAssembly package. Authored runtime code, workers, build scripts, and tests use `.ts` or `.tsx`; `pkg/bist.js` is generated WebAssembly glue and is not maintained by hand.
 
-Currently, two official plugins are available:
+Install the locked dependencies and regenerate the Rust bindings before starting the application:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+```bash
+npm ci
+npm run build:wasm
+npm run dev
+```
 
-## Expanding the ESLint configuration
+Use `npm run typecheck` for the strict compiler check, `npm run lint` for TypeScript and React rules, `npm test` for the unit and component suite, and `npm run build` for the checked production bundle. `npm run verify` runs the frontend checks together. The repository-level `../scripts/verify.sh` also runs Rust, scientific, WebAssembly, and dependency checks.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Shared scientific and UI contracts live in `src/types/domain.ts`. Worker messages must pass through `src/protocol/computeProtocol.ts` and `src/services/ComputeWorkerClient.ts`. System metadata and numerical constants live in `src/config/`; components should consume those definitions instead of creating local copies.

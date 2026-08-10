@@ -66,7 +66,7 @@ impl DuffingParams {
     }
 
     pub fn jacobian(&self, pos: Vector2<f64>) -> Matrix2<f64> {
-        return Matrix2::new(0.0, 1.0, -self.b, self.a - 3.0 * pos.y.powi(2));
+        Matrix2::new(0.0, 1.0, -self.b, self.a - 3.0 * pos.y.powi(2))
     }
 
     // transform normal vector using J^(-1) ^ T
@@ -107,7 +107,7 @@ impl DuffingParams {
             return Ok(normal);
         }
 
-        return Ok(result);
+        Ok(result)
     }
 
     pub fn transform_normal_inverse(
@@ -141,7 +141,7 @@ impl DuffingParams {
         if !result.x.is_finite() || !result.y.is_finite() {
             return Ok(normal);
         }
-        return Ok(result);
+        Ok(result)
     }
 
     // apply duffing map to position

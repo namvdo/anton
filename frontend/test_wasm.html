@@ -17,7 +17,7 @@
 
         try {
             log('Loading WASM module...');
-            const wasm = await import('./pkg/set_valued_viz.js');
+            const wasm = await import('./pkg/bist.js');
             await wasm.default();
 
             log('✓ WASM loaded successfully');

@@ -2,8 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use wasm_bindgen::prelude::JsValue;
 
-use serde_wasm_bindgen;
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ParameterEntry {
     pub name: String,

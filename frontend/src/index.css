@@ -73,6 +73,14 @@ body {
   align-items: center;
   gap: 7px;
 }
+.app-version {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: .03em;
+  text-transform: none;
+}
 .app-name-mark {
   width: 18px; height: 18px;
   border-radius: 4px;
@@ -323,6 +331,38 @@ body {
 }
 .preset:hover { border-color: var(--text-3); color: var(--text); background: var(--surface); }
 .preset.active { border-color: var(--blue); color: var(--blue); background: var(--blue-dim); }
+
+/* ─── Experiment exchange ────────────────────────────── */
+.experiment-note {
+  margin: 0 0 9px;
+  color: var(--text-3);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+.experiment-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.experiment-actions button {
+  border: 1px solid var(--line-hi);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--text-2);
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+.experiment-actions button:hover:not(:disabled) { border-color: var(--text-3); color: var(--text); }
+.experiment-actions button:disabled { opacity: .5; cursor: wait; }
+.experiment-status {
+  margin-top: 8px;
+  font-size: 10px;
+  line-height: 1.4;
+}
+.experiment-status.success { color: var(--green); }
+.experiment-status.error { color: #e06b6b; }
 
 /* ─── Custom Params ─────────────────────────────────── */
 .param-editor { margin-top: 6px; display: grid; gap: 6px; }

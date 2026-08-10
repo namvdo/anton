@@ -1,5 +1,3 @@
-use std::mem::discriminant;
-
 use nalgebra::Vector2;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -93,8 +91,8 @@ pub fn compute_hausdorff_distance(
         manifold_b.len()
     );
 
-    let (dist_a_to_b, max_a_idx, closest_b_idx) = directed_hausdorff(manifold_a, manifold_b);
-    let (dist_b_to_a, max_b_idx, closest_a_idx) = directed_hausdorff(manifold_b, manifold_a);
+    let (dist_a_to_b, _, _) = directed_hausdorff(manifold_a, manifold_b);
+    let (dist_b_to_a, _, _) = directed_hausdorff(manifold_b, manifold_a);
 
     let hausdorff_dist = dist_a_to_b.max(dist_b_to_a);
 

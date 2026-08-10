@@ -97,6 +97,12 @@ pub struct PeriodicOrbitDatabase {
     pub orbits: Vec<PeriodicOrbit>,
 }
 
+impl Default for PeriodicOrbitDatabase {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PeriodicOrbitDatabase {
     pub fn new() -> Self {
         Self { orbits: Vec::new() }
@@ -134,7 +140,7 @@ impl PeriodicOrbitDatabase {
                 if distance < threshold {
                     return PointClassification::NearPeriodicOrbit {
                         period: orbit.period,
-                        stability: orbit.stability.clone(),
+                        stability: orbit.stability,
                         distance,
                     };
                 }
@@ -190,11 +196,22 @@ pub struct PeriodicOrbitJS {
     pub points: Vec<(f64, f64)>,
     pub period: usize,
     pub stability: String,
+    pub residual: Option<f64>,
 }
 
 /// Duffing map: x_{n+1} = y_n, y_{n+1} = -b * x_n + a*y_n - y_n^3
 fn duffing_map(x: f64, y: f64, a: f64, b: f64) -> (f64, f64) {
     (y, -b * x + a * y - y * y * y)
+}
+
+fn periodic_orbit_residual(orbit: &PeriodicOrbit, a: f64, b: f64) -> Option<f64> {
+    let first = orbit.points.first()?;
+    let (mut x, mut y) = (first.x, first.y);
+    for _ in 0..orbit.period {
+        (x, y) = duffing_map(x, y, a, b);
+    }
+    let residual = (x - first.x).hypot(y - first.y);
+    residual.is_finite().then_some(residual)
 }
 
 fn duffing_jacobian(_x: f64, y: f64, a: f64, b: f64) -> Jacobian {
@@ -363,29 +380,29 @@ fn davidchack_lai_duffing(a: f64, b: f64, max_period: usize) -> PeriodicOrbitDat
                 if let Some(fixed_point) = find_duffing_periodic_point_davidchack_lai(
                     x0, y0, period, a, b, None, 100, 1e-10,
                 ) {
-                    if !database.contains_point(fixed_point.x, fixed_point.y, 0.01) {
-                        if verify_duffing_minimal_period(&fixed_point, period, a, b) {
-                            let mut orbit_points = vec![fixed_point.clone()];
-                            let mut x = fixed_point.x;
-                            let mut y = fixed_point.y;
+                    if !database.contains_point(fixed_point.x, fixed_point.y, 0.01)
+                        && verify_duffing_minimal_period(&fixed_point, period, a, b)
+                    {
+                        let mut orbit_points = vec![fixed_point];
+                        let mut x = fixed_point.x;
+                        let mut y = fixed_point.y;
 
-                            for _ in 1..period {
-                                let (x_new, y_new) = duffing_map(x, y, a, b);
-                                orbit_points.push(Point { x: x_new, y: y_new });
-                                x = x_new;
-                                y = y_new;
-                            }
-
-                            let (_, jac_fn) =
-                                compose_duffing_n_times(fixed_point.x, fixed_point.y, period, a, b);
-                            let stability = classify_stability(&jac_fn);
-
-                            database.add_orbit(PeriodicOrbit {
-                                points: orbit_points,
-                                period,
-                                stability,
-                            });
+                        for _ in 1..period {
+                            let (x_new, y_new) = duffing_map(x, y, a, b);
+                            orbit_points.push(Point { x: x_new, y: y_new });
+                            x = x_new;
+                            y = y_new;
                         }
+
+                        let (_, jac_fn) =
+                            compose_duffing_n_times(fixed_point.x, fixed_point.y, period, a, b);
+                        let stability = classify_stability(&jac_fn);
+
+                        database.add_orbit(PeriodicOrbit {
+                            points: orbit_points,
+                            period,
+                            stability,
+                        });
                     }
                 }
             }
@@ -417,34 +434,34 @@ fn davidchack_lai_duffing(a: f64, b: f64, max_period: usize) -> PeriodicOrbitDat
                         if let Some(periodic_point) = find_duffing_periodic_point_davidchack_lai(
                             x0, y0, period, a, b, None, 150, 1e-10,
                         ) {
-                            if !database.contains_point(periodic_point.x, periodic_point.y, 0.01) {
-                                if verify_duffing_minimal_period(&periodic_point, period, a, b) {
-                                    let mut orbit_points = vec![periodic_point.clone()];
-                                    let mut x = periodic_point.x;
-                                    let mut y = periodic_point.y;
+                            if !database.contains_point(periodic_point.x, periodic_point.y, 0.01)
+                                && verify_duffing_minimal_period(&periodic_point, period, a, b)
+                            {
+                                let mut orbit_points = vec![periodic_point];
+                                let mut x = periodic_point.x;
+                                let mut y = periodic_point.y;
 
-                                    for _ in 1..period {
-                                        let (x_new, y_new) = duffing_map(x, y, a, b);
-                                        orbit_points.push(Point { x: x_new, y: y_new });
-                                        x = x_new;
-                                        y = y_new;
-                                    }
-
-                                    let (_, jac_fn) = compose_duffing_n_times(
-                                        periodic_point.x,
-                                        periodic_point.y,
-                                        period,
-                                        a,
-                                        b,
-                                    );
-                                    let stability = classify_stability(&jac_fn);
-
-                                    database.add_orbit(PeriodicOrbit {
-                                        points: orbit_points,
-                                        period,
-                                        stability,
-                                    });
+                                for _ in 1..period {
+                                    let (x_new, y_new) = duffing_map(x, y, a, b);
+                                    orbit_points.push(Point { x: x_new, y: y_new });
+                                    x = x_new;
+                                    y = y_new;
                                 }
+
+                                let (_, jac_fn) = compose_duffing_n_times(
+                                    periodic_point.x,
+                                    periodic_point.y,
+                                    period,
+                                    a,
+                                    b,
+                                );
+                                let stability = classify_stability(&jac_fn);
+
+                                database.add_orbit(PeriodicOrbit {
+                                    points: orbit_points,
+                                    period,
+                                    stability,
+                                });
                             }
                         }
                     }
@@ -560,6 +577,7 @@ impl DuffingSystemWasm {
                 points: orbit.points.iter().map(|p| (p.x, p.y)).collect(),
                 period: orbit.period,
                 stability: String::from(&orbit.stability),
+                residual: periodic_orbit_residual(orbit, self.system.a, self.system.b),
             })
             .collect();
 
@@ -627,5 +645,21 @@ impl DuffingSystemWasm {
     #[wasm_bindgen(js_name = getOrbitCount)]
     pub fn get_orbit_count(&self) -> usize {
         self.system.orbit_database.total_count()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn periodic_export_residual_is_computed_from_the_recorded_period() {
+        let orbit = PeriodicOrbit {
+            points: vec![Point { x: 0.0, y: 0.0 }],
+            period: 1,
+            stability: StabilityType::Saddle,
+        };
+
+        assert_eq!(periodic_orbit_residual(&orbit, 2.75, 0.2), Some(0.0));
     }
 }

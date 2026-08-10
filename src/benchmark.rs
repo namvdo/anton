@@ -1,4 +1,4 @@
-use henon_periodic_orbits::{
+use bist::{
     BoundaryHenonSystemAnalysis, HenonParams, ManifoldConfig, SaddlePoint, SaddleType,
     UlamComputer, UnstableManifoldComputer,
 };
