@@ -4,7 +4,7 @@
   <img src="./frontend/public/bist-logo-full.png" alt="BIST - Bounded Invariant Set Toolbox logo" width="520" />
 </div>
 
-Iteractive web-based visualization tool for exploring set-valued dynamical systems with additive bounded noise, developed as part of the Advanced Computing Project (ACP2) research course at the University of Oulu.
+Iteractive web-based visualization tool for exploring set-valued dynamical systems with additive bounded noise, developed as part of the Applied Computing Project (ACP2) research course at the University of Oulu.
 
 #### Live at: [https://namvdo.github.io/set-valued-viz](https://namvdo.github.io/set-valued-viz)
 #### Technical report: [https://namvdo.github.io/bist_technical_report_24042026.pdf](https://namvdo.github.io/bist_technical_report_24042026.pdf)
