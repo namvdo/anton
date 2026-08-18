@@ -1,163 +1,144 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { GeometricOffsetsPanel } from './GeometricOffsetsPanel';
-import type { GeometricOffsetResult, GeometricOffsetState } from '../../types/domain';
+import { createGeometricOffsetContour } from '../../utils/geometricOffsetBatch';
+import type {
+  GeometricOffsetResult,
+  GeometricOffsetState,
+} from '../../types/domain';
 
-const state: GeometricOffsetState = {
-  contourEpsilon: 0.08,
-  showContours: true,
-  inverseIterations: 1,
-  inverseDisplayMode: 'all',
-  showInverseContours: true,
-  isComputing: false,
-  isComputingInverse: false,
-  result: null,
-  inverseResult: null,
-  error: null,
-  inverseError: null
+const result = (epsilon: number): GeometricOffsetResult => ({
+  completed_levels: 1,
+  epsilon,
+  stop_reason: 'requested_levels_completed',
+  levels: [{
+    level: 1,
+    target_distance: epsilon,
+    component_count: 1,
+    boundary_components: [{ id: 0, points: [] }],
+  }],
+});
+
+const initialState = (ready = false): GeometricOffsetState => {
+  const contours = [0.025, 0.05, 0.075].map(createGeometricOffsetContour).map(contour => ({
+    ...contour,
+    result: ready ? result(contour.epsilon) : null,
+  }));
+  return {
+    editorMode: 'series',
+    seriesStart: 0.025,
+    seriesEnd: 0.075,
+    seriesCount: 3,
+    individualEpsilon: 0.1,
+    contours,
+    selectedContourId: contours[0].id,
+    preimageSourceIds: [contours[0].id],
+    inverseIterations: 2,
+    inverseDisplayMode: 'all',
+    showInverseContours: true,
+    isComputing: false,
+    isComputingInverse: false,
+    error: null,
+    inverseError: null,
+  };
 };
 
-const result: GeometricOffsetResult = {
-  completed_levels: 1,
-  epsilon: 0.1,
-  stop_reason: 'requested_levels_completed',
-  levels: [
-    { level: 1, target_distance: 0.1, component_count: 1, offset_residual: 0.001, gap_residual: 0.0015, uncertainty: 0.01 }
-  ]
+interface HarnessProps {
+  ready?: boolean;
+  compute?: () => void;
+  computeInverse?: () => void;
+}
+
+const Harness = ({ ready = false, compute = vi.fn(), computeInverse = vi.fn() }: HarnessProps) => {
+  const [state, setState] = useState(() => initialState(ready));
+  return (
+    <GeometricOffsetsPanel
+      state={state}
+      setState={setState}
+      systemEpsilon={0.0625}
+      canCompute
+      compute={compute}
+      canComputeInverse={ready}
+      computeInverse={computeInverse}
+      fitInverse={vi.fn()}
+    />
+  );
 };
 
 describe('GeometricOffsetsPanel', () => {
-  it('disables computation without showing prerequisite instructions', () => {
-    const { container } = render(<GeometricOffsetsPanel state={state} setState={vi.fn()} canCompute={false} compute={vi.fn()} />);
-    expect(screen.getByRole('button', { name: 'Compute ε contours' })).toBeDisabled();
-    expect(container.querySelector('.geometric-offset-note')).toBeNull();
+  it('generates an evenly spaced epsilon series before computation', () => {
+    render(<Harness />);
+    fireEvent.change(screen.getByLabelText('Series start epsilon'), { target: { value: '0.02' } });
+    fireEvent.change(screen.getByLabelText('Series end epsilon'), { target: { value: '0.08' } });
+    fireEvent.change(screen.getByLabelText('Series contour count'), { target: { value: '4' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Use evenly spaced series' }));
+
+    expect(screen.getByLabelText('Show contour epsilon 0.02')).toBeInTheDocument();
+    expect(screen.getByLabelText('Show contour epsilon 0.04')).toBeInTheDocument();
+    expect(screen.getByLabelText('Show contour epsilon 0.06')).toBeInTheDocument();
+    expect(screen.getByLabelText('Show contour epsilon 0.08')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Compute 4 contours' })).toBeEnabled();
   });
 
-  it('runs geometric offset computation', () => {
+  it('adds an individual epsilon without removing the generated series', () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Individual' }));
+    fireEvent.change(screen.getByLabelText('Individual contour epsilon'), {
+      target: { value: '0.11' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+
+    expect(screen.getByLabelText('Show contour epsilon 0.11')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Compute 4 contours' })).toBeEnabled();
+  });
+
+  it('computes all configured contours through one action', () => {
     const compute = vi.fn();
-    render(<GeometricOffsetsPanel state={state} setState={vi.fn()} canCompute compute={compute} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Compute ε contours' }));
+    render(<Harness compute={compute} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Compute 3 contours' }));
     expect(compute).toHaveBeenCalledOnce();
   });
 
-  it('exposes contour spacing as the only geometric-offset numerical control', () => {
-    const { container } = render(<GeometricOffsetsPanel state={state} setState={vi.fn()} canCompute compute={vi.fn()} />);
-    expect(container.querySelectorAll('.p-val')).toHaveLength(1);
-    expect(screen.getByText('Contour ε')).toBeInTheDocument();
-    expect(screen.queryByText('Levels')).toBeNull();
-    expect(screen.queryByText('Resolution')).toBeNull();
-    expect(screen.queryByLabelText('Source contour')).toBeNull();
+  it('gives every contour independent direct visibility', () => {
+    render(<Harness ready />);
+    const first = screen.getByLabelText('Show contour epsilon 0.025');
+    const second = screen.getByLabelText('Show contour epsilon 0.05');
+    expect(first).toBeChecked();
+    expect(second).toBeChecked();
+    fireEvent.click(first);
+    expect(first).not.toBeChecked();
+    expect(second).toBeChecked();
   });
 
-  it('updates contour epsilon independently and invalidates stale contour results', () => {
-    const setState = vi.fn();
-    const { container } = render(<GeometricOffsetsPanel state={{ ...state, result }} setState={setState}
-      canCompute compute={vi.fn()} />);
-    const contourEpsilonInput = container.querySelector('.p-val');
-    expect(contourEpsilonInput).toHaveValue(0.08);
-    fireEvent.change(contourEpsilonInput!, { target: { value: '0.25' } });
-    const update = setState.mock.calls[0][0];
-    expect(update({ ...state, result })).toMatchObject({
-      contourEpsilon: 0.25,
-      result: null,
-      inverseResult: null
-    });
+  it('highlights one contour and automatically keeps it as a preimage source', () => {
+    render(<Harness ready />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select contour epsilon 0.05' }));
+
+    expect(screen.getByRole('button', { name: 'Select contour epsilon 0.05' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByLabelText('Use contour epsilon 0.05 for preimages')).toBeChecked();
+    expect(screen.getByLabelText('Use contour epsilon 0.05 for preimages')).toBeDisabled();
   });
 
-  it('keeps detailed geometric diagnostics out of the compact sidebar', () => {
-    render(<GeometricOffsetsPanel state={{ ...state, result }} setState={vi.fn()} canCompute compute={vi.fn()} />);
-    expect(screen.queryByText(/2 levels/)).toBeNull();
-    expect(screen.queryByText(/gap ε/)).toBeNull();
-    expect(screen.queryByText(/gap residual/)).toBeNull();
-    expect(screen.queryByText(/target residual/)).toBeNull();
-    expect(screen.queryByText(/uncertainty/)).toBeNull();
-    expect(screen.queryByLabelText('Source contour')).toBeNull();
-  });
-
-  it('does not show the escaped-domain summary in the sidebar', () => {
-    const escaped = { ...result, completed_levels: 1, stop_reason: 'escaped_domain', levels: result.levels.slice(0, 1) };
-    render(<GeometricOffsetsPanel state={{ ...state, result: escaped }} setState={vi.fn()} canCompute compute={vi.fn()} />);
-    expect(screen.queryByText(/escaped domain/)).toBeNull();
-    expect(screen.queryByText(/1 level/)).toBeNull();
-  });
-
-  it('maps stored closed offset components backward on demand', () => {
+  it('supports multiple simultaneous preimage sources', () => {
     const computeInverse = vi.fn();
-    render(<GeometricOffsetsPanel state={{ ...state, result }} setState={vi.fn()}
-      canCompute compute={vi.fn()} canComputeInverse computeInverse={computeInverse} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Compute boundary-map preimage' }));
+    render(<Harness ready computeInverse={computeInverse} />);
+    fireEvent.click(screen.getByLabelText('Use contour epsilon 0.05 for preimages'));
+
+    const button = screen.getByRole('button', { name: 'Compute preimages from 2 sources' });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
     expect(computeInverse).toHaveBeenCalledOnce();
-    expect(screen.getByText('Preimage steps')).toBeInTheDocument();
-    expect(screen.getByLabelText('Display')).toBeDisabled();
-    expect(screen.getByLabelText('Show inverse-map curves')).toBeDisabled();
   });
 
-  it('keeps inverse sampling diagnostics out of the compact sidebar', () => {
-    const inverseResult = {
-      curves: [{
-        source_level: 1,
-        source_component_id: 0,
-        inverse_iteration: 1,
-        source_relation: 'nested_outside',
-        points: []
-      }],
-      total_output_points: 842,
-      max_position_chord_error: 0.0004,
-      max_normal_chord_error: 0.003,
-      subdivision_limit_reached: false,
-      completed_iterations: 1
-    };
-    const fitInverse = vi.fn();
-    const { container } = render(<GeometricOffsetsPanel state={{ ...state, result, inverseResult }} setState={vi.fn()}
-      canCompute compute={vi.fn()} canComputeInverse computeInverse={vi.fn()} fitInverse={fitInverse} />);
-    expect(screen.queryByText(/generated closed preimage/)).toBeNull();
-    expect(screen.queryByText(/stored samples/)).toBeNull();
-    expect(screen.queryByText(/position chord error/)).toBeNull();
-    expect(screen.queryByText(/subdivision limit/)).toBeNull();
-    expect(screen.queryByText(/source-nesting/)).toBeNull();
-    expect(container.querySelector('.geometric-offset-status')).toBeNull();
-    expect(screen.getByLabelText('Show inverse-map curves')).toBeChecked();
-    fireEvent.click(screen.getByRole('button', { name: 'Fit preimage in view' }));
-    expect(fitInverse).toHaveBeenCalledOnce();
-  });
-
-  it('shows all computed steps by default and toggles the curve group as one overlay', () => {
-    const inverseResult = {
-      curves: [
-        { inverse_iteration: 1, source_relation: 'nested_outside', points: [] },
-        { inverse_iteration: 2, source_relation: 'nested_outside', points: [] },
-        { inverse_iteration: 3, source_relation: 'nested_outside', points: [] }
-      ],
-      total_output_points: 900,
-      max_position_chord_error: 0.0004,
-      max_normal_chord_error: 0.003,
-      subdivision_limit_reached: false,
-      completed_iterations: 3
-    };
-    const setState = vi.fn();
-    render(<GeometricOffsetsPanel state={{ ...state, result, inverseResult }} setState={setState}
-      canCompute compute={vi.fn()} canComputeInverse computeInverse={vi.fn()} fitInverse={vi.fn()} />);
-
-    expect(screen.getByLabelText('Display')).toHaveValue('all');
-    fireEvent.click(screen.getByLabelText('Show inverse-map curves'));
-    const update = setState.mock.calls[0][0];
-    expect(update({ ...state, inverseResult })).toMatchObject({ showInverseContours: false });
-  });
-
-  it('does not show a warning box when an inverse curve fails the nesting diagnostic', () => {
-    const inverseResult = {
-      curves: [{ inverse_iteration: 1, source_relation: 'crosses_source', points: [] }],
-      total_output_points: 1640,
-      max_position_chord_error: 0.000114,
-      max_normal_chord_error: 0.00051,
-      subdivision_limit_reached: false,
-      completed_iterations: 1
-    };
-    const { container } = render(<GeometricOffsetsPanel state={{ ...state, result, inverseResult }} setState={vi.fn()}
-      canCompute compute={vi.fn()} canComputeInverse computeInverse={vi.fn()} fitInverse={vi.fn()} />);
-
-    expect(screen.queryByText('Preimage crosses its source; it is not a nested basin boundary.')).toBeNull();
-    expect(container.querySelector('.geometric-offset-status')).toBeNull();
+  it('prevents duplicate individual epsilon values', () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Individual' }));
+    fireEvent.change(screen.getByLabelText('Individual contour epsilon'), {
+      target: { value: '0.05' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('already exists');
+    expect(screen.getByRole('button', { name: 'Compute 3 contours' })).toBeInTheDocument();
   });
 });

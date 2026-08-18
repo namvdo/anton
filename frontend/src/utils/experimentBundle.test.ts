@@ -78,6 +78,31 @@ describe('experiment bundle schema v2', () => {
       stationaryIterations: 100,
       absorptionTolerance: 1e-12,
     });
+    expect(ui.geometricOffsetSettings.contourEpsilons).toEqual([0.025, 0.05, 0.075, 0.1, 0.125]);
+
+    const oldV2 = buildReferenceBundle();
+    Reflect.deleteProperty(oldV2.configuration.solvers.geometricOffsets, 'contourEpsilons');
+    const oldUi = experimentConfigurationToUiState(
+      parseExperimentBundle(JSON.stringify(oldV2)).configuration,
+    );
+    expect(oldUi.geometricOffsetSettings.contourEpsilons).toEqual([0.1]);
+  });
+
+  it('round-trips the complete geometric contour epsilon batch', () => {
+    const bundle = buildReferenceBundle({
+      configuration: {
+        ...legacyConfigurationInput,
+        solverSettings: {
+          geometricOffsets: {
+            contourEpsilon: 0.05,
+            contourEpsilons: [0.025, 0.05, 0.075],
+          },
+        },
+      },
+    });
+    const ui = experimentConfigurationToUiState(bundle.configuration);
+    expect(ui.geometricOffsetSettings.contourEpsilon).toBe(0.05);
+    expect(ui.geometricOffsetSettings.contourEpsilons).toEqual([0.025, 0.05, 0.075]);
   });
 
   it('derives residual, normal, Ulam, and geometric diagnostics from results', () => {
@@ -114,6 +139,45 @@ describe('experiment bundle schema v2', () => {
     expect(bundle.diagnostics.warnings).toContain(
       'The source commit does not identify a verified clean working tree.',
     );
+  });
+
+  it('aggregates diagnostics from batched direct and inverse contour snapshots', () => {
+    const bundle = buildReferenceBundle({
+      results: {
+        geometricOffsets: {
+          batchVersion: 1,
+          contours: [
+            { id: 'a', result: { completed_levels: 1 } },
+            { id: 'b', result: { completed_levels: 1 } },
+          ],
+        },
+        inverseGeometricOffsets: {
+          batchVersion: 1,
+          contours: [
+            { id: 'a', result: {
+              completed_iterations: 2,
+              max_position_chord_error: 2e-4,
+              max_normal_chord_error: 3e-3,
+              subdivision_limit_reached: false,
+            } },
+            { id: 'b', result: {
+              completed_iterations: 3,
+              max_position_chord_error: 4e-4,
+              max_normal_chord_error: 1e-3,
+              subdivision_limit_reached: true,
+            } },
+          ],
+        },
+      },
+    });
+
+    expect(bundle.diagnostics.geometricOffsets).toEqual({
+      completedDirectLevels: 2,
+      completedInverseIterations: 3,
+      maximumInversePositionChordError: 4e-4,
+      maximumInverseNormalChordError: 3e-3,
+      inverseSubdivisionLimitReached: true,
+    });
   });
 
   it('migrates a version-1 bundle into the canonical v2 shape', () => {

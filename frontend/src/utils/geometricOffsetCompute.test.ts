@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildGeometricOffsetBatchRequest,
   buildSingleGeometricOffsetRequest,
   geometricOffsetSampleSpacing
 } from './geometricOffsetCompute';
@@ -17,6 +18,27 @@ describe('single geometric-offset computation settings', () => {
       boundary,
       params: { epsilon: 0.2 }
     });
+  });
+
+  it('validates and sorts a complete contour batch before worker execution', () => {
+    expect(buildGeometricOffsetBatchRequest(boundary, [
+      { id: 'large', epsilon: 0.2 },
+      { id: 'small', epsilon: 0.1 },
+    ])).toEqual({
+      boundary,
+      contours: [
+        { id: 'small', epsilon: 0.1 },
+        { id: 'large', epsilon: 0.2 },
+      ],
+    });
+    expect(() => buildGeometricOffsetBatchRequest(boundary, [
+      { id: 'first', epsilon: 0.1 },
+      { id: 'duplicate', epsilon: 0.1 },
+    ])).toThrow(/unique/);
+    expect(() => buildGeometricOffsetBatchRequest(boundary, [
+      { id: 'same', epsilon: 0.1 },
+      { id: 'same', epsilon: 0.2 },
+    ])).toThrow(/identifiers must be unique/);
   });
 
   it('rejects invalid input before starting the worker', () => {

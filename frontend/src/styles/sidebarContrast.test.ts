@@ -35,8 +35,14 @@ const contrastRatio = (foreground: string, background: string): number => {
 };
 
 describe('sidebar typography tokens', () => {
-  it.each(['text', 'text-2', 'text-3'])('%s is true white for maximum visibility', token => {
-    expect(readColorToken(token).toLowerCase()).toBe('#ffffff');
+  it('uses a visible hierarchy while keeping every text token light', () => {
+    const text = relativeLuminance(readColorToken('text'));
+    const secondary = relativeLuminance(readColorToken('text-2'));
+    const muted = relativeLuminance(readColorToken('text-3'));
+
+    expect(text).toBeGreaterThan(secondary);
+    expect(secondary).toBeGreaterThan(muted);
+    expect(muted).toBeGreaterThan(0.35);
   });
 
   it.each(['text', 'text-2', 'text-3'])('%s meets WCAG AA contrast on sidebar surfaces', token => {
@@ -47,11 +53,22 @@ describe('sidebar typography tokens', () => {
   });
 
   it('uses the shared native font stacks for UI and equation text', () => {
-    expect(stylesheet).toMatch(/--font-sans:\s*ui-sans-serif/);
+    expect(stylesheet).toMatch(/--font-sans:\s*Inter, ui-sans-serif/);
     expect(stylesheet).toMatch(/--font-mono:\s*ui-monospace/);
     expect(stylesheet).toMatch(/body\s*{[^}]*font-family:\s*var\(--font-sans\)/s);
     expect(stylesheet).toMatch(/\.eq-line\s*{[^}]*font-family:\s*var\(--font-mono\)/s);
     expect(stylesheet).toMatch(/\.eq-line \.sym,[^}]*color:\s*var\(--text\)/s);
     expect(stylesheet).toMatch(/\.eq-custom-input\s*{[^}]*color:\s*var\(--text\)/s);
+  });
+
+  it('keeps labels strong and keyboard focus visible', () => {
+    expect(stylesheet).toMatch(/\.sec-title\s*{[^}]*font-weight:\s*750/s);
+    expect(stylesheet).toMatch(/\.p-name\s*{[^}]*font-weight:\s*700/s);
+    expect(stylesheet).toMatch(/button:focus-visible,[^}]*outline:\s*2px solid var\(--amber\)/s);
+  });
+
+  it('keeps a large contour legend inside the viewport', () => {
+    expect(stylesheet).toMatch(/\.vp-legend\s*{[^}]*max-height:\s*calc\(100% - var\(--viewport-header-height\) - 32px\)/s);
+    expect(stylesheet).toMatch(/\.vp-legend\s*{[^}]*overflow-y:\s*auto/s);
   });
 });

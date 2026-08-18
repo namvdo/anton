@@ -187,13 +187,125 @@ pub struct UlamComputer {
     epsilon: f64,
 }
 
+impl UlamComputer {
+    fn build_henon(
+        a: f64,
+        b: f64,
+        dims: (usize, usize),
+        points_per_box: usize,
+        epsilon: f64,
+        min: Vector2<f64>,
+        max: Vector2<f64>,
+    ) -> Result<Self, String> {
+        let params = HenonParams::new(a, b, epsilon)?;
+        if dims.0 == 0 || dims.1 == 0 || dims.0.checked_mul(dims.1).is_none() {
+            return Err("Ulam grid dimensions must be positive and finite in size".to_string());
+        }
+        if points_per_box == 0 {
+            return Err("Ulam sampling requires at least one point per box".to_string());
+        }
+        if !min.x.is_finite()
+            || !min.y.is_finite()
+            || !max.x.is_finite()
+            || !max.y.is_finite()
+            || min.x >= max.x
+            || min.y >= max.y
+        {
+            return Err("Ulam domain must have finite, strictly ordered bounds".to_string());
+        }
+
+        let grid = Grid::new_rectangular(min, max, dims);
+        let n_boxes = grid.boxes.len();
+        let samples_per_dim = (points_per_box as f64).sqrt().ceil() as usize;
+        let actual_samples = samples_per_dim * samples_per_dim;
+        console_log!(
+            "Ulam: {}x{} boxes, {}x{} samples/box = {} samples, epsilon = {}",
+            dims.0,
+            dims.1,
+            samples_per_dim,
+            samples_per_dim,
+            actual_samples,
+            epsilon
+        );
+
+        let mut transitions: HashMap<usize, Vec<(usize, f64)>> = HashMap::new();
+        for (index, rect) in grid.boxes.iter().enumerate() {
+            let center = Vector2::new(rect.center.0, rect.center.1);
+            let radius = Vector2::new(rect.radius.0, rect.radius.1);
+            let mut counts: HashMap<usize, usize> = HashMap::new();
+            for sample_y in 0..samples_per_dim {
+                for sample_x in 0..samples_per_dim {
+                    let unit_x = if samples_per_dim > 1 {
+                        -1.0 + 2.0 * sample_x as f64 / (samples_per_dim - 1) as f64
+                    } else {
+                        0.0
+                    };
+                    let unit_y = if samples_per_dim > 1 {
+                        -1.0 + 2.0 * sample_y as f64 / (samples_per_dim - 1) as f64
+                    } else {
+                        0.0
+                    };
+                    let point =
+                        Vector2::new(center.x + unit_x * radius.x, center.y + unit_y * radius.y);
+                    let mapped = params.henon_map(&point)?;
+                    for target in grid.find_intersecting_boxes(&mapped, epsilon) {
+                        *counts.entry(target).or_insert(0) += 1;
+                    }
+                }
+            }
+            if !counts.is_empty() {
+                let total = counts.values().sum::<usize>() as f64;
+                let mut row: Vec<_> = counts
+                    .into_iter()
+                    .map(|(target, count)| (target, count as f64 / total))
+                    .collect();
+                row.sort_unstable_by_key(|(target, _)| *target);
+                transitions.insert(index, row);
+            }
+        }
+
+        let stationary_density = Self::compute_stationary_density(&transitions, n_boxes, 100);
+        let support = Self::support_indicator(&stationary_density, 1e-10);
+        let absorption_probabilities =
+            Self::compute_absorption_probabilities(&transitions, &support, 1_000, 1e-12);
+        console_log!(
+            "Ulam computation complete. Stationary-density sum: {:.6}, absorption range: [{:.6}, {:.6}]",
+            stationary_density.iter().sum::<f64>(),
+            absorption_probabilities.iter().copied().fold(f64::INFINITY, f64::min),
+            absorption_probabilities.iter().copied().fold(f64::NEG_INFINITY, f64::max)
+        );
+        Ok(Self {
+            grid,
+            transitions,
+            stationary_density,
+            absorption_probabilities,
+            epsilon,
+        })
+    }
+
+    /// Build a native rectangular Ulam grid without silently changing its
+    /// dimensions or domain. Refinement studies use this entry point so that
+    /// the 2:1 thesis domain is covered by approximately square boxes.
+    pub fn try_new_rectangular(
+        a: f64,
+        b: f64,
+        dims: (usize, usize),
+        points_per_box: usize,
+        epsilon: f64,
+        min: Vector2<f64>,
+        max: Vector2<f64>,
+    ) -> Result<Self, String> {
+        Self::build_henon(a, b, dims, points_per_box, epsilon, min, max)
+    }
+}
+
 #[wasm_bindgen]
 impl UlamComputer {
     /// Create a new UlamComputer with the given parameters
     ///
     /// # Arguments
     /// * `a` - Henon map parameter a
-    /// * `b` - Henon map parameter b  
+    /// * `b` - Henon map parameter b
     /// * `subdivisions` - Number of grid subdivisions in each dimension
     /// * `points_per_box` - Number of sample points per box (will be squared for grid)
     /// * `epsilon` - Epsilon parameter for ball inflation (boundary detection)
@@ -209,109 +321,17 @@ impl UlamComputer {
         y_min: f64,
         y_max: f64,
     ) -> Result<UlamComputer, String> {
-        let params = HenonParams::new(a, b, 0.001)?;
-
         let (x_min, x_max) = clamp_pair(x_min, x_max, RANGE_LIMIT);
         let (y_min, y_max) = clamp_pair(y_min, y_max, RANGE_LIMIT);
-        let min = Vector2::new(x_min, y_min);
-        let max = Vector2::new(x_max, y_max);
-        let grid = Grid::new(min, max, subdivisions);
-
-        let n_boxes = grid.boxes.len();
-
-        // Determine grid sampling pattern
-        // points_per_box controls density, we'll use sqrt(points_per_box) x sqrt(points_per_box) grid
-        let samples_per_dim = (points_per_box as f64).sqrt().ceil() as usize;
-        let actual_samples = samples_per_dim * samples_per_dim;
-
-        console_log!(
-            "Ulam: {} boxes, {}x{} samples/box = {} samples, epsilon = {}",
-            n_boxes,
-            samples_per_dim,
-            samples_per_dim,
-            actual_samples,
-            epsilon
-        );
-
-        // Build transition matrix using set-valued approach with epsilon-inflation
-        let mut transitions: HashMap<usize, Vec<(usize, f64)>> = HashMap::new();
-
-        for i in 0..n_boxes {
-            let rect = &grid.boxes[i];
-            let center = Vector2::new(rect.center.0, rect.center.1);
-            let radius = Vector2::new(rect.radius.0, rect.radius.1);
-
-            // Count transitions to each target box
-            let mut counts: HashMap<usize, usize> = HashMap::new();
-            let mut total_valid = 0usize;
-
-            // Sample points uniformly on a grid within the box
-            for sy in 0..samples_per_dim {
-                for sx in 0..samples_per_dim {
-                    // Map [0, samples_per_dim-1] to [-1, 1] range within box
-                    let tx = if samples_per_dim > 1 {
-                        -1.0 + 2.0 * (sx as f64) / ((samples_per_dim - 1) as f64)
-                    } else {
-                        0.0
-                    };
-                    let ty = if samples_per_dim > 1 {
-                        -1.0 + 2.0 * (sy as f64) / ((samples_per_dim - 1) as f64)
-                    } else {
-                        0.0
-                    };
-
-                    let pt = Vector2::new(center.x + tx * radius.x, center.y + ty * radius.y);
-
-                    // Map the point through Henon map
-                    if let Ok(mapped) = params.henon_map(&pt) {
-                        // Find all boxes intersecting the epsilon-ball around the mapped point
-                        // This is the key GAIO/set-valued enhancement
-                        let intersecting = grid.find_intersecting_boxes(&mapped, epsilon);
-
-                        if !intersecting.is_empty() {
-                            total_valid += 1;
-                            // Each intersecting box gets a count (normalized later)
-                            for target_idx in intersecting {
-                                *counts.entry(target_idx).or_insert(0) += 1;
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Normalize to get transition probabilities
-            if total_valid > 0 {
-                let mut probs = Vec::with_capacity(counts.len());
-                let total = counts.values().sum::<usize>() as f64;
-                for (target, count) in counts {
-                    probs.push((target, (count as f64) / total));
-                }
-                transitions.insert(i, probs);
-            }
-        }
-
-        // The matrix is row stochastic. Its stationary density is a left
-        // eigenvector; the absorption probabilities form a right eigenvector
-        // and must be initialized from the invariant-set support.
-        let stationary_density = Self::compute_stationary_density(&transitions, n_boxes, 100);
-        let support = Self::support_indicator(&stationary_density, 1e-10);
-        let absorption_probabilities =
-            Self::compute_absorption_probabilities(&transitions, &support, 1_000, 1e-12);
-
-        console_log!(
-            "Ulam computation complete. Stationary-density sum: {:.6}, absorption range: [{:.6}, {:.6}]",
-            stationary_density.iter().sum::<f64>(),
-            absorption_probabilities.iter().copied().fold(f64::INFINITY, f64::min),
-            absorption_probabilities.iter().copied().fold(f64::NEG_INFINITY, f64::max)
-        );
-
-        Ok(UlamComputer {
-            grid,
-            transitions,
-            stationary_density,
-            absorption_probabilities,
+        Self::build_henon(
+            a,
+            b,
+            (subdivisions, subdivisions),
+            points_per_box,
             epsilon,
-        })
+            Vector2::new(x_min, y_min),
+            Vector2::new(x_max, y_max),
+        )
     }
 
     /// Compute the stationary density (the left eigenvector of row-stochastic `P`).
@@ -496,6 +516,10 @@ impl UlamComputer {
             .get(&from_box_idx)
             .map(Vec::as_slice)
             .unwrap_or(&[])
+    }
+
+    pub fn grid(&self) -> &Grid {
+        &self.grid
     }
 }
 

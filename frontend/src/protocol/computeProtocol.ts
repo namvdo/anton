@@ -12,7 +12,9 @@ export const COMPUTE_TASK_KINDS = Object.freeze([
   'computeManifolds',
   'computeUlam',
   'computeGeometricOffsets',
+  'computeGeometricOffsetBatch',
   'computeInverseGeometricOffsets',
+  'computeInverseGeometricOffsetBatch',
   'getUlamTransitions',
 ] as const);
 

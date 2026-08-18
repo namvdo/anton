@@ -1,41 +1,38 @@
 import { MIN_VIEW_SPAN, normalizeViewRange, RANGE_LIMIT } from './viewRange';
+import { categoricalCurveColor } from './categoricalCurveColor';
 import type {
   InverseOffsetCurve,
   InverseOffsetResult,
   ViewRange,
 } from '../types/domain';
 
-const GOLDEN_ANGLE_DEGREES = 137.50776405003785;
-
-const hslToHex = (hue: number, saturation: number, lightness: number): string => {
-  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
-  const hueSector = hue / 60;
-  const secondary = chroma * (1 - Math.abs((hueSector % 2) - 1));
-  let red = 0;
-  let green = 0;
-  let blue = 0;
-
-  if (hueSector < 1) [red, green] = [chroma, secondary];
-  else if (hueSector < 2) [red, green] = [secondary, chroma];
-  else if (hueSector < 3) [green, blue] = [chroma, secondary];
-  else if (hueSector < 4) [green, blue] = [secondary, chroma];
-  else if (hueSector < 5) [red, blue] = [secondary, chroma];
-  else [red, blue] = [chroma, secondary];
-
-  const lightnessOffset = lightness - chroma / 2;
-  const channelHex = (channel: number) => Math.round((channel + lightnessOffset) * 255)
-    .toString(16)
-    .padStart(2, '0');
-  return `#${channelHex(red)}${channelHex(green)}${channelHex(blue)}`;
-};
-
 export const inverseOffsetStepColor = (iteration: number | string): string => {
   const numericIteration = Number(iteration);
   const step = Number.isFinite(numericIteration) && numericIteration >= 1
     ? Math.trunc(numericIteration)
     : 1;
-  const hue = (42 + (step - 1) * GOLDEN_ANGLE_DEGREES) % 360;
-  return hslToHex(hue, 0.78, 0.62);
+  return categoricalCurveColor(step - 1);
+};
+
+export const inverseOffsetCurveColor = (
+  sourceIndex: number,
+  sourceCount: number,
+  iteration: number | string,
+): string => {
+  const numericSourceIndex = Number(sourceIndex);
+  const safeSourceIndex = Number.isFinite(numericSourceIndex) && numericSourceIndex >= 0
+    ? Math.trunc(numericSourceIndex)
+    : 0;
+  const numericSourceCount = Number(sourceCount);
+  const safeSourceCount = Number.isFinite(numericSourceCount) && numericSourceCount >= 1
+    ? Math.max(Math.trunc(numericSourceCount), safeSourceIndex + 1)
+    : safeSourceIndex + 1;
+  const numericIteration = Number(iteration);
+  const step = Number.isFinite(numericIteration) && numericIteration >= 1
+    ? Math.trunc(numericIteration)
+    : 1;
+
+  return categoricalCurveColor((step - 1) * safeSourceCount + safeSourceIndex);
 };
 
 export const visibleInverseOffsetCurves = (

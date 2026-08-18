@@ -14,19 +14,23 @@ export const SystemPicker = ({ type, setType, systemId, setSystemId, systems, di
     <>
       <div className="type-toggle-wrap">
         <div className="type-toggle-label">System type</div>
-        <div className="type-toggle">
-          <button 
+        <div className="type-toggle" role="group" aria-label="System type">
+          <button
+            type="button"
             className={`type-btn ${type === 'discrete' ? 'active' : ''}`} 
             onClick={() => !disabled && setType('discrete')}
             disabled={disabled}
+            aria-pressed={type === 'discrete'}
           >
             Discrete
             <span className="type-sub">maps &amp; iterations</span>
           </button>
-          <button 
+          <button
+            type="button"
             className={`type-btn ${type === 'continuous' ? 'active' : ''}`} 
             onClick={() => !disabled && setType('continuous')}
             disabled={disabled}
+            aria-pressed={type === 'continuous'}
           >
             Continuous
             <span className="type-sub">ODEs &amp; flows</span>
@@ -35,16 +39,18 @@ export const SystemPicker = ({ type, setType, systemId, setSystemId, systems, di
       </div>
       <div className="system-pick-wrap">
         <div className="sys-pick-label">System</div>
-        <div className="sys-options">
+        <div className="sys-options" role="group" aria-label="Dynamical system">
           {systems[type].map(s => (
-            <div 
+            <button
+              type="button"
               key={s.id}
               className={`sys-opt ${s.id === systemId ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
               onClick={() => !disabled && setSystemId(s.id)}
-              aria-disabled={disabled}
+              disabled={disabled}
+              aria-pressed={s.id === systemId}
             >
               <span className="sys-opt-name">{s.name}</span>
-            </div>
+            </button>
           ))}
         </div>
       </div>

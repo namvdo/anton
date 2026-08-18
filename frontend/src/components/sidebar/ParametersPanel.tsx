@@ -91,31 +91,26 @@ export const ParametersPanel = ({
 
 
       {!isContinuous && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '2px' }}>
+        <div style={{ marginTop: '2px' }}>
+          {systemId === 'duffing' && (
+            <div style={{ marginBottom: '8px' }}>
+              <div style={{ fontSize: '10px', color: 'var(--text)', marginBottom: '3px' }}>Maximum orbit period</div>
+              <input
+                aria-label="Maximum orbit period"
+                className={`p-val ${disabled ? 'disabled' : ''}`}
+                style={{ width: '100%' }}
+                type="number"
+                min="1" max="20" step="1"
+                value={params.maxPeriod}
+                onChange={(e) => setParams(prev => ({ ...prev, maxPeriod: parseInt(e.target.value) || 2 }))}
+                disabled={disabled}
+              />
+            </div>
+          )}
           <div>
-            <div style={{ fontSize: '10px', color: 'var(--text)', marginBottom: '3px' }}>Max period</div>
+            <div style={{ fontSize: '10px', color: 'var(--text)', marginBottom: '3px' }}>Trajectory iterations</div>
             <input
-              className={`p-val ${disabled ? 'disabled' : ''}`}
-              style={{ width: '100%' }}
-              type="number"
-              min="1" max="20" step="1"
-              value={params.maxPeriod}
-              onChange={(e) => setParams(prev => ({ ...prev, maxPeriod: parseInt(e.target.value) || 2 }))}
-              disabled={disabled}
-            />
-            <input
-              type="range"
-              className={`p-track ${disabled ? 'disabled' : ''}`}
-              style={{ marginTop: '4px' }}
-              min="1" max="10" step="1"
-              value={params.maxPeriod}
-              onChange={(e) => setParams(prev => ({ ...prev, maxPeriod: parseInt(e.target.value) }))}
-              disabled={disabled}
-            />
-          </div>
-          <div>
-            <div style={{ fontSize: '10px', color: 'var(--text)', marginBottom: '3px' }}>Max iter</div>
-            <input
+              aria-label="Trajectory iterations"
               className={`p-val ${disabled ? 'disabled' : ''}`}
               style={{ width: '100%' }}
               type="number"

@@ -23,6 +23,7 @@ import {
   PERIODIC_SEARCH_LIMITS,
 } from './periodicSearchSettings';
 import { normalizeExtendedStartPoint } from './startPointState';
+import { normalizeContourEpsilons } from './geometricOffsetBatch';
 import { normalizeViewRange, RANGE_LIMIT } from './viewRange';
 import type {
   BistParameters,
@@ -101,6 +102,7 @@ interface SolverConfiguration {
   };
   geometricOffsets: {
     contourEpsilon: number;
+    contourEpsilons: number[];
     inverseIterations: number;
     inversePositionTolerance: number | null;
     inversePositionToleranceRule: string;
@@ -521,6 +523,9 @@ const normalizeSolvers = (
   { requireAllSections = false }: { requireAllSections?: boolean } = {},
 ): SolverConfiguration => {
   const value = requireObject(solvers, 'Solver settings');
+  const suppliedGeometricOffsets = value.geometricOffsets === undefined
+    ? {}
+    : requireObject(value.geometricOffsets, 'Geometric-offset settings');
   const sectionNames = [
     'trajectory',
     'periodicSearch',
@@ -569,6 +574,18 @@ const normalizeSolvers = (
       geometric.inversePositionTolerance,
       'Inverse-offset position tolerance',
     );
+  const contourEpsilon = requirePositive(
+    geometric.contourEpsilon,
+    'Geometric contour epsilon',
+  );
+  const contourEpsilons = normalizeContourEpsilons(
+    Array.isArray(suppliedGeometricOffsets.contourEpsilons)
+      ? suppliedGeometricOffsets.contourEpsilons.map(value => requirePositive(
+        value,
+        'Geometric contour epsilon',
+      ))
+      : [contourEpsilon],
+  );
 
   return {
     trajectory: { maximumIterations },
@@ -655,10 +672,8 @@ const normalizeSolvers = (
       ), ULAM_OPERATOR_SETTINGS.absorptionTolerance, 'Ulam absorption tolerance'),
     },
     geometricOffsets: {
-      contourEpsilon: requirePositive(
-        geometric.contourEpsilon,
-        'Geometric contour epsilon',
-      ),
+      contourEpsilon,
+      contourEpsilons,
       inverseIterations: requireInteger(
         geometric.inverseIterations,
         'Inverse-offset iterations',
@@ -945,7 +960,31 @@ const buildDiagnostics = (
     ? finiteValues(stationaryDensity).reduce((sum, value) => sum + value, 0)
     : null;
   const absorptionRange = vectorRange(absorptionProbabilities);
+  const direct = results.geometricOffsets.direct;
   const inverse = results.geometricOffsets.inverse;
+  const batchResultRecords = (value: UnknownRecord | null | undefined): UnknownRecord[] => (
+    Array.isArray(value?.contours)
+      ? value.contours.flatMap(item => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return [];
+        const result = (item as UnknownRecord).result;
+        return result && typeof result === 'object' && !Array.isArray(result)
+          ? [result as UnknownRecord]
+          : [];
+      })
+      : value ? [value] : []
+  );
+  const directResults = batchResultRecords(direct);
+  const inverseResults = batchResultRecords(inverse);
+  const directLevelCounts = finiteValues(directResults.map(result => result.completed_levels));
+  const inverseIterationCounts = finiteValues(
+    inverseResults.map(result => result.completed_iterations),
+  );
+  const inversePositionErrors = finiteValues(
+    inverseResults.map(result => result.max_position_chord_error),
+  );
+  const inverseNormalErrors = finiteValues(
+    inverseResults.map(result => result.max_normal_chord_error),
+  );
   const warnings = [];
   if (orbits.length > 0 && reportedClosureResiduals.length !== orbits.length) {
     warnings.push('Some periodic-orbit residuals were unavailable in the exported result snapshot.');
@@ -987,18 +1026,20 @@ const buildDiagnostics = (
         : null,
     },
     geometricOffsets: {
-      completedDirectLevels: requireOptionalDiagnosticNumber(
-        results.geometricOffsets.direct?.completed_levels,
-      ),
-      completedInverseIterations: requireOptionalDiagnosticNumber(inverse?.completed_iterations),
-      maximumInversePositionChordError: requireOptionalDiagnosticNumber(
-        inverse?.max_position_chord_error,
-      ),
-      maximumInverseNormalChordError: requireOptionalDiagnosticNumber(
-        inverse?.max_normal_chord_error,
-      ),
-      inverseSubdivisionLimitReached: typeof inverse?.subdivision_limit_reached === 'boolean'
-        ? inverse.subdivision_limit_reached
+      completedDirectLevels: directLevelCounts.length > 0
+        ? directLevelCounts.reduce((sum, value) => sum + value, 0)
+        : null,
+      completedInverseIterations: inverseIterationCounts.length > 0
+        ? Math.max(...inverseIterationCounts)
+        : null,
+      maximumInversePositionChordError: inversePositionErrors.length > 0
+        ? Math.max(...inversePositionErrors)
+        : null,
+      maximumInverseNormalChordError: inverseNormalErrors.length > 0
+        ? Math.max(...inverseNormalErrors)
+        : null,
+      inverseSubdivisionLimitReached: inverseResults.length > 0
+        ? inverseResults.some(result => result.subdivision_limit_reached === true)
         : null,
     },
     warnings,

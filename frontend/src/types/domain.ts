@@ -190,16 +190,32 @@ export interface InverseOffsetResult extends UnknownRecord {
   subdivision_limit_reached?: boolean;
 }
 
+export type GeometricOffsetEditorMode = 'series' | 'individual';
+
+export interface GeometricOffsetContour {
+  id: string;
+  epsilon: number;
+  visible: boolean;
+  result: GeometricOffsetResult | null;
+  inverseResult: InverseOffsetResult | null;
+  error: string | null;
+  inverseError: string | null;
+}
+
 export interface GeometricOffsetState {
-  contourEpsilon: number;
-  showContours: boolean;
+  editorMode: GeometricOffsetEditorMode;
+  seriesStart: number;
+  seriesEnd: number;
+  seriesCount: number;
+  individualEpsilon: number;
+  contours: GeometricOffsetContour[];
+  selectedContourId: string | null;
+  preimageSourceIds: string[];
   inverseIterations: number;
   inverseDisplayMode: 'all' | 'final';
   showInverseContours: boolean;
   isComputing: boolean;
   isComputingInverse: boolean;
-  result: GeometricOffsetResult | null;
-  inverseResult: InverseOffsetResult | null;
   error: string | null;
   inverseError: string | null;
 }

@@ -32,4 +32,16 @@ describe('compute protocol', () => {
     expect(() => parseComputeResponse({ id: 2, kind: 'computeUlam', ok: false, error: '' }))
       .toThrow('non-empty error');
   });
+
+  it('accepts direct and inverse geometric batch tasks', () => {
+    expect(createComputeRequest(3, 'computeGeometricOffsetBatch', {
+      boundary: [],
+      contours: [],
+    }).kind).toBe('computeGeometricOffsetBatch');
+    expect(createComputeRequest(4, 'computeInverseGeometricOffsetBatch', {
+      sources: [],
+      params: {},
+      settings: {},
+    }).kind).toBe('computeInverseGeometricOffsetBatch');
+  });
 });

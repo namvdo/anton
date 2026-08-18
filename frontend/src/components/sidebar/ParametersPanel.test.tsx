@@ -44,4 +44,15 @@ describe('ParametersPanel', () => {
     expect(screen.queryByRole('button', { name: 'Apply & Recompute' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Recompute' })).toBeNull();
   });
+
+  it('keeps Hénon orbit-period configuration in the periodic search panel', () => {
+    render(<ParametersPanel {...baseProps} />);
+    expect(screen.queryByLabelText('Maximum orbit period')).toBeNull();
+    expect(screen.getByLabelText('Trajectory iterations')).toBeInTheDocument();
+  });
+
+  it('retains the Duffing maximum period because its search uses a built-in grid', () => {
+    render(<ParametersPanel {...baseProps} systemId="duffing" />);
+    expect(screen.getByLabelText('Maximum orbit period')).toHaveValue(5);
+  });
 });

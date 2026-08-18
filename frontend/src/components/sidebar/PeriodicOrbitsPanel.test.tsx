@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { PeriodicOrbitsPanel } from './PeriodicOrbitsPanel';
 
@@ -58,7 +58,9 @@ describe('PeriodicOrbitsPanel', () => {
     render(<PeriodicOrbitsPanel {...baseProps} periodicState={periodicState} />);
 
     expect(screen.getByText('Period filter')).toBeInTheDocument();
-    expect(screen.getAllByRole('button').length).toBe(6);
+    const periodFilter = document.querySelector('.period-filter');
+    expect(periodFilter).not.toBeNull();
+    expect(within(periodFilter as HTMLElement).getAllByRole('button')).toHaveLength(6);
     expect(screen.getByRole('button', { name: /6\+/ })).toBeInTheDocument();
   });
 

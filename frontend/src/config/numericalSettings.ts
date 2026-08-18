@@ -33,6 +33,7 @@ export const PERIODIC_SUPPORT_FILTER_SETTINGS = Object.freeze({
 
 export const DEFAULT_GEOMETRIC_OFFSET_SETTINGS = Object.freeze({
   contourEpsilon: 0.1,
+  contourEpsilons: [0.025, 0.05, 0.075, 0.1, 0.125],
   inverseIterations: 1,
   inverseNormalTolerance: 0.02,
   inverseMaximumSubdivisionDepth: 7,

@@ -10,7 +10,11 @@ import {
 import type { ComputeTaskKind } from './protocol/computeProtocol';
 import type {
   ComputeTaskPayload,
+  GeometricOffsetBatchComputePayload,
+  GeometricOffsetBatchComputeResult,
   GeometricOffsetsComputePayload,
+  InverseGeometricOffsetBatchComputePayload,
+  InverseGeometricOffsetBatchComputeResult,
   InverseGeometricOffsetsComputePayload,
   ManifoldComputePayload,
   ManifoldComputeResult,
@@ -543,6 +547,28 @@ const computeGeometricOffsets = async (
   ) as GeometricOffsetResult;
 };
 
+const computeGeometricOffsetBatch = async (
+  payload: GeometricOffsetBatchComputePayload,
+): Promise<GeometricOffsetBatchComputeResult> => {
+  const wasm = await ensureWasm();
+  if (typeof wasm.computeGeometricOffsetContours !== 'function') {
+    throw new Error('Geometric offset export is unavailable; rebuild WebAssembly');
+  }
+  if (!Array.isArray(payload.contours) || payload.contours.length === 0) {
+    throw new Error('A geometric-offset batch requires at least one contour.');
+  }
+  return {
+    contours: payload.contours.map(({ id, epsilon }) => ({
+      id,
+      epsilon,
+      result: wasm.computeGeometricOffsetContours(
+        payload.boundary,
+        epsilon,
+      ) as GeometricOffsetResult,
+    })),
+  };
+};
+
 const computeInverseGeometricOffsets = async (
   payload: InverseGeometricOffsetsComputePayload,
 ): Promise<InverseOffsetResult> => {
@@ -563,6 +589,34 @@ const computeInverseGeometricOffsets = async (
   ) as InverseOffsetResult;
 };
 
+const computeInverseGeometricOffsetBatch = async (
+  payload: InverseGeometricOffsetBatchComputePayload,
+): Promise<InverseGeometricOffsetBatchComputeResult> => {
+  const wasm = await ensureWasm();
+  if (typeof wasm.computeInverseGeometricOffsetContours !== 'function') {
+    throw new Error('Inverse geometric offset export is unavailable; rebuild WebAssembly');
+  }
+  if (!Array.isArray(payload.sources) || payload.sources.length === 0) {
+    throw new Error('An inverse geometric-offset batch requires at least one source contour.');
+  }
+  const { params, settings } = payload;
+  return {
+    sources: payload.sources.map(source => ({
+      id: source.id,
+      result: wasm.computeInverseGeometricOffsetContours(
+        source.levels,
+        params.a,
+        params.b,
+        params.epsilon,
+        settings.iterations,
+        source.positionTolerance,
+        settings.normalTolerance,
+        settings.maxSubdivisionDepth,
+      ) as InverseOffsetResult,
+    })),
+  };
+};
+
 type TaskHandler = (payload: UnknownRecord) => Promise<unknown>;
 
 const TASK_HANDLERS: Readonly<Record<ComputeTaskKind, TaskHandler>> = Object.freeze({
@@ -572,8 +626,14 @@ const TASK_HANDLERS: Readonly<Record<ComputeTaskKind, TaskHandler>> = Object.fre
   computeGeometricOffsets: payload => computeGeometricOffsets(
     payload as unknown as ComputeTaskPayload<'computeGeometricOffsets'>,
   ),
+  computeGeometricOffsetBatch: payload => computeGeometricOffsetBatch(
+    payload as unknown as ComputeTaskPayload<'computeGeometricOffsetBatch'>,
+  ),
   computeInverseGeometricOffsets: payload => computeInverseGeometricOffsets(
     payload as unknown as ComputeTaskPayload<'computeInverseGeometricOffsets'>,
+  ),
+  computeInverseGeometricOffsetBatch: payload => computeInverseGeometricOffsetBatch(
+    payload as unknown as ComputeTaskPayload<'computeInverseGeometricOffsetBatch'>,
   ),
   getUlamTransitions: payload => getUlamTransitions(
     payload as unknown as ComputeTaskPayload<'getUlamTransitions'>,

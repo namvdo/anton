@@ -18,6 +18,7 @@ import {
 } from './utils/viewRange';
 import {
     DEFAULT_PERIODIC_SEARCH_SETTINGS,
+    forceFullGridSearchSettings,
     normalizePeriodicSearchSettings
 } from './utils/periodicSearchSettings';
 import { applyStartPointUpdate } from './utils/startPointState';
@@ -27,12 +28,18 @@ import {
 } from './utils/trajectoryState';
 import { buildGeometricOffsetSeed } from './utils/geometricOffsetSeed';
 import {
-    buildSingleGeometricOffsetRequest,
+    buildGeometricOffsetBatchRequest,
     geometricOffsetSampleSpacing
 } from './utils/geometricOffsetCompute';
 import {
+    createGeometricOffsetContour,
+    geometricOffsetContourColor,
+    geometricOffsetSourceContours,
+    reconcileGeometricOffsetContours
+} from './utils/geometricOffsetBatch';
+import {
     fitInverseOffsetCurveRange,
-    inverseOffsetStepColor,
+    inverseOffsetCurveColor,
     visibleInverseOffsetCurves
 } from './utils/inverseOffsetDisplay';
 import {
@@ -86,9 +93,7 @@ import type {
     ExperimentStatus,
     ExtendedPointTuple,
     ExtendedState,
-    GeometricOffsetResult,
     GeometricOffsetState,
-    InverseOffsetResult,
     Manifold,
     ManifoldBranch,
     ManifoldState,
@@ -282,8 +287,8 @@ const createCoordinateSystem = (scene: THREE.Scene, range: ViewRange): THREE.Gro
         if (!context) throw new Error('Could not create the coordinate-label canvas context.');
         context.fillStyle = 'transparent';
         context.fillRect(0, 0, canvas.width, canvas.height);
-        context.font = 'Bold 32px Arial';
-        context.fillStyle = '#aaaaaa';
+        context.font = '700 28px Inter, Arial, sans-serif';
+        context.fillStyle = '#aab2bd';
         context.textAlign = 'center';
         context.textBaseline = 'middle';
         context.fillText(text, canvas.width / 2, canvas.height / 2);
@@ -298,21 +303,28 @@ const createCoordinateSystem = (scene: THREE.Scene, range: ViewRange): THREE.Gro
         return sprite;
     };
 
-    for (let i = 0; i <= gridDivisions; i++) {
+    const tickStride = Math.max(1, Math.floor(gridDivisions / 4));
+    const xLabelInset = Math.min((xMax - xMin) * 0.04, 0.18);
+    const yLabelInset = Math.min((yMax - yMin) * 0.05, 0.14);
+
+    for (let i = 0; i <= gridDivisions; i += tickStride) {
         const x = xMin + i * xStep;
         if (Math.abs(x) > 0.01) {
-            gridGroup.add(createTextSprite(x.toFixed(1), new THREE.Vector3(x, yMin - 0.15, 0), 0.12));
+            const labelX = Math.min(xMax - xLabelInset, Math.max(xMin + xLabelInset, x));
+            gridGroup.add(createTextSprite(x.toFixed(1), new THREE.Vector3(labelX, yMin + yLabelInset, 0), 0.12));
         }
     }
-    for (let i = 0; i <= gridDivisions; i++) {
+    for (let i = 0; i <= gridDivisions; i += tickStride) {
         const y = yMin + i * yStep;
         if (Math.abs(y) > 0.01) {
-            gridGroup.add(createTextSprite(y.toFixed(1), new THREE.Vector3(xMin - 0.2, y, 0), 0.12));
+            const lowerInset = i === 0 ? yLabelInset * 2.2 : yLabelInset;
+            const labelY = Math.min(yMax - yLabelInset, Math.max(yMin + lowerInset, y));
+            gridGroup.add(createTextSprite(y.toFixed(1), new THREE.Vector3(xMin + xLabelInset, labelY, 0), 0.12));
         }
     }
 
-    gridGroup.add(createTextSprite('x', new THREE.Vector3(xMax + 0.2, 0, 0), 0.18));
-    gridGroup.add(createTextSprite('y', new THREE.Vector3(0, yMax + 0.15, 0), 0.18));
+    gridGroup.add(createTextSprite('x', new THREE.Vector3(xMax - xLabelInset, 0.12, 0), 0.18));
+    gridGroup.add(createTextSprite('y', new THREE.Vector3(0.12, yMax - yLabelInset, 0), 0.18));
     gridGroup.add(createTextSprite('0', new THREE.Vector3(-0.12, -0.12, 0), 0.1));
 
     scene.add(gridGroup);
@@ -344,6 +356,16 @@ const SetValuedViz = () => {
     const batchAnimationRef = useRef<number | null>(null);
     const viewTransitionFrameRef = useRef<number | null>(null);
     const manifoldDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const readViewportSize = useCallback((): { width: number; height: number } => {
+        const canvas = canvasRef.current;
+        const bounds = canvas?.getBoundingClientRect();
+        const parent = canvas?.parentElement;
+        return {
+            width: Math.max(1, bounds?.width || canvas?.clientWidth || parent?.clientWidth || window.innerWidth),
+            height: Math.max(1, bounds?.height || canvas?.clientHeight || parent?.clientHeight || window.innerHeight),
+        };
+    }, []);
 
     const [dynamicSystem, setDynamicSystem] = useState<SystemId>('duffing_ode');
     const [customEquations, setCustomEquations] = useState<CustomEquations>(INITIAL_CUSTOM_EQUATIONS);
@@ -391,18 +413,26 @@ const SetValuedViz = () => {
         startPoint: { x: 0.1, y: 0.1, nx: 1.0, ny: 0.0 }
     });
 
-    const [geometricOffsetState, setGeometricOffsetState] = useState<GeometricOffsetState>({
-        contourEpsilon: DEFAULT_GEOMETRIC_OFFSET_SETTINGS.contourEpsilon,
-        showContours: true,
-        inverseIterations: DEFAULT_GEOMETRIC_OFFSET_SETTINGS.inverseIterations,
-        inverseDisplayMode: 'all',
-        showInverseContours: true,
-        isComputing: false,
-        isComputingInverse: false,
-        result: null,
-        inverseResult: null,
-        error: null,
-        inverseError: null
+    const [geometricOffsetState, setGeometricOffsetState] = useState<GeometricOffsetState>(() => {
+        const contours = DEFAULT_GEOMETRIC_OFFSET_SETTINGS.contourEpsilons
+            .map(createGeometricOffsetContour);
+        return {
+            editorMode: 'series',
+            seriesStart: contours[0].epsilon,
+            seriesEnd: contours[contours.length - 1].epsilon,
+            seriesCount: contours.length,
+            individualEpsilon: DEFAULT_GEOMETRIC_OFFSET_SETTINGS.contourEpsilon,
+            contours,
+            selectedContourId: contours[0].id,
+            preimageSourceIds: [contours[0].id],
+            inverseIterations: DEFAULT_GEOMETRIC_OFFSET_SETTINGS.inverseIterations,
+            inverseDisplayMode: 'all',
+            showInverseContours: true,
+            isComputing: false,
+            isComputingInverse: false,
+            error: null,
+            inverseError: null
+        };
     });
 
     const geometricOffsetSeed = useMemo(
@@ -572,8 +602,8 @@ const SetValuedViz = () => {
 
         const gridHeight = range.yMax - range.yMin;
         const padding = 0.12;
-        const viewWidth = window.innerWidth - 268;
-        const aspect = viewWidth / window.innerHeight;
+        const { width, height } = readViewportSize();
+        const aspect = width / height;
         const frustumHeight = gridHeight + padding * 2;
         const frustumWidth = frustumHeight * aspect;
 
@@ -587,7 +617,7 @@ const SetValuedViz = () => {
         camera.position.set(centerX, centerY, 5);
         camera.lookAt(centerX, centerY, 0);
         camera.updateProjectionMatrix();
-    }, []);
+    }, [readViewportSize]);
 
     const cancelViewRangeTransition = useCallback(() => {
         if (viewTransitionFrameRef.current !== null) {
@@ -704,8 +734,9 @@ const SetValuedViz = () => {
             alpha: true,
             preserveDrawingBuffer: true
         });
-        renderer.setSize(window.innerWidth - 268, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
+        const initialSize = readViewportSize();
+        renderer.setSize(initialSize.width, initialSize.height, false);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         rendererRef.current = renderer;
 
         const initialViewportRange = viewportRangeRef.current;
@@ -714,17 +745,22 @@ const SetValuedViz = () => {
 
         const handleResize = () => {
             const range = viewportRangeRef.current;
+            const size = readViewportSize();
             applyViewRangeToCamera(range);
-            renderer.setSize(window.innerWidth - 268, window.innerHeight);
+            renderer.setSize(size.width, size.height, false);
             scene.traverse(object => {
                 if (object instanceof Line2) {
                     object.material.resolution.set(
-                        Math.max(1, window.innerWidth - 268),
-                        Math.max(1, window.innerHeight)
+                        size.width,
+                        size.height
                     );
                 }
             });
         };
+        const resizeObserver = typeof ResizeObserver === 'undefined'
+            ? null
+            : new ResizeObserver(handleResize);
+        resizeObserver?.observe(canvasRef.current);
         window.addEventListener('resize', handleResize);
 
         const animate = () => {
@@ -735,12 +771,13 @@ const SetValuedViz = () => {
 
         return () => {
             window.removeEventListener('resize', handleResize);
+            resizeObserver?.disconnect();
             if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
             if (batchAnimationRef.current) cancelAnimationFrame(batchAnimationRef.current);
             if (viewTransitionFrameRef.current) cancelAnimationFrame(viewTransitionFrameRef.current);
             renderer.dispose();
         };
-    }, [applyViewRangeToCamera]);
+    }, [applyViewRangeToCamera, readViewportSize]);
 
     useEffect(() => {
         viewportRangeRef.current = viewportRange;
@@ -814,7 +851,9 @@ const SetValuedViz = () => {
         }
     }, [draftParamValidation, dynamicSystem, isCustomSystem, wasmModule]);
 
-    const applyInputsAndRecompute = useCallback(() => {
+    const applyInputsAndRecomputeWithSearchSettings = useCallback((
+        nextPeriodicSearchSettings: PeriodicSearchSettings,
+    ) => {
         const nextDraftParams = {
             ...draftParams,
             a: clampToRange(draftParams.a, -PARAM_ABS_LIMIT, PARAM_ABS_LIMIT, params.a),
@@ -849,10 +888,20 @@ const SetValuedViz = () => {
         }
         setEquationError(null);
         setParams(nextDraftParams);
-        setPeriodicSearchSettings(draftPeriodicSearchSettings);
+        setPeriodicSearchSettings(nextPeriodicSearchSettings);
         setComputeRequestId(prev => prev + 1);
         return true;
-    }, [draftParams, params.a, params.b, isCustomSystem, draftCustomEquations, activeCustomKey, draftParamValidation, validateCustomDraft, draftPeriodicSearchSettings]);
+    }, [draftParams, params.a, params.b, isCustomSystem, draftCustomEquations, activeCustomKey, draftParamValidation, validateCustomDraft]);
+
+    const applyInputsAndRecompute = useCallback(() => (
+        applyInputsAndRecomputeWithSearchSettings(draftPeriodicSearchSettings)
+    ), [applyInputsAndRecomputeWithSearchSettings, draftPeriodicSearchSettings]);
+
+    const runPeriodicGridSearch = useCallback(() => {
+        const gridSearchSettings = forceFullGridSearchSettings(draftPeriodicSearchSettings);
+        setDraftPeriodicSearchSettings(gridSearchSettings);
+        return applyInputsAndRecomputeWithSearchSettings(gridSearchSettings);
+    }, [applyInputsAndRecomputeWithSearchSettings, draftPeriodicSearchSettings]);
 
     const applyIfNeededBeforeAction = useCallback((action: 'step' | 'play'): boolean => {
         if (!hasPendingInputChanges) {
@@ -1894,45 +1943,62 @@ const SetValuedViz = () => {
         setGeometricOffsetState(prev => ({
             ...prev,
             isComputing: true,
-            result: null,
-            inverseResult: null,
+            contours: prev.contours.map(contour => ({
+                ...contour,
+                result: null,
+                inverseResult: null,
+                error: null,
+                inverseError: null,
+            })),
             error: null,
             inverseError: null
         }));
         try {
-            const request = buildSingleGeometricOffsetRequest(
+            const request = buildGeometricOffsetBatchRequest(
                 geometricOffsetSeed,
-                geometricOffsetState.contourEpsilon
+                geometricOffsetState.contours,
             );
-            const result = await runComputeTask('computeGeometricOffsets', request);
+            const batch = await runComputeTask('computeGeometricOffsetBatch', request);
             if (requestId !== geometricOffsetRequestIdRef.current) return;
-            if (result?.completed_levels !== 1 || result?.levels?.length !== 1) {
-                throw new Error('The direct geometric contour was not completed.');
+            if (batch.contours.length !== geometricOffsetState.contours.length
+                || batch.contours.some(({ result }) => (
+                    result?.completed_levels !== 1 || result?.levels?.length !== 1
+                ))) {
+                throw new Error('The direct geometric contour batch was not completed.');
             }
+            const resultsById = new Map(batch.contours.map(item => [item.id, item.result]));
             setGeometricOffsetState(prev => ({
                 ...prev,
                 isComputing: false,
-                result,
-                inverseResult: null,
+                contours: prev.contours.map(contour => ({
+                    ...contour,
+                    result: resultsById.get(contour.id) ?? null,
+                    inverseResult: null,
+                    error: resultsById.has(contour.id) ? null : 'No result was returned for this contour.',
+                    inverseError: null,
+                })),
                 error: null,
                 inverseError: null,
-                showContours: true
             }));
-            const contourComponents = result.levels.flatMap(level => level.boundary_components || []);
-            const contourCurves = contourComponents.map((component, index) => ({
-                inverse_iteration: 0,
-                source_component_id: component.id ?? index,
-                points: component.points.flatMap(point => {
-                    if (!Array.isArray(point)) return [point];
-                    const [x, y, nx = 0, ny = 0] = point;
-                    return [x, y].every(Number.isFinite)
-                        ? [{ x, y, nx, ny }]
-                        : [];
-                }),
-            }));
+            const contourCurves = batch.contours.flatMap(({ result }) => (
+                result.levels.flatMap(level => (
+                    (level.boundary_components || []).map((component, componentIndex) => ({
+                        inverse_iteration: 0,
+                        source_component_id: component.id ?? componentIndex,
+                        points: component.points.flatMap(point => {
+                            if (!Array.isArray(point)) return [point];
+                            const [x, y, nx = 0, ny = 0] = point;
+                            return [x, y].every(Number.isFinite)
+                                ? [{ x, y, nx, ny }]
+                                : [];
+                        }),
+                    }))
+                ))
+            ));
+            const viewportSize = readViewportSize();
             const fittedRange = fitInverseOffsetCurveRange(
                 contourCurves,
-                Math.max(1, window.innerWidth - 268) / Math.max(1, window.innerHeight)
+                viewportSize.width / viewportSize.height
             );
             if (fittedRange) transitionViewRange(fittedRange);
         } catch (error) {
@@ -1940,8 +2006,13 @@ const SetValuedViz = () => {
             setGeometricOffsetState(prev => ({
                 ...prev,
                 isComputing: false,
-                result: null,
-                inverseResult: null,
+                contours: prev.contours.map(contour => ({
+                    ...contour,
+                    result: null,
+                    inverseResult: null,
+                    error: error instanceof Error ? error.message : String(error),
+                    inverseError: null,
+                })),
                 error: error instanceof Error ? error.message : String(error),
                 inverseError: null
             }));
@@ -1949,23 +2020,30 @@ const SetValuedViz = () => {
     }, [
         dynamicSystem,
         geometricOffsetSeed,
-        geometricOffsetState.contourEpsilon,
+        geometricOffsetState.contours,
+        readViewportSize,
         runComputeTask,
         transitionViewRange
     ]);
 
     const computeInverseGeometricOffsets = useCallback(async () => {
-        const levels = geometricOffsetState.result?.levels?.slice(0, 1) || [];
-        if (dynamicSystem !== 'henon' || !levels.length) {
+        const sources = geometricOffsetSourceContours(geometricOffsetState);
+        if (dynamicSystem !== 'henon' || sources.length === 0) {
             setGeometricOffsetState(previous => ({
                 ...previous,
                 inverseError: 'Compute at least one closed geometric offset contour first.'
             }));
             return;
         }
-        let sampleSpacing;
+        let batchSources;
         try {
-            sampleSpacing = geometricOffsetSampleSpacing(geometricOffsetState.result);
+            batchSources = sources.map(contour => ({
+                id: contour.id,
+                levels: contour.result!.levels.slice(0, 1),
+                positionTolerance: inverseOffsetPositionTolerance(
+                    geometricOffsetSampleSpacing(contour.result),
+                ),
+            }));
         } catch (error) {
             setGeometricOffsetState(previous => ({
                 ...previous,
@@ -1977,35 +2055,47 @@ const SetValuedViz = () => {
         setGeometricOffsetState(previous => ({
             ...previous,
             isComputingInverse: true,
-            inverseResult: null,
+            contours: previous.contours.map(contour => sources.some(source => source.id === contour.id)
+                ? { ...contour, inverseResult: null, inverseError: null }
+                : contour),
             inverseError: null
         }));
         try {
-            const inverseResult = await runComputeTask('computeInverseGeometricOffsets', {
-                levels,
+            const batch = await runComputeTask('computeInverseGeometricOffsetBatch', {
+                sources: batchSources,
                 params: { a: params.a, b: params.b, epsilon: params.epsilon },
                 settings: {
                     iterations: geometricOffsetState.inverseIterations,
-                    positionTolerance: inverseOffsetPositionTolerance(sampleSpacing),
                     normalTolerance: DEFAULT_GEOMETRIC_OFFSET_SETTINGS.inverseNormalTolerance,
                     maxSubdivisionDepth: DEFAULT_GEOMETRIC_OFFSET_SETTINGS.inverseMaximumSubdivisionDepth
                 }
             });
             if (requestId !== inverseOffsetRequestIdRef.current) return;
+            if (batch.sources.length !== sources.length) {
+                throw new Error('The inverse geometric contour batch was not completed.');
+            }
+            const resultsById = new Map(batch.sources.map(source => [source.id, source.result]));
             setGeometricOffsetState(previous => ({
                 ...previous,
                 isComputingInverse: false,
-                inverseResult,
+                contours: previous.contours.map(contour => resultsById.has(contour.id)
+                    ? {
+                        ...contour,
+                        inverseResult: resultsById.get(contour.id) ?? null,
+                        inverseError: null,
+                    }
+                    : contour),
                 inverseError: null,
                 showInverseContours: true
             }));
-            const visibleCurves = visibleInverseOffsetCurves(
-                inverseResult,
-                geometricOffsetState.inverseDisplayMode
-            );
+            const visibleCurves = batch.sources.flatMap(source => visibleInverseOffsetCurves(
+                source.result,
+                geometricOffsetState.inverseDisplayMode,
+            ));
+            const viewportSize = readViewportSize();
             const fittedRange = fitInverseOffsetCurveRange(
                 visibleCurves,
-                Math.max(1, window.innerWidth - 268) / Math.max(1, window.innerHeight)
+                viewportSize.width / viewportSize.height
             );
             if (fittedRange) transitionViewRange(fittedRange);
         } catch (error) {
@@ -2013,37 +2103,50 @@ const SetValuedViz = () => {
             setGeometricOffsetState(previous => ({
                 ...previous,
                 isComputingInverse: false,
-                inverseResult: null,
+                contours: previous.contours.map(contour => sources.some(source => source.id === contour.id)
+                    ? {
+                        ...contour,
+                        inverseResult: null,
+                        inverseError: error instanceof Error ? error.message : String(error),
+                    }
+                    : contour),
                 inverseError: error instanceof Error ? error.message : String(error)
             }));
         }
     }, [
         dynamicSystem,
-        geometricOffsetState.inverseDisplayMode,
-        geometricOffsetState.inverseIterations,
-        geometricOffsetState.result,
+        geometricOffsetState,
         params.a,
         params.b,
         params.epsilon,
+        readViewportSize,
         runComputeTask,
         transitionViewRange
     ]);
 
     const fitInverseGeometricOffsets = useCallback(() => {
-        const curves = visibleInverseOffsetCurves(
-            geometricOffsetState.inverseResult,
-            geometricOffsetState.inverseDisplayMode
-        );
-        const viewportWidth = Math.max(1, window.innerWidth - 268);
-        const viewportHeight = Math.max(1, window.innerHeight);
+        const sourceIds = new Set(geometricOffsetState.preimageSourceIds);
+        if (geometricOffsetState.selectedContourId) {
+            sourceIds.add(geometricOffsetState.selectedContourId);
+        }
+        const curves = geometricOffsetState.contours
+            .filter(contour => sourceIds.has(contour.id))
+            .flatMap(contour => visibleInverseOffsetCurves(
+                contour.inverseResult,
+                geometricOffsetState.inverseDisplayMode,
+            ));
+        const { width: viewportWidth, height: viewportHeight } = readViewportSize();
         const fittedRange = fitInverseOffsetCurveRange(
             curves,
             viewportWidth / viewportHeight
         );
         if (fittedRange) transitionViewRange(fittedRange);
     }, [
+        geometricOffsetState.contours,
         geometricOffsetState.inverseDisplayMode,
-        geometricOffsetState.inverseResult,
+        geometricOffsetState.preimageSourceIds,
+        geometricOffsetState.selectedContourId,
+        readViewportSize,
         transitionViewRange
     ]);
 
@@ -2054,8 +2157,13 @@ const SetValuedViz = () => {
             ...prev,
             isComputing: false,
             isComputingInverse: false,
-            result: null,
-            inverseResult: null,
+            contours: prev.contours.map(contour => ({
+                ...contour,
+                result: null,
+                inverseResult: null,
+                error: null,
+                inverseError: null,
+            })),
             error: null,
             inverseError: null
         }));
@@ -2072,7 +2180,7 @@ const SetValuedViz = () => {
             }
         });
         toRemove.forEach(obj => {
-            if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
+            if (obj instanceof THREE.Mesh || obj instanceof THREE.Line || obj instanceof Line2) {
                 obj.geometry.dispose();
                 if (Array.isArray(obj.material)) obj.material.forEach(material => material.dispose());
                 else obj.material.dispose();
@@ -2120,69 +2228,100 @@ const SetValuedViz = () => {
             });
         }
 
-        if (geometricOffsetState.showContours && geometricOffsetState.result?.levels) {
-            geometricOffsetState.result.levels.forEach((level, levelIndex) => {
+        geometricOffsetState.contours.forEach((contour, contourIndex) => {
+            if (!contour.visible || !contour.result?.levels) return;
+            const selected = contour.id === geometricOffsetState.selectedContourId;
+            contour.result.levels.forEach((level, levelIndex) => {
                 (level.boundary_components || []).forEach(component => {
                     const points = (component.points || []).flatMap(point => {
                         const projected = projectedCoordinates(point);
                         return projected
-                            ? [new THREE.Vector3(projected.x, projected.y, 0.22 + levelIndex * 0.005)]
+                            ? [{ x: projected.x, y: projected.y }]
                             : [];
                     });
                     if (points.length < 3) return;
-                    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-                    const material = new THREE.LineDashedMaterial({
-                        color: '#3f9186',
+                    const closedPoints = [...points, points[0]];
+                    const geometry = new LineGeometry();
+                    geometry.setPositions(closedPoints.flatMap(point => [
+                        point.x,
+                        point.y,
+                        0.22 + contourIndex * 0.004 + levelIndex * 0.001,
+                    ]));
+                    const material = new LineMaterial({
+                        color: geometricOffsetContourColor(contourIndex),
+                        linewidth: selected ? 3.8 : 2.1,
+                        dashed: true,
                         dashSize: 0.035,
                         gapSize: 0.018,
                         transparent: true,
-                        opacity: 0.96
+                        opacity: selected ? 1 : 0.9,
+                        depthTest: false,
                     });
-                    const line = new THREE.LineLoop(geometry, material);
+                    const viewportSize = readViewportSize();
+                    material.resolution.set(viewportSize.width, viewportSize.height);
+                    const line = new Line2(geometry, material);
                     line.computeLineDistances();
-                    line.userData = { type: 'geometricOffset', level: level.level, targetDistance: level.target_distance };
+                    line.userData = {
+                        type: 'geometricOffset',
+                        contourId: contour.id,
+                        epsilon: contour.epsilon,
+                        level: level.level,
+                        targetDistance: level.target_distance,
+                        selected,
+                    };
                     scene.add(line);
                 });
             });
-        }
+        });
 
-        if (geometricOffsetState.showInverseContours && geometricOffsetState.inverseResult?.curves) {
-            const visibleCurves = visibleInverseOffsetCurves(
-                geometricOffsetState.inverseResult,
-                geometricOffsetState.inverseDisplayMode
-            );
-            visibleCurves.forEach(curve => {
-                const points = (curve.points || []).filter(point => (
-                    Number.isFinite(point.x) && Number.isFinite(point.y)
-                ));
-                if (points.length < 3) return;
-                const closedPoints = [...points, points[0]];
-                const geometry = new LineGeometry();
-                geometry.setPositions(closedPoints.flatMap(point => [
-                    point.x,
-                    point.y,
-                    0.25 + 0.006 * curve.inverse_iteration
-                ]));
-                const material = new LineMaterial({
-                    color: inverseOffsetStepColor(curve.inverse_iteration),
-                    linewidth: 2.8,
-                    transparent: true,
-                    opacity: 0.98,
-                    depthTest: false
-                });
-                material.resolution.set(
-                    Math.max(1, window.innerWidth - 268),
-                    Math.max(1, window.innerHeight)
+        if (geometricOffsetState.showInverseContours) {
+            const sourceIds = new Set(geometricOffsetState.preimageSourceIds);
+            if (geometricOffsetState.selectedContourId) {
+                sourceIds.add(geometricOffsetState.selectedContourId);
+            }
+            geometricOffsetState.contours.forEach((contour, contourIndex) => {
+                if (!sourceIds.has(contour.id) || !contour.inverseResult?.curves) return;
+                const visibleCurves = visibleInverseOffsetCurves(
+                    contour.inverseResult,
+                    geometricOffsetState.inverseDisplayMode,
                 );
-                const line = new Line2(geometry, material);
-                line.computeLineDistances();
-                line.userData = {
-                    type: 'inverseGeometricOffset',
-                    sourceLevel: curve.source_level,
-                    sourceComponentId: curve.source_component_id,
-                    inverseIteration: curve.inverse_iteration
-                };
-                scene.add(line);
+                visibleCurves.forEach(curve => {
+                    const points = (curve.points || []).filter(point => (
+                        Number.isFinite(point.x) && Number.isFinite(point.y)
+                    ));
+                    if (points.length < 3) return;
+                    const closedPoints = [...points, points[0]];
+                    const geometry = new LineGeometry();
+                    geometry.setPositions(closedPoints.flatMap(point => [
+                        point.x,
+                        point.y,
+                        0.25 + 0.006 * curve.inverse_iteration + contourIndex * 0.0005,
+                    ]));
+                    const material = new LineMaterial({
+                        color: inverseOffsetCurveColor(
+                            contourIndex,
+                            geometricOffsetState.contours.length,
+                            curve.inverse_iteration,
+                        ),
+                        linewidth: contour.id === geometricOffsetState.selectedContourId ? 3.2 : 2.5,
+                        transparent: true,
+                        opacity: Math.max(0.72, 0.98 - 0.035 * (curve.inverse_iteration - 1)),
+                        depthTest: false,
+                    });
+                    const viewportSize = readViewportSize();
+                    material.resolution.set(viewportSize.width, viewportSize.height);
+                    const line = new Line2(geometry, material);
+                    line.computeLineDistances();
+                    line.userData = {
+                        type: 'inverseGeometricOffset',
+                        contourId: contour.id,
+                        epsilon: contour.epsilon,
+                        sourceLevel: curve.source_level,
+                        sourceComponentId: curve.source_component_id,
+                        inverseIteration: curve.inverse_iteration,
+                    };
+                    scene.add(line);
+                });
             });
         }
 
@@ -2266,7 +2405,7 @@ const SetValuedViz = () => {
             scene.add(sphere);
         }
 
-    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange]);
+    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, readViewportSize]);
 
     useEffect(() => {
         if (!sceneRef.current) return;
@@ -2893,9 +3032,12 @@ const SetValuedViz = () => {
 
     const exportExperiment = useCallback(() => {
         try {
-            const inversePositionTolerance = geometricOffsetState.inverseResult
+            const selectedContour = geometricOffsetState.contours.find(contour => (
+                contour.id === geometricOffsetState.selectedContourId
+            )) ?? geometricOffsetState.contours[0];
+            const inversePositionTolerance = selectedContour?.inverseResult
                 ? inverseOffsetPositionTolerance(
-                    geometricOffsetSampleSpacing(geometricOffsetState.result)
+                    geometricOffsetSampleSpacing(selectedContour.result)
                 )
                 : null;
             const bundle = buildExperimentBundle({
@@ -2930,7 +3072,9 @@ const SetValuedViz = () => {
                         },
                         geometricOffsets: {
                             ...DEFAULT_GEOMETRIC_OFFSET_SETTINGS,
-                            contourEpsilon: geometricOffsetState.contourEpsilon,
+                            contourEpsilon: selectedContour?.epsilon
+                                ?? DEFAULT_GEOMETRIC_OFFSET_SETTINGS.contourEpsilon,
+                            contourEpsilons: geometricOffsetState.contours.map(contour => contour.epsilon),
                             inverseIterations: geometricOffsetState.inverseIterations,
                             inversePositionTolerance,
                             inversePositionToleranceRule: INVERSE_OFFSET_POSITION_TOLERANCE_RULE
@@ -2946,8 +3090,29 @@ const SetValuedViz = () => {
                     fixedPoints: manifoldState.fixedPoints,
                     intersections: manifoldState.intersections,
                     continuousBoundaryPoints: bdeState.points,
-                    geometricOffsets: geometricOffsetState.result,
-                    inverseGeometricOffsets: geometricOffsetState.inverseResult,
+                    geometricOffsets: {
+                        batchVersion: 1,
+                        selectedContourId: geometricOffsetState.selectedContourId,
+                        contours: geometricOffsetState.contours
+                            .filter(contour => contour.result !== null)
+                            .map(contour => ({
+                                id: contour.id,
+                                epsilon: contour.epsilon,
+                                visible: contour.visible,
+                                result: contour.result,
+                            })),
+                    },
+                    inverseGeometricOffsets: {
+                        batchVersion: 1,
+                        sourceIds: geometricOffsetState.preimageSourceIds,
+                        contours: geometricOffsetState.contours
+                            .filter(contour => contour.inverseResult !== null)
+                            .map(contour => ({
+                                id: contour.id,
+                                epsilon: contour.epsilon,
+                                result: contour.inverseResult,
+                            })),
+                    },
                     ulam: {
                         gridBoxes: ulamState.gridBoxes,
                         invariantMeasure: ulamState.invariantMeasure,
@@ -2977,10 +3142,10 @@ const SetValuedViz = () => {
         customParams,
         bdeState.points,
         dynamicSystem,
-        geometricOffsetState.contourEpsilon,
+        geometricOffsetState.contours,
         geometricOffsetState.inverseIterations,
-        geometricOffsetState.inverseResult,
-        geometricOffsetState.result,
+        geometricOffsetState.preimageSourceIds,
+        geometricOffsetState.selectedContourId,
         manifoldState.fixedPoints,
         manifoldState.intersectionThreshold,
         manifoldState.intersections,
@@ -3055,15 +3220,31 @@ const SetValuedViz = () => {
                 showStableManifold: configuration.manifoldSettings.computeStable,
                 showUnstableManifold: configuration.manifoldSettings.computeUnstable
             }));
-            setGeometricOffsetState(prev => ({
-                ...prev,
-                contourEpsilon: configuration.geometricOffsetSettings.contourEpsilon,
-                inverseIterations: configuration.geometricOffsetSettings.inverseIterations,
-                result: null,
-                inverseResult: null,
-                error: null,
-                inverseError: null
-            }));
+            setGeometricOffsetState(prev => {
+                const contours = reconcileGeometricOffsetContours(
+                    [],
+                    configuration.geometricOffsetSettings.contourEpsilons,
+                );
+                const selectedContour = contours.find(contour => (
+                    contour.epsilon === configuration.geometricOffsetSettings.contourEpsilon
+                )) ?? contours[0];
+                return {
+                    ...prev,
+                    seriesStart: contours[0].epsilon,
+                    seriesEnd: contours[contours.length - 1].epsilon,
+                    seriesCount: contours.length,
+                    individualEpsilon: configuration.geometricOffsetSettings.contourEpsilon,
+                    contours,
+                    selectedContourId: selectedContour.id,
+                    preimageSourceIds: [selectedContour.id],
+                    inverseIterations: configuration.geometricOffsetSettings.inverseIterations,
+                    showInverseContours: true,
+                    isComputing: false,
+                    isComputingInverse: false,
+                    error: null,
+                    inverseError: null,
+                };
+            });
             setUlamState(prev => ({
                 ...prev,
                 subdivisions: configuration.ulamSettings.subdivisions,
@@ -3130,7 +3311,7 @@ const SetValuedViz = () => {
                 computeGeometricOffsets={computeGeometricOffsets}
                 computeInverseGeometricOffsets={computeInverseGeometricOffsets}
                 fitInverseGeometricOffsets={fitInverseGeometricOffsets}
-                canComputeInverseGeometricOffsets={Boolean(geometricOffsetState.result?.levels?.length)
+                canComputeInverseGeometricOffsets={geometricOffsetSourceContours(geometricOffsetState).length > 0
                     && !geometricOffsetState.isComputing
                     && !geometricOffsetState.isComputingInverse}
                 ORBIT_COLORS={ORBIT_COLORS}
@@ -3138,7 +3319,9 @@ const SetValuedViz = () => {
                 setFilters={setFilters}
                 periodicState={periodicState}
                 periodicSearchSettings={draftPeriodicSearchSettings}
+                appliedPeriodicSearchSettings={periodicSearchSettings}
                 updatePeriodicSearchSettings={updatePeriodicSearchSettings}
+                runPeriodicGridSearch={runPeriodicGridSearch}
                 updateStartPoint={updateStartPoint}
                 animationState={animationState}
                 setAnimationState={setAnimationState}

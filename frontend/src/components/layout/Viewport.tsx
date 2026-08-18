@@ -1,9 +1,15 @@
 import React, { type RefObject } from 'react';
-import { inverseOffsetStepColor, visibleInverseOffsetCurves } from '../../utils/inverseOffsetDisplay';
+import {
+  inverseOffsetCurveColor,
+  visibleInverseOffsetCurves,
+} from '../../utils/inverseOffsetDisplay';
+import {
+  formatContourEpsilon,
+  geometricOffsetContourColor,
+} from '../../utils/geometricOffsetBatch';
 import type {
+  GeometricOffsetContour,
   GeometricOffsetState,
-  GeometricOffsetResult,
-  InverseOffsetResult,
   ManifoldState,
   SystemType,
   TooltipData,
@@ -18,10 +24,10 @@ interface ViewportProps {
   tooltip: Pick<TooltipState, 'visible'> & Partial<Omit<TooltipState, 'visible'>>;
   manifoldState: Pick<ManifoldState, 'showUnstableManifold' | 'showStableManifold' | 'showOrbits'>;
   geometricOffsetState: {
-    showContours?: boolean;
-    result?: GeometricOffsetResult | object | null;
+    contours?: GeometricOffsetContour[];
+    selectedContourId?: string | null;
+    preimageSourceIds?: string[];
     showInverseContours?: boolean;
-    inverseResult?: InverseOffsetResult | null;
     inverseDisplayMode?: GeometricOffsetState['inverseDisplayMode'];
   };
   ulamState: Pick<UlamState, 'showUlamOverlay'>;
@@ -40,29 +46,57 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
   const serializedDisplayRange = displayRange
     ? `${displayRange.xMin},${displayRange.xMax},${displayRange.yMin},${displayRange.yMax}`
     : undefined;
-  const inverseCurves = geometricOffsetState?.showInverseContours
-    ? visibleInverseOffsetCurves(
-      geometricOffsetState?.inverseResult ?? null,
-      geometricOffsetState?.inverseDisplayMode || 'all'
-    )
+  const contours = geometricOffsetState?.contours ?? [];
+  const computedContourCount = contours.filter(contour => contour.result).length;
+  const plotTitle = computedContourCount > 0
+    ? 'Geometric ε-offset comparison'
+    : type === 'discrete'
+      ? 'Discrete boundary-map phase space'
+      : 'Continuous boundary-flow phase space';
+  const plotSubtitle = computedContourCount > 0
+    ? 'Select a contour or sidebar row to inspect and compare its boundary.'
+    : type === 'discrete'
+      ? 'Inspect boundary maps, periodic states, manifolds, and trajectories.'
+      : 'Inspect boundary flow, trajectories, and invariant-set approximations.';
+  const sourceIds = new Set(geometricOffsetState?.preimageSourceIds ?? []);
+  if (geometricOffsetState?.selectedContourId) {
+    sourceIds.add(geometricOffsetState.selectedContourId);
+  }
+  const inverseLegendEntries = geometricOffsetState?.showInverseContours
+    ? contours.flatMap((contour, contourIndex) => {
+      if (!sourceIds.has(contour.id) || !contour.inverseResult) return [];
+      const inverseCurves = visibleInverseOffsetCurves(
+        contour.inverseResult,
+        geometricOffsetState?.inverseDisplayMode || 'all',
+      );
+      const iterations = [...new Set(inverseCurves.map(curve => (
+        Number(curve.inverse_iteration) || 1
+      )))].sort((left, right) => left - right);
+      if (iterations.length === 0) return [];
+      return iterations.map(iteration => ({ contour, contourIndex, iteration }));
+    })
     : [];
-  const inverseIterations = [...new Set(inverseCurves.map(curve => (
-    Number(curve.inverse_iteration) || 1
-  )))].sort((left, right) => left - right);
 
   return (
     <div className="viewport" data-view-range={serializedDisplayRange}>
+      <header className="vp-header">
+        <div className="vp-header-copy">
+          <h1>{plotTitle}</h1>
+          <p>{plotSubtitle}</p>
+        </div>
+        <button type="button" className="vp-fit-button" onClick={handleResetView}>Fit view</button>
+      </header>
       <div className="vp-tools">
         <button type="button" className="vp-btn" title="Zoom in" aria-label="Zoom in" onClick={handleZoomIn}>+</button>
         <button type="button" className="vp-btn" title="Zoom out" aria-label="Zoom out" onClick={handleZoomOut}>−</button>
         <button type="button" className="vp-btn" title="Reset view" aria-label="Reset view" onClick={handleResetView}>⌂</button>
         <div className="vp-sep"></div>
         {type === 'continuous' && (
-          <button className="vp-btn active" title="Place start point">📍</button>
+          <button type="button" className="vp-btn active" title="Place start point" aria-label="Place start point">◎</button>
         )}
-        <button className="vp-btn" title="Pan" onClick={handlePanMode}>⊹</button>
+        <button type="button" className="vp-btn" title="Pan" aria-label="Pan" onClick={handlePanMode}>⊹</button>
         <div className="vp-sep"></div>
-        <button className="vp-btn" title="Save PNG" onClick={savePNG}>↓</button>
+        <button type="button" className="vp-btn" title="Save PNG" aria-label="Save PNG" onClick={savePNG}>↓</button>
       </div>
 
 
@@ -71,11 +105,25 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
         <div className="vp-legend-title">Legend</div>
         {manifoldState.showUnstableManifold && <div className="lg-item"><div className="lg-line" style={{ background: '#5b88b5' }}></div>Unstable manifold</div>}
         {manifoldState.showStableManifold && <div className="lg-item"><div className="lg-line" style={{ background: '#b8904a' }}></div>Stable manifold</div>}
-        {geometricOffsetState?.showContours && geometricOffsetState?.result && <div className="lg-item"><div className="lg-line" style={{ background: '#3f9186' }}></div>Geometric ε-offsets</div>}
-        {inverseIterations.map(iteration => (
-          <div className="lg-item" key={`inverse-offset-${iteration}`}>
-            <div className="lg-line" style={{ background: inverseOffsetStepColor(iteration), height: '3px' }}></div>
-            Boundary-map preimage · step {iteration}
+        {contours.map((contour, contourIndex) => contour.visible && contour.result ? (
+          <div className="lg-item" key={`geometric-offset-${contour.id}`}
+            aria-label={`Geometric contour epsilon ${formatContourEpsilon(contour.epsilon)}${contour.id === geometricOffsetState.selectedContourId ? ' selected' : ''}`}>
+            <div className="lg-line" style={{
+              background: `repeating-linear-gradient(90deg, ${geometricOffsetContourColor(contourIndex)} 0 7px, transparent 7px 11px)`,
+              height: contour.id === geometricOffsetState.selectedContourId ? '3px' : '2px',
+            }}></div>
+            ε<sub>g</sub> = {formatContourEpsilon(contour.epsilon)}
+            {contour.id === geometricOffsetState.selectedContourId ? ' · selected' : ''}
+          </div>
+        ) : null)}
+        {inverseLegendEntries.map(({ contour, contourIndex, iteration }) => (
+          <div className="lg-item" key={`inverse-offset-${contour.id}-${iteration}`}
+            aria-label={`Preimage epsilon ${formatContourEpsilon(contour.epsilon)} step ${iteration}`}>
+            <div className="lg-line" style={{
+              background: inverseOffsetCurveColor(contourIndex, contours.length, iteration),
+              height: '3px',
+            }}></div>
+            Preimage ε<sub>g</sub> = {formatContourEpsilon(contour.epsilon)} · step {iteration}
           </div>
         ))}
         {manifoldState.showOrbits && (
@@ -149,7 +197,7 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
 
       <canvas
         ref={canvasRef}
-        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
+        className="vp-canvas"
       />
     </div>
   );

@@ -1,0 +1,47 @@
+name: Package BIST release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --version 0.13.1 --locked
+      - name: Build verified offline package
+        run: ./scripts/package_release.sh
+      - name: Smoke-test unpacked package without network access
+        run: ./scripts/release_smoke_test.sh --use-existing-archive --require-network-namespace
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bist-release
+          path: |
+            release/*.tar.gz
+            release/*.zip
+            release/*.sha256
+            release/release-smoke-evidence.json
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" release/*.tar.gz release/*.zip release/*.sha256 release/release-smoke-evidence.json --title "BIST ${GITHUB_REF_NAME}" --notes-file RELEASE_NOTES.md

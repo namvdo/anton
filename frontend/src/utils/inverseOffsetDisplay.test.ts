@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   fitInverseOffsetCurveRange,
   inverseOffsetCurveBounds,
+  inverseOffsetCurveColor,
   inverseCurveNestingSummary,
   inverseOffsetStepColor,
   visibleInverseOffsetCurves
@@ -40,6 +41,17 @@ describe('inverse offset display utilities', () => {
     expect(colors.every(color => /^#[0-9a-f]{6}$/.test(color))).toBe(true);
     expect(inverseOffsetStepColor(32)).toBe(colors[31]);
     expect(inverseOffsetStepColor('invalid')).toBe(colors[0]);
+  });
+
+  it('assigns a distinct color to every source and inverse-step combination', () => {
+    const sourceCount = 12;
+    const colors = Array.from({ length: 8 }, (_, stepIndex) => (
+      Array.from({ length: sourceCount }, (_, sourceIndex) => (
+        inverseOffsetCurveColor(sourceIndex, sourceCount, stepIndex + 1)
+      ))
+    )).flat();
+    expect(new Set(colors).size).toBe(colors.length);
+    expect(inverseOffsetCurveColor(0, sourceCount, 'invalid')).toBe(colors[0]);
   });
 
   it('computes finite bounds and an aspect-aware padded camera range', () => {

@@ -77,7 +77,9 @@ interface SidebarProps {
   setFilters: StateSetter<OrbitFilters>;
   periodicState: PeriodicState;
   periodicSearchSettings: PeriodicSearchSettings;
+  appliedPeriodicSearchSettings: PeriodicSearchSettings;
   updatePeriodicSearchSettings: (patch: Partial<PeriodicSearchSettings>) => void;
+  runPeriodicGridSearch: () => void;
   updateStartPoint: (point: ManifoldState['startPoint']) => void;
   animationState: AnimationState;
   setAnimationState: StateSetter<AnimationState>;
@@ -107,8 +109,8 @@ export const Sidebar = (props: SidebarProps) => {
   return (
     <div className="sidebar">
       <div className="app-name">
-        <img src={logoSrc} alt="BIST Logo" style={{ height: '18px', width: 'auto' }} />
-        BIST
+        <img className="app-logo" src={logoSrc} alt="" aria-hidden="true" />
+        <span>BIST</span>
         <span className="app-version">v{BIST_VERSION}</span>
       </div>
 
@@ -152,7 +154,16 @@ export const Sidebar = (props: SidebarProps) => {
           <PeriodicSearchPanel
             dynamicSystem={props.dynamicSystem}
             periodicSearchSettings={props.periodicSearchSettings}
+            appliedPeriodicSearchSettings={props.appliedPeriodicSearchSettings}
+            maxPeriod={props.params.maxPeriod}
+            appliedMaxPeriod={(props.appliedParams || props.params).maxPeriod}
+            appliedParameters={props.appliedParams || props.params}
+            viewRange={props.viewRange}
+            periodicState={props.periodicState}
             updatePeriodicSearchSettings={props.updatePeriodicSearchSettings}
+            updateMaxPeriod={maxPeriod => props.setParams(previous => ({ ...previous, maxPeriod }))}
+            runGridSearch={props.runPeriodicGridSearch}
+            hasPendingChanges={props.hasPendingInputChanges}
             disabled={props.manifoldState.isRunning || animationLocksConfiguration}
           />
         )}
@@ -183,6 +194,7 @@ export const Sidebar = (props: SidebarProps) => {
                 <GeometricOffsetsPanel
                   state={props.geometricOffsetState}
                   setState={props.setGeometricOffsetState}
+                  systemEpsilon={props.params.epsilon}
                   canCompute={props.canComputeGeometricOffsets}
                   compute={props.computeGeometricOffsets}
                   canComputeInverse={props.canComputeInverseGeometricOffsets}

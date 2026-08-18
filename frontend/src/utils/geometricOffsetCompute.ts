@@ -4,6 +4,8 @@ import type {
   GeometricOffsetResult,
   PointLike,
 } from '../types/domain';
+import type { GeometricOffsetBatchComputePayload } from '../protocol/computeContracts';
+import { normalizeContourEpsilons } from './geometricOffsetBatch';
 
 const coordinatePair = (point: PointLike): [number, number] => (
   Array.isArray(point)
@@ -49,6 +51,38 @@ export const buildSingleGeometricOffsetRequest = (
   return {
     boundary: boundary.map(extendedPoint),
     params: { epsilon }
+  };
+};
+
+export const buildGeometricOffsetBatchRequest = (
+  boundary: ExtendedPointLike[],
+  contours: Array<{ id: string; epsilon: number }>,
+): GeometricOffsetBatchComputePayload => {
+  if (!Array.isArray(contours) || contours.length === 0) {
+    throw new Error('Add at least one geometric contour ε value.');
+  }
+  const contourIds = contours.map(contour => contour.id);
+  if (contourIds.some(id => typeof id !== 'string' || id.trim().length === 0)) {
+    throw new Error('Each geometric contour requires a stable identifier.');
+  }
+  if (new Set(contourIds).size !== contourIds.length) {
+    throw new Error('Geometric contour identifiers must be unique.');
+  }
+  const epsilonValues = normalizeContourEpsilons(contours.map(contour => contour.epsilon));
+  const normalizedBoundary = buildSingleGeometricOffsetRequest(boundary, epsilonValues[0]).boundary;
+  const contoursByEpsilon = new Map(contours.map(contour => [
+    normalizeContourEpsilons([contour.epsilon])[0],
+    contour,
+  ]));
+  return {
+    boundary: normalizedBoundary,
+    contours: epsilonValues.map(epsilon => {
+      const contour = contoursByEpsilon.get(epsilon);
+      if (!contour) {
+        throw new Error('Each geometric contour requires a stable identifier.');
+      }
+      return { id: contour.id, epsilon };
+    }),
   };
 };
 

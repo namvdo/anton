@@ -69,3 +69,10 @@ jobs:
     - name: Build production frontend
       working-directory: frontend
       run: npm run build
+    - name: Smoke-test unpacked offline release
+      run: ./scripts/release_smoke_test.sh --require-network-namespace
+    - name: Upload offline release smoke evidence
+      uses: actions/upload-artifact@v4
+      with:
+        name: offline-release-smoke-evidence
+        path: release/release-smoke-evidence.json

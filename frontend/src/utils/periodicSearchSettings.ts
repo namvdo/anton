@@ -8,12 +8,70 @@ export const DEFAULT_PERIODIC_SEARCH_SETTINGS: PeriodicSearchSettings = {
 };
 
 export const PERIODIC_SEARCH_LIMITS = {
+  maxPeriodMin: 1,
+  maxPeriodMax: 20,
   gridSizeMin: 2,
   gridSizeMax: 256,
   thetaGridSizeMin: 2,
   thetaGridSizeMax: 256,
   residualThresholdMin: 1e-14,
   residualThresholdMax: 1e-2
+};
+
+export interface PeriodicSearchPreset {
+  id: 'quick' | 'balanced' | 'thorough';
+  label: string;
+  description: string;
+  maxPeriod: number;
+  settings: PeriodicSearchSettings;
+}
+
+export const PERIODIC_SEARCH_PRESETS: readonly PeriodicSearchPreset[] = Object.freeze([
+  {
+    id: 'quick',
+    label: 'Quick',
+    description: '864 seeds',
+    maxPeriod: 3,
+    settings: { gridSize: 6, thetaGridSize: 8, residualThreshold: 1e-8, useContinuation: false },
+  },
+  {
+    id: 'balanced',
+    label: 'Balanced',
+    description: '5,000 seeds',
+    maxPeriod: 5,
+    settings: { ...DEFAULT_PERIODIC_SEARCH_SETTINGS },
+  },
+  {
+    id: 'thorough',
+    label: 'Thorough',
+    description: '41,472 seeds',
+    maxPeriod: 8,
+    settings: { gridSize: 18, thetaGridSize: 16, residualThreshold: 1e-10, useContinuation: false },
+  },
+]);
+
+export const normalizePeriodicMaxPeriod = (value: number, fallback = 5): number => {
+  const parsed = Number.parseInt(`${value}`, 10);
+  const parsedFallback = Number.parseInt(`${fallback}`, 10);
+  const safeFallback = Number.isFinite(parsedFallback)
+    ? Math.min(
+      PERIODIC_SEARCH_LIMITS.maxPeriodMax,
+      Math.max(PERIODIC_SEARCH_LIMITS.maxPeriodMin, parsedFallback),
+    )
+    : 5;
+  return Number.isFinite(parsed)
+    ? Math.min(PERIODIC_SEARCH_LIMITS.maxPeriodMax, Math.max(PERIODIC_SEARCH_LIMITS.maxPeriodMin, parsed))
+    : safeFallback;
+};
+
+export const estimatePeriodicGridSeedCount = (
+  maxPeriod: number,
+  gridSize: number,
+  thetaGridSize: number,
+): number => {
+  const periodCount = normalizePeriodicMaxPeriod(maxPeriod);
+  const settings = normalizePeriodicSearchSettings({ gridSize, thetaGridSize });
+  return periodCount * settings.gridSize * settings.gridSize * settings.thetaGridSize;
 };
 
 export const normalizePeriodicSearchSettings = (
@@ -48,3 +106,10 @@ export const normalizePeriodicSearchSettings = (
     useContinuation
   };
 };
+
+export const forceFullGridSearchSettings = (
+  settings: PeriodicSearchSettings,
+): PeriodicSearchSettings => ({
+  ...normalizePeriodicSearchSettings(settings),
+  useContinuation: false,
+});

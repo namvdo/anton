@@ -81,6 +81,24 @@ export interface GeometricOffsetsComputePayload {
   params: Pick<BistParameters, 'epsilon'>;
 }
 
+export interface GeometricOffsetBatchInput {
+  id: string;
+  epsilon: number;
+}
+
+export interface GeometricOffsetBatchOutput extends GeometricOffsetBatchInput {
+  result: GeometricOffsetResult;
+}
+
+export interface GeometricOffsetBatchComputePayload {
+  boundary: ExtendedPointTuple[];
+  contours: GeometricOffsetBatchInput[];
+}
+
+export interface GeometricOffsetBatchComputeResult {
+  contours: GeometricOffsetBatchOutput[];
+}
+
 export interface InverseGeometricOffsetsComputePayload {
   levels: GeometricOffsetLevel[];
   params: Pick<BistParameters, 'a' | 'b' | 'epsilon'>;
@@ -90,6 +108,29 @@ export interface InverseGeometricOffsetsComputePayload {
     normalTolerance: number;
     maxSubdivisionDepth: number;
   };
+}
+
+export interface InverseGeometricOffsetBatchSource {
+  id: string;
+  levels: GeometricOffsetLevel[];
+  positionTolerance: number;
+}
+
+export interface InverseGeometricOffsetBatchComputePayload {
+  sources: InverseGeometricOffsetBatchSource[];
+  params: Pick<BistParameters, 'a' | 'b' | 'epsilon'>;
+  settings: {
+    iterations: number;
+    normalTolerance: number;
+    maxSubdivisionDepth: number;
+  };
+}
+
+export interface InverseGeometricOffsetBatchComputeResult {
+  sources: Array<{
+    id: string;
+    result: InverseOffsetResult;
+  }>;
 }
 
 export interface UlamTransitionsPayload {
@@ -113,9 +154,17 @@ export interface ComputeTaskMap {
     payload: GeometricOffsetsComputePayload;
     result: GeometricOffsetResult;
   };
+  computeGeometricOffsetBatch: {
+    payload: GeometricOffsetBatchComputePayload;
+    result: GeometricOffsetBatchComputeResult;
+  };
   computeInverseGeometricOffsets: {
     payload: InverseGeometricOffsetsComputePayload;
     result: InverseOffsetResult;
+  };
+  computeInverseGeometricOffsetBatch: {
+    payload: InverseGeometricOffsetBatchComputePayload;
+    result: InverseGeometricOffsetBatchComputeResult;
   };
   getUlamTransitions: {
     payload: UlamTransitionsPayload;
