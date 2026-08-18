@@ -12,6 +12,7 @@ import type {
   SystemId,
   ViewRange,
 } from '../../types/domain';
+import { resolveSystemEpsilon } from '../../utils/systemEpsilon';
 
 interface ParameterSweepPanelProps {
   wasmModule: Pick<BistWasmModule, 'parameterSweepGeneric'> | null;
@@ -92,7 +93,7 @@ export const ParameterSweepPanel = ({
           sweepState.sweepMin,
           sweepState.sweepMax,
           sweepState.numSamples,
-          params.epsilon || 0.01,
+          resolveSystemEpsilon(params.epsilon),
           sweepState.maxPeriod,
           viewRange.xMin,
           viewRange.xMax,

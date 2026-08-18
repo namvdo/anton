@@ -230,8 +230,8 @@ impl HenonParams {
             return Err("Parameter b cannot be zero or near zero".to_string());
         }
 
-        if epsilon <= 0.0 {
-            return Err("Epsilon must be positive".to_string());
+        if epsilon < 0.0 {
+            return Err("Epsilon must be non-negative".to_string());
         }
 
         if a.abs() > 10.0 || epsilon > 1.0 {
@@ -2849,7 +2849,7 @@ mod tests {
         assert!(HenonParams::new(0.0, 0.3, 0.01).is_ok());
         assert!(HenonParams::new(1.4, 0.0, 0.01).is_err());
         assert!(HenonParams::new(1.4, 0.3, -0.01).is_err());
-        assert!(HenonParams::new(1.4, 0.3, 0.0).is_err());
+        assert!(HenonParams::new(1.4, 0.3, 0.0).is_ok());
         assert!(HenonParams::new(f64::NAN, 0.3, 0.01).is_err());
     }
 
@@ -2860,6 +2860,20 @@ mod tests {
         let result = params.henon_map(&pos).unwrap();
         assert_eq!(result.x, 1.0);
         assert_eq!(result.y, 0.0);
+    }
+
+    #[test]
+    fn zero_epsilon_extended_map_matches_deterministic_henon_map() {
+        let params = HenonParams::new(1.4, 0.3, 0.0).unwrap();
+        let state = ExtendedState {
+            pos: Vector2::new(0.2, -0.1),
+            normal: Vector2::new(0.6, 0.8),
+        };
+
+        let expected = params.henon_map(&state.pos).unwrap();
+        let actual = params.extended_map(state, 1).unwrap().pos;
+
+        assert!((actual - expected).norm() < 1e-12);
     }
 
     #[test]

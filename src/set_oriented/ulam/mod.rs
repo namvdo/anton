@@ -1112,6 +1112,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn henon_ulam_accepts_zero_noise_radius() {
+        let computer = UlamComputer::try_new_rectangular(
+            1.4,
+            0.3,
+            (2, 2),
+            1,
+            0.0,
+            Vector2::new(-2.0, -2.0),
+            Vector2::new(2.0, 2.0),
+        )
+        .unwrap();
+
+        assert_eq!(computer.get_epsilon(), 0.0);
+    }
+
+    #[test]
     fn rectangular_master_grid_has_8192_square_boxes() {
         let grid =
             Grid::new_rectangular(Vector2::new(-2.2, -1.1), Vector2::new(2.2, 1.1), (128, 64));

@@ -21,8 +21,8 @@ impl DuffingParams {
             return Err("Parameter b cannot be zero or near zero".to_string());
         }
 
-        if epsilon <= 0.0 {
-            return Err("Epsilon must be positive".to_string());
+        if epsilon < 0.0 {
+            return Err("Epsilon must be non-negative".to_string());
         }
 
         if a.abs() > 10.0 || epsilon > 1.0 || b.abs() > 10.0 {
@@ -213,5 +213,30 @@ impl DuffingParams {
         }
 
         Ok(current)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zero_epsilon_extended_map_matches_deterministic_duffing_map() {
+        let params = DuffingParams::new(2.75, 0.2, 0.0).unwrap();
+        let state = ExtendedState {
+            pos: Vector2::new(0.2, -0.1),
+            normal: Vector2::new(0.6, 0.8),
+        };
+
+        let expected = params.duffing_map(&state.pos).unwrap();
+        let actual = params.extended_map(state, 1).unwrap().pos;
+
+        assert!((actual - expected).norm() < 1e-12);
+    }
+
+    #[test]
+    fn epsilon_validation_accepts_zero_and_rejects_negative_values() {
+        assert!(DuffingParams::new(2.75, 0.2, 0.0).is_ok());
+        assert!(DuffingParams::new(2.75, 0.2, -f64::EPSILON).is_err());
     }
 }

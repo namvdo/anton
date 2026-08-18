@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import { ParametersPanel } from './ParametersPanel';
 
@@ -54,5 +54,18 @@ describe('ParametersPanel', () => {
   it('retains the Duffing maximum period because its search uses a built-in grid', () => {
     render(<ParametersPanel {...baseProps} systemId="duffing" />);
     expect(screen.getByLabelText('Maximum orbit period')).toHaveValue(5);
+  });
+
+  it('allows zero epsilon to select deterministic dynamics', () => {
+    const setParams = vi.fn();
+    render(<ParametersPanel {...baseProps} setParams={setParams} />);
+
+    const epsilonInput = screen.getAllByRole('spinbutton')[2];
+    fireEvent.change(epsilonInput, { target: { value: '0' } });
+
+    const updater = setParams.mock.calls.at(-1)?.[0];
+    expect(updater).toBeTypeOf('function');
+    expect(updater(baseProps.params)).toMatchObject({ epsilon: 0 });
+    expect(screen.getByText('noise radius; 0 = deterministic')).toBeInTheDocument();
   });
 });
