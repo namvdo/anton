@@ -28,6 +28,11 @@ import {
 } from './utils/trajectoryState';
 import { buildGeometricOffsetSeed } from './utils/geometricOffsetSeed';
 import {
+    BOUNDARY_LAYER_COLORS,
+    reconstructDeterministicImageBoundary,
+    summarizeClosedBoundarySampling
+} from './utils/boundaryLayers';
+import {
     buildGeometricOffsetBatchRequest,
     geometricOffsetSampleSpacing
 } from './utils/geometricOffsetCompute';
@@ -402,6 +407,10 @@ const SetValuedViz = () => {
         sourcePeriodicRevision: 0,
         showOrbits: true,
         showUnstableManifold: false,
+        showDeterministicImageBoundary: false,
+        showNoiseBalls: false,
+        showBoundarySamplePoints: false,
+        maximumManifoldPointSpacing: DEFAULT_MANIFOLD_SETTINGS.maximumPointSpacing,
         showStableManifold: false,
         intersectionThreshold: DEFAULT_MANIFOLD_SETTINGS.intersectionThreshold,
         currentPoint: { x: 0.1, y: 0.1, nx: 1.0, ny: 0.0 }, // 4D point for boundary map
@@ -443,6 +452,54 @@ const SetValuedViz = () => {
         ),
         [manifoldState.rawManifolds, manifoldState.manifolds, params.a, params.b, params.epsilon]
     );
+
+    const boundaryLayers = useMemo(() => {
+        if (geometricOffsetSeed.length < 3) {
+            return {
+                deterministicImage: [] as ExtendedState[],
+                invariantBoundary: [] as ExtendedState[],
+                noiseBallCenters: [] as ProjectedState[],
+                unstableSampling: null,
+                deterministicSampling: null,
+                error: null as string | null,
+            };
+        }
+        try {
+            const deterministicImage = reconstructDeterministicImageBoundary(
+                geometricOffsetSeed,
+                params.epsilon,
+            );
+            const invariantBoundary = deterministicImage.map(({ x, y, nx, ny }) => ({
+                x: x + params.epsilon * nx,
+                y: y + params.epsilon * ny,
+                nx,
+                ny,
+            }));
+            return {
+                deterministicImage,
+                invariantBoundary,
+                noiseBallCenters: params.epsilon > 0 ? deterministicImage : [],
+                unstableSampling: summarizeClosedBoundarySampling(
+                    invariantBoundary,
+                ),
+                deterministicSampling: summarizeClosedBoundarySampling(deterministicImage),
+                error: null,
+            };
+        } catch (error) {
+            return {
+                deterministicImage: [] as ExtendedState[],
+                invariantBoundary: [] as ExtendedState[],
+                noiseBallCenters: [] as ProjectedState[],
+                unstableSampling: null,
+                deterministicSampling: null,
+                error: error instanceof Error ? error.message : String(error),
+            };
+        }
+    }, [geometricOffsetSeed, params.epsilon]);
+
+    const hasClosedMisBoundary = geometricOffsetSeed.length >= 3
+        && boundaryLayers.error === null
+        && boundaryLayers.deterministicImage.length >= 3;
 
     const [filters, setFilters] = useState<OrbitFilters>({
         period1: true, period2: true, period3: true,
@@ -986,6 +1043,10 @@ const SetValuedViz = () => {
             fixedPoints: [],
             intersections: [],
             showUnstableManifold: false,
+            showDeterministicImageBoundary: false,
+            showNoiseBalls: false,
+            showBoundarySamplePoints: false,
+            maximumManifoldPointSpacing: DEFAULT_MANIFOLD_SETTINGS.maximumPointSpacing,
             showStableManifold: false,
             showOrbits: true,
             showTrail: true,
@@ -1481,7 +1542,8 @@ const SetValuedViz = () => {
                 customParams: appliedParamValidation.normalized,
                 showStableManifold: manifoldState.showStableManifold,
                 showUnstableManifold: manifoldState.showUnstableManifold,
-                intersectionThreshold: manifoldState.intersectionThreshold
+                intersectionThreshold: manifoldState.intersectionThreshold,
+                maximumPointSpacing: manifoldState.maximumManifoldPointSpacing,
             }).then((result) => {
                 if (cancelled) return;
                 setManifoldState(prev => ({
@@ -1515,7 +1577,7 @@ const SetValuedViz = () => {
                 clearTimeout(manifoldDebounceRef.current);
             }
         };
-    }, [dynamicSystem, params.a, params.b, params.delta, params.h, params.epsilon, periodicState.orbits, periodicState.resultRevision, wasmModule, manifoldState.showStableManifold, manifoldState.showUnstableManifold, manifoldState.intersectionThreshold, activeAppliedCustomEquations, appliedParamValidation, manifoldState.startPoint.x, manifoldState.startPoint.y, viewRange, computeRequestId, runComputeTask]);
+    }, [dynamicSystem, params.a, params.b, params.delta, params.h, params.epsilon, periodicState.orbits, periodicState.resultRevision, wasmModule, manifoldState.showStableManifold, manifoldState.showUnstableManifold, manifoldState.intersectionThreshold, manifoldState.maximumManifoldPointSpacing, activeAppliedCustomEquations, appliedParamValidation, manifoldState.startPoint.x, manifoldState.startPoint.y, viewRange, computeRequestId, runComputeTask]);
 
     useEffect(() => {
         if (!animationState.isAnimating || animationState.awaitingResult) {
@@ -2175,12 +2237,12 @@ const SetValuedViz = () => {
 
         const toRemove: THREE.Object3D[] = [];
         scene.traverse(child => {
-            if (child.userData.type === 'trajectory' || child.userData.type === 'manifold' || child.userData.type === 'geometricOffset' || child.userData.type === 'inverseGeometricOffset' || child.userData.type === 'fixedPoint' || child.userData.type === 'bde') {
+            if (child.userData.type === 'trajectory' || child.userData.type === 'manifold' || child.userData.type === 'boundaryLayer' || child.userData.type === 'boundarySamplePoints' || child.userData.type === 'noiseBall' || child.userData.type === 'geometricOffset' || child.userData.type === 'inverseGeometricOffset' || child.userData.type === 'fixedPoint' || child.userData.type === 'bde') {
                 toRemove.push(child);
             }
         });
         toRemove.forEach(obj => {
-            if (obj instanceof THREE.Mesh || obj instanceof THREE.Line || obj instanceof Line2) {
+            if (obj instanceof THREE.Mesh || obj instanceof THREE.Line || obj instanceof THREE.Points || obj instanceof Line2) {
                 obj.geometry.dispose();
                 if (Array.isArray(obj.material)) obj.material.forEach(material => material.dispose());
                 else obj.material.dispose();
@@ -2188,23 +2250,162 @@ const SetValuedViz = () => {
             scene.remove(obj);
         });
 
-        if (manifoldState.showUnstableManifold && manifoldState.manifolds.length > 0) {
-            manifoldState.manifolds.forEach(m => {
-                const color = ORBIT_COLORS.manifold;
+        const addClosedBoundaryLine = (
+            points: ProjectedState[],
+            color: string,
+            linewidth: number,
+            zPosition: number,
+            boundaryRole: string,
+        ): void => {
+            if (points.length < 3) return;
+            const closedPoints = [...points, points[0]];
+            const geometry = new LineGeometry();
+            geometry.setPositions(closedPoints.flatMap(point => [point.x, point.y, zPosition]));
+            const material = new LineMaterial({
+                color,
+                linewidth,
+                transparent: true,
+                opacity: 0.98,
+                depthTest: false,
+            });
+            const viewportSize = readViewportSize();
+            material.resolution.set(viewportSize.width, viewportSize.height);
+            const line = new Line2(geometry, material);
+            line.computeLineDistances();
+            line.renderOrder = 10;
+            line.userData = { type: 'boundaryLayer', boundaryRole };
+            scene.add(line);
+        };
 
-                [m.plus, m.minus].forEach(traj => {
-                    if (traj && traj.points && traj.points.length > 1) {
-                        traj.points.forEach(([x, y]) => {
-                            const geom = new THREE.SphereGeometry(0.008, 6, 6);
-                            const mat = new THREE.MeshBasicMaterial({
-                                color: new THREE.Color(color)
-                            });
-                            const sphere = new THREE.Mesh(geom, mat);
-                            sphere.position.set(x, y, 0.1);
-                            sphere.userData.type = 'manifold';
-                            scene.add(sphere);
-                        });
+        const addBoundarySamplePoints = (
+            points: ProjectedState[],
+            color: string,
+            zPosition: number,
+            boundaryRole: string,
+        ): void => {
+            if (points.length < 3) return;
+            const geometry = new THREE.BufferGeometry().setFromPoints(
+                points.map(point => new THREE.Vector3(point.x, point.y, zPosition)),
+            );
+            const material = new THREE.PointsMaterial({
+                color: new THREE.Color(color),
+                size: 4,
+                sizeAttenuation: false,
+                transparent: true,
+                opacity: 0.9,
+                depthTest: false,
+                depthWrite: false,
+            });
+            const samples = new THREE.Points(geometry, material);
+            samples.renderOrder = 12;
+            samples.userData = { type: 'boundarySamplePoints', boundaryRole };
+            scene.add(samples);
+        };
+
+        if (manifoldState.showUnstableManifold && hasClosedMisBoundary) {
+            if (manifoldState.showBoundarySamplePoints) {
+                addBoundarySamplePoints(
+                    boundaryLayers.invariantBoundary,
+                    BOUNDARY_LAYER_COLORS.invariant,
+                    0.26,
+                    'unstable-manifold',
+                );
+            } else {
+                addClosedBoundaryLine(
+                    boundaryLayers.invariantBoundary,
+                    BOUNDARY_LAYER_COLORS.invariant,
+                    3.4,
+                    0.24,
+                    'unstable-manifold',
+                );
+            }
+
+            if (manifoldState.showDeterministicImageBoundary) {
+                if (manifoldState.showBoundarySamplePoints) {
+                    addBoundarySamplePoints(
+                        boundaryLayers.deterministicImage,
+                        BOUNDARY_LAYER_COLORS.deterministicImage,
+                        0.255,
+                        'deterministic-image',
+                    );
+                } else {
+                    addClosedBoundaryLine(
+                        boundaryLayers.deterministicImage,
+                        BOUNDARY_LAYER_COLORS.deterministicImage,
+                        2.6,
+                        0.23,
+                        'deterministic-image',
+                    );
+                }
+            }
+
+            if (manifoldState.showNoiseBalls && params.epsilon > 0) {
+                const centers = boundaryLayers.noiseBallCenters;
+                const fillGeometry = new THREE.CircleGeometry(params.epsilon, 32);
+                const fillMaterial = new THREE.MeshBasicMaterial({
+                    color: new THREE.Color(BOUNDARY_LAYER_COLORS.noiseBall),
+                    transparent: true,
+                    opacity: 0.003,
+                    depthTest: false,
+                    depthWrite: false,
+                    side: THREE.DoubleSide,
+                });
+                const fills = new THREE.InstancedMesh(fillGeometry, fillMaterial, centers.length);
+                const transform = new THREE.Matrix4();
+                centers.forEach((center, index) => {
+                    transform.makeTranslation(center.x, center.y, 0.205);
+                    fills.setMatrixAt(index, transform);
+                });
+                fills.instanceMatrix.needsUpdate = true;
+                fills.renderOrder = 6;
+                fills.userData = { type: 'noiseBall', role: 'fill', count: centers.length };
+                scene.add(fills);
+
+                const outlinePoints: THREE.Vector3[] = [];
+                centers.forEach(center => {
+                    for (let index = 0; index < 32; index += 1) {
+                        const start = index * 2 * Math.PI / 32;
+                        const end = (index + 1) * 2 * Math.PI / 32;
+                        outlinePoints.push(
+                            new THREE.Vector3(
+                                center.x + params.epsilon * Math.cos(start),
+                                center.y + params.epsilon * Math.sin(start),
+                                0.215,
+                            ),
+                            new THREE.Vector3(
+                                center.x + params.epsilon * Math.cos(end),
+                                center.y + params.epsilon * Math.sin(end),
+                                0.215,
+                            ),
+                        );
                     }
+                });
+                const outlineGeometry = new THREE.BufferGeometry().setFromPoints(outlinePoints);
+                const outlineMaterial = new THREE.LineBasicMaterial({
+                    color: new THREE.Color(BOUNDARY_LAYER_COLORS.noiseBall),
+                    transparent: true,
+                    opacity: 0.035,
+                    depthTest: false,
+                });
+                const outlines = new THREE.LineSegments(outlineGeometry, outlineMaterial);
+                outlines.renderOrder = 8;
+                outlines.userData = { type: 'noiseBall', role: 'boundary', count: centers.length };
+                scene.add(outlines);
+            }
+        } else if (manifoldState.showUnstableManifold && manifoldState.manifolds.length > 0) {
+            manifoldState.manifolds.forEach(manifold => {
+                [manifold.plus, manifold.minus].forEach(trajectory => {
+                    if (!trajectory?.points || trajectory.points.length <= 1) return;
+                    trajectory.points.forEach(([x, y]) => {
+                        const geometry = new THREE.SphereGeometry(0.008, 6, 6);
+                        const material = new THREE.MeshBasicMaterial({
+                            color: new THREE.Color(ORBIT_COLORS.manifold)
+                        });
+                        const sphere = new THREE.Mesh(geometry, material);
+                        sphere.position.set(x, y, 0.1);
+                        sphere.userData.type = 'manifold';
+                        scene.add(sphere);
+                    });
                 });
             });
         }
@@ -2405,7 +2606,7 @@ const SetValuedViz = () => {
             scene.add(sphere);
         }
 
-    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, readViewportSize]);
+    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, readViewportSize, geometricOffsetSeed, boundaryLayers, hasClosedMisBoundary, params.epsilon]);
 
     useEffect(() => {
         if (!sceneRef.current) return;
@@ -3054,6 +3255,7 @@ const SetValuedViz = () => {
                     solverSettings: {
                         manifold: {
                             intersectionThreshold: manifoldState.intersectionThreshold,
+                            maximumPointSpacing: manifoldState.maximumManifoldPointSpacing,
                             computeStable: manifoldState.showStableManifold,
                             computeUnstable: manifoldState.showUnstableManifold
                         },
@@ -3148,6 +3350,7 @@ const SetValuedViz = () => {
         geometricOffsetState.selectedContourId,
         manifoldState.fixedPoints,
         manifoldState.intersectionThreshold,
+        manifoldState.maximumManifoldPointSpacing,
         manifoldState.intersections,
         manifoldState.manifolds,
         manifoldState.showStableManifold,
@@ -3217,6 +3420,7 @@ const SetValuedViz = () => {
                 isRunning: false,
                 hasStarted: false,
                 intersectionThreshold: configuration.manifoldSettings.intersectionThreshold,
+                maximumManifoldPointSpacing: configuration.manifoldSettings.maximumPointSpacing,
                 showStableManifold: configuration.manifoldSettings.computeStable,
                 showUnstableManifold: configuration.manifoldSettings.computeUnstable
             }));
@@ -3307,6 +3511,12 @@ const SetValuedViz = () => {
                 setManifoldState={setManifoldState}
                 geometricOffsetState={geometricOffsetState}
                 setGeometricOffsetState={setGeometricOffsetState}
+                hasClosedMisBoundary={hasClosedMisBoundary}
+                boundaryLayerError={boundaryLayers.error}
+                boundarySampling={{
+                    unstable: boundaryLayers.unstableSampling,
+                    deterministic: boundaryLayers.deterministicSampling,
+                }}
                 canComputeGeometricOffsets={!manifoldState.isComputing && geometricOffsetSeed.length >= 3}
                 computeGeometricOffsets={computeGeometricOffsets}
                 computeInverseGeometricOffsets={computeInverseGeometricOffsets}
@@ -3347,6 +3557,7 @@ const SetValuedViz = () => {
                 manifoldState={manifoldState}
                 geometricOffsetState={geometricOffsetState}
                 ulamState={ulamState}
+                hasClosedMisBoundary={hasClosedMisBoundary}
                 displayRange={viewportRange}
                 savePNG={savePNG}
                 handleZoomIn={handleZoomIn}

@@ -15,6 +15,7 @@ import { ExperimentPanel } from '../sidebar/ExperimentPanel';
 import { InfoStrip } from './InfoStrip';
 import { ControlsBar } from './ControlsBar';
 import { BIST_VERSION } from '../../config/systems';
+import type { BoundarySamplingSummary } from '../../utils/boundaryLayers';
 import type {
   AnimationState,
   BdeState,
@@ -67,6 +68,12 @@ interface SidebarProps {
   setManifoldState: StateSetter<ManifoldState>;
   geometricOffsetState: GeometricOffsetState;
   setGeometricOffsetState: StateSetter<GeometricOffsetState>;
+  hasClosedMisBoundary: boolean;
+  boundaryLayerError: string | null;
+  boundarySampling: {
+    unstable: BoundarySamplingSummary | null;
+    deterministic: BoundarySamplingSummary | null;
+  };
   canComputeGeometricOffsets: boolean;
   computeGeometricOffsets: () => void;
   canComputeInverseGeometricOffsets: boolean;
@@ -188,6 +195,10 @@ export const Sidebar = (props: SidebarProps) => {
               manifoldState={props.manifoldState}
               setManifoldState={props.setManifoldState}
               ORBIT_COLORS={ORBIT_COLORS}
+              hasClosedMisBoundary={props.hasClosedMisBoundary}
+              boundaryLayerError={props.boundaryLayerError}
+              boundarySampling={props.boundarySampling}
+              systemEpsilon={(props.appliedParams || props.params).epsilon}
             />
             {props.dynamicSystem === 'henon' && (
               <>

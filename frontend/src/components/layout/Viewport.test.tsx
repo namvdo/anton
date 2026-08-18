@@ -21,6 +21,9 @@ const baseProps = {
   tooltip: { visible: false },
   manifoldState: {
     showUnstableManifold: false,
+    showDeterministicImageBoundary: false,
+    showNoiseBalls: false,
+    showBoundarySamplePoints: false,
     showStableManifold: false,
     showOrbits: false
   },
@@ -69,6 +72,21 @@ describe('Viewport', () => {
     render(<Viewport {...baseProps} type="discrete" geometricOffsetState={{ contours: [contour] }} />);
 
     expect(screen.getByRole('heading', { name: 'Geometric ε-offset comparison' })).toBeInTheDocument();
+  });
+
+  it('labels unstable, deterministic-image, noise-ball, and mapped-point layers', () => {
+    render(<Viewport {...baseProps} type="discrete" hasClosedMisBoundary manifoldState={{
+      ...baseProps.manifoldState,
+      showUnstableManifold: true,
+      showDeterministicImageBoundary: true,
+      showNoiseBalls: true,
+    }} />);
+
+    expect(screen.getByRole('heading', { name: 'Discrete boundary-map phase space' })).toBeInTheDocument();
+    expect(screen.getByText('Unstable manifold')).toBeInTheDocument();
+    expect(screen.getByText('Deterministic image boundary')).toBeInTheDocument();
+    expect(screen.getByText('Noise balls')).toBeInTheDocument();
+    expect(screen.queryByText('Mapped boundary points')).not.toBeInTheDocument();
   });
 
   it('shows the start point tool for continuous systems', () => {

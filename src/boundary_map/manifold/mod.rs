@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use wasm_bindgen::prelude::*;
 
-type CacheKey = (i32, i32, i32, i32, i32, i32);
+type CacheKey = (i32, i32, i32, i32, i32, i32, i32, i32);
 
 static MANIFOLD_CACHE: std::sync::OnceLock<Mutex<HashMap<CacheKey, CachedManifoldResult>>> =
     std::sync::OnceLock::new();
@@ -15,15 +15,45 @@ fn get_cache() -> &'static Mutex<HashMap<CacheKey, CachedManifoldResult>> {
     MANIFOLD_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn cache_key(a: f64, b: f64, x_min: f64, x_max: f64, y_min: f64, y_max: f64) -> CacheKey {
+fn cache_key(
+    a: f64,
+    b: f64,
+    epsilon: f64,
+    spacing_tol: f64,
+    x_min: f64,
+    x_max: f64,
+    y_min: f64,
+    y_max: f64,
+) -> CacheKey {
     (
         (a * 100.0).round() as i32,
         (b * 100.0).round() as i32,
+        (epsilon * 10_000.0).round() as i32,
+        (spacing_tol * 1_000_000.0).round() as i32,
         (x_min * 100.0).round() as i32,
         (x_max * 100.0).round() as i32,
         (y_min * 100.0).round() as i32,
         (y_max * 100.0).round() as i32,
     )
+}
+
+fn validate_manifold_point_spacing(spacing_tol: f64) -> Result<f64, String> {
+    if !spacing_tol.is_finite() || !(1e-4..=5e-2).contains(&spacing_tol) {
+        return Err(
+            "Maximum manifold point spacing must be finite and between 0.0001 and 0.05."
+                .to_string(),
+        );
+    }
+    Ok(spacing_tol)
+}
+
+fn validated_manifold_config(spacing_tol: f64) -> Result<ManifoldConfig, JsValue> {
+    let spacing_tol = validate_manifold_point_spacing(spacing_tol)
+        .map_err(|message| JsValue::from_str(&message))?;
+    Ok(ManifoldConfig {
+        spacing_tol,
+        ..ManifoldConfig::default()
+    })
 }
 
 fn normalize_display_range(x_min: f64, x_max: f64, y_min: f64, y_max: f64) -> (f64, f64, f64, f64) {
@@ -845,10 +875,21 @@ pub fn compute_manifold_simple(
     x_max: f64,
     y_min: f64,
     y_max: f64,
+    maximum_point_spacing: f64,
 ) -> Result<JsValue, JsValue> {
+    let config = validated_manifold_config(maximum_point_spacing)?;
     let (x_min, x_max, y_min, y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
     // Check cache first
-    let key = cache_key(a, b, x_min, x_max, y_min, y_max);
+    let key = cache_key(
+        a,
+        b,
+        epsilon,
+        maximum_point_spacing,
+        x_min,
+        x_max,
+        y_min,
+        y_max,
+    );
     if let Ok(cache) = get_cache().lock() {
         if let Some(cached) = cache.get(&key) {
             console_log!("Cache HIT for a={}, b={}", a, b);
@@ -1064,7 +1105,6 @@ pub fn compute_manifold_simple(
     );
 
     let mut manifolds_result = Vec::new();
-    let config = ManifoldConfig::default();
     let computer = UnstableManifoldComputer::new(params, config);
 
     // Compute manifolds for unstable points
@@ -1896,7 +1936,9 @@ pub fn compute_stable_and_unstable_manifolds(
     y_max: f64,
     orbits_js: JsValue,
     intersection_threshold: f64,
+    maximum_point_spacing: f64,
 ) -> Result<JsValue, JsValue> {
+    let config = validated_manifold_config(maximum_point_spacing)?;
     let (x_min, x_max, y_min, y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
     console_log!(
         "Computing stable and unstable manifolds with a={}, b={}, eps={}, threshold={}",
@@ -1999,7 +2041,6 @@ pub fn compute_stable_and_unstable_manifolds(
     let mut stable_manifolds: Vec<ManifoldResult> = Vec::new();
     let mut intersections: Vec<IntersectionInfo> = Vec::new();
 
-    let config = ManifoldConfig::default();
     let computer = UnstableManifoldComputer::new(params, config);
 
     for orbit in &saddle_orbits {
@@ -2547,7 +2588,9 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
     y_max: f64,
     orbits_js: JsValue,
     intersection_threshold: f64,
+    maximum_point_spacing: f64,
 ) -> Result<JsValue, JsValue> {
+    let config = validated_manifold_config(maximum_point_spacing)?;
     let (x_min, x_max, y_min, y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
     console_log!(
         "Computing user-defined stable+unstable manifolds: x={}, y={}, eps={}",
@@ -2618,7 +2661,6 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
     let mut stable_manifolds: Vec<ManifoldResult> = Vec::new();
     let mut intersections: Vec<IntersectionInfo> = Vec::new();
 
-    let config = ManifoldConfig::default();
     let computer = UnstableManifoldComputer::new(system.clone(), config);
 
     for orbit in &saddle_orbits {
@@ -2790,6 +2832,14 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
 mod tests {
     use super::*;
 
+    #[test]
+    fn manifold_point_spacing_is_validated_before_computation() {
+        assert_eq!(validate_manifold_point_spacing(0.005), Ok(0.005));
+        assert!(validate_manifold_point_spacing(0.0).is_err());
+        assert!(validate_manifold_point_spacing(0.0501).is_err());
+        assert!(validate_manifold_point_spacing(f64::NAN).is_err());
+    }
+
     #[derive(Clone, Copy)]
     struct LinearExpandingSystem;
 
@@ -2840,6 +2890,40 @@ mod tests {
         assert!(
             x_positions.windows(2).all(|pair| pair[0] < pair[1]),
             "refined trajectory must not jump backward: {x_positions:?}"
+        );
+    }
+
+    #[test]
+    fn smaller_spacing_runs_more_extended_map_refinements() {
+        let saddle = SaddlePoint::from_2d_eigenvector(
+            Vector2::new(0.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            1,
+            2.0,
+            SaddleType::Regular,
+            None,
+        );
+        let compute = |spacing_tol| {
+            UnstableManifoldComputer::new(
+                LinearExpandingSystem,
+                ManifoldConfig {
+                    spacing_tol,
+                    max_iter: 3,
+                    max_points: 1_000,
+                    time_limit: 1.0,
+                    ..ManifoldConfig::default()
+                },
+            )
+            .compute_direction(&saddle, 1.0, &[])
+            .unwrap()
+            .points
+        };
+
+        let coarse = compute(1.5e-5);
+        let fine = compute(5e-6);
+        assert!(
+            fine.len() > coarse.len(),
+            "smaller spacing must produce more calculated extended states"
         );
     }
 

@@ -548,6 +548,60 @@ select:disabled { cursor: not-allowed; }
 .t-switch.on .t-thumb { left: 18px; background: #fff; }
 .t-switch.disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
 
+.boundary-layer-section {
+  margin: 4px 0 8px;
+  padding: 9px 10px 5px;
+  border-left: 2px solid var(--line-hi);
+  background: rgba(255,255,255,.018);
+}
+.boundary-layer-section .t-row { min-height: 34px; padding: 6px 0; }
+.boundary-refinement-control {
+  margin-top: 4px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+}
+.boundary-refinement-control .p-row { margin-bottom: 2px; }
+.boundary-refinement-note {
+  color: var(--text-3);
+  font-size: 9px;
+  line-height: 1.4;
+}
+.boundary-layer-status {
+  margin: 6px 0;
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+.boundary-layer-status.error { color: var(--red); }
+.boundary-sampling {
+  margin: 7px 0 4px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+  color: var(--text-3);
+  font-size: 9px;
+}
+.boundary-sampling-title {
+  margin-bottom: 4px;
+  color: var(--text-2);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.boundary-sampling > div:not(.boundary-sampling-title) {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  line-height: 1.65;
+}
+.boundary-sampling strong {
+  color: var(--text-2);
+  font-family: var(--font-mono);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
 /* ─── Period filter ─────────────────────────────────── */
 .period-filter {
   display: grid;
@@ -1075,6 +1129,7 @@ select:disabled { cursor: not-allowed; }
 .lg-item:last-child { margin-bottom: 0; }
 .lg-line { width: 18px; height: 2px; border-radius: 1px; flex-shrink: 0; }
 .lg-dot  { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.lg-ring { width: 10px; height: 10px; border: 1px solid; border-radius: 50%; flex-shrink: 0; }
 
 /* SVG manifold mockup */
 .vp-svg {

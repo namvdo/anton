@@ -15,6 +15,10 @@ const ORBIT_COLORS = {
 describe('ManifoldsPanel', () => {
   const defaultManifoldState = {
     showUnstableManifold: false,
+    showDeterministicImageBoundary: false,
+    showNoiseBalls: false,
+    showBoundarySamplePoints: false,
+    maximumManifoldPointSpacing: 0.005,
     showStableManifold: false,
     showRepellerManifold: false,
     intersectionThreshold: 0.05,
@@ -34,6 +38,48 @@ describe('ManifoldsPanel', () => {
     expect(screen.getByText('Unstable manifold')).toBeInTheDocument();
     expect(screen.getByText('Stable manifold')).toBeInTheDocument();
     expect(screen.getAllByRole('checkbox')).toHaveLength(2);
+  });
+
+  it('shows simple boundary-layer controls and sampling density for a closed curve', () => {
+    const setManifoldState = vi.fn();
+    render(
+      <ManifoldsPanel
+        manifoldState={{ ...defaultManifoldState, showUnstableManifold: true }}
+        setManifoldState={setManifoldState}
+        ORBIT_COLORS={ORBIT_COLORS}
+        hasClosedMisBoundary
+        systemEpsilon={0.0625}
+        boundarySampling={{
+          unstable: { sampleCount: 320, perimeter: 8, pointsPerUnit: 40, maximumGap: 0.031 },
+          deterministic: { sampleCount: 320, perimeter: 6.4, pointsPerUnit: 50, maximumGap: 0.027 },
+        }}
+      />
+    );
+
+    expect(screen.getByLabelText('Remove noise')).toBeEnabled();
+    expect(screen.getByLabelText('Show noise balls')).toBeEnabled();
+    expect(screen.getByLabelText('Show points')).toBeEnabled();
+    expect(screen.getByRole('spinbutton', { name: '' })).toHaveValue(0.005);
+    expect(screen.getByText('Smaller spacing performs more extended boundary-map calculations.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Boundary sampling density')).toHaveTextContent('Unstable320 points · max gap 0.031');
+    expect(screen.getByLabelText('Boundary sampling density')).toHaveTextContent('Deterministic320 points · max gap 0.027');
+    expect(screen.queryByText('Wei boundary construction')).not.toBeInTheDocument();
+  });
+
+  it('disables boundary layers until a closed curve is available', () => {
+    render(
+      <ManifoldsPanel
+        manifoldState={{ ...defaultManifoldState, showUnstableManifold: true }}
+        setManifoldState={vi.fn()}
+        ORBIT_COLORS={ORBIT_COLORS}
+        systemEpsilon={0.0625}
+      />
+    );
+
+    expect(screen.getByText(/Waiting for a closed unstable-manifold boundary/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Remove noise')).toBeDisabled();
+    expect(screen.getByLabelText('Show noise balls')).toBeDisabled();
+    expect(screen.getByLabelText('Show points')).toBeDisabled();
   });
 
   it('shows intersection detection panel when stable manifold enabled', () => {

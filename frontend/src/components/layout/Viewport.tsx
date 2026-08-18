@@ -17,12 +17,22 @@ import type {
   UlamState,
   ViewRange,
 } from '../../types/domain';
+import { BOUNDARY_LAYER_COLORS } from '../../utils/boundaryLayers';
 
 interface ViewportProps {
   type: SystemType;
   canvasRef: RefObject<HTMLCanvasElement | null>;
   tooltip: Pick<TooltipState, 'visible'> & Partial<Omit<TooltipState, 'visible'>>;
-  manifoldState: Pick<ManifoldState, 'showUnstableManifold' | 'showStableManifold' | 'showOrbits'>;
+  manifoldState: Pick<
+    ManifoldState,
+    | 'showUnstableManifold'
+    | 'showDeterministicImageBoundary'
+    | 'showNoiseBalls'
+    | 'showBoundarySamplePoints'
+    | 'showStableManifold'
+    | 'showOrbits'
+  >;
+  hasClosedMisBoundary?: boolean;
   geometricOffsetState: {
     contours?: GeometricOffsetContour[];
     selectedContourId?: string | null;
@@ -39,7 +49,7 @@ interface ViewportProps {
   savePNG: () => void;
 }
 
-export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOffsetState, ulamState, displayRange, handleZoomIn, handleZoomOut, handleResetView, handlePanMode, savePNG }: ViewportProps) => {
+export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOffsetState, ulamState, hasClosedMisBoundary = false, displayRange, handleZoomIn, handleZoomOut, handleResetView, handlePanMode, savePNG }: ViewportProps) => {
   const tooltipData: TooltipData | null = tooltip.data ?? null;
   const tooltipX = tooltip.x ?? 0;
   const tooltipY = tooltip.y ?? 0;
@@ -103,7 +113,32 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
 
       <div className="vp-legend">
         <div className="vp-legend-title">Legend</div>
-        {manifoldState.showUnstableManifold && <div className="lg-item"><div className="lg-line" style={{ background: '#5b88b5' }}></div>Unstable manifold</div>}
+        {manifoldState.showUnstableManifold && (
+          <div className="lg-item">
+            <div
+              className={manifoldState.showBoundarySamplePoints ? 'lg-dot' : 'lg-line'}
+              style={{ background: BOUNDARY_LAYER_COLORS.invariant }}
+            ></div>
+            Unstable manifold
+          </div>
+        )}
+        {hasClosedMisBoundary && manifoldState.showUnstableManifold
+          && manifoldState.showDeterministicImageBoundary && (
+          <div className="lg-item">
+            <div
+              className={manifoldState.showBoundarySamplePoints ? 'lg-dot' : 'lg-line'}
+              style={{ background: BOUNDARY_LAYER_COLORS.deterministicImage }}
+            ></div>
+            Deterministic image boundary
+          </div>
+        )}
+        {hasClosedMisBoundary && manifoldState.showUnstableManifold
+          && manifoldState.showNoiseBalls && (
+          <div className="lg-item">
+            <div className="lg-ring" style={{ borderColor: BOUNDARY_LAYER_COLORS.noiseBall }}></div>
+            Noise balls
+          </div>
+        )}
         {manifoldState.showStableManifold && <div className="lg-item"><div className="lg-line" style={{ background: '#b8904a' }}></div>Stable manifold</div>}
         {contours.map((contour, contourIndex) => contour.visible && contour.result ? (
           <div className="lg-item" key={`geometric-offset-${contour.id}`}

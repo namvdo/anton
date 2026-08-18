@@ -1,5 +1,6 @@
 export const DEFAULT_MANIFOLD_SETTINGS = Object.freeze({
   intersectionThreshold: 0.05,
+  maximumPointSpacing: 0.005,
   computeStable: false,
   computeUnstable: false,
 });

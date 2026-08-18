@@ -315,7 +315,8 @@ const computeManifolds = async (payload: ManifoldComputePayload): Promise<Manifo
     customParams,
     showStableManifold,
     showUnstableManifold,
-    intersectionThreshold
+    intersectionThreshold,
+    maximumPointSpacing,
   } = payload;
 
   if (dynamicSystem === 'duffing') {
@@ -349,7 +350,8 @@ const computeManifolds = async (payload: ManifoldComputePayload): Promise<Manifo
           viewRange.yMin,
           viewRange.yMax,
           periodicOrbits,
-          intersectionThreshold
+          intersectionThreshold,
+          maximumPointSpacing,
         );
         return {
           manifolds: result.unstable_manifolds || [],
@@ -396,7 +398,8 @@ const computeManifolds = async (payload: ManifoldComputePayload): Promise<Manifo
         viewRange.yMin,
         viewRange.yMax,
         periodicOrbits,
-        intersectionThreshold
+        intersectionThreshold,
+        maximumPointSpacing,
       );
       return {
         manifolds: result.unstable_manifolds || [],
@@ -420,7 +423,8 @@ const computeManifolds = async (payload: ManifoldComputePayload): Promise<Manifo
     viewRange.xMin,
     viewRange.xMax,
     viewRange.yMin,
-    viewRange.yMax
+    viewRange.yMax,
+    maximumPointSpacing,
   );
 
   return {

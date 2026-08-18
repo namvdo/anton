@@ -138,6 +138,10 @@ export interface ManifoldState {
   sourcePeriodicRevision: number;
   showOrbits: boolean;
   showUnstableManifold: boolean;
+  showDeterministicImageBoundary: boolean;
+  showNoiseBalls: boolean;
+  showBoundarySamplePoints: boolean;
+  maximumManifoldPointSpacing: number;
   showStableManifold: boolean;
   intersectionThreshold: number;
   currentPoint: ExtendedState;

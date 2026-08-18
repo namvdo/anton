@@ -2,6 +2,10 @@ import { Collapsible } from '../ui/Collapsible';
 import { Toggle } from '../ui/Toggle';
 import { Slider } from '../ui/Slider';
 import type { ManifoldState, StateSetter } from '../../types/domain';
+import {
+  BOUNDARY_LAYER_COLORS,
+  type BoundarySamplingSummary,
+} from '../../utils/boundaryLayers';
 
 interface OrbitColors {
   manifold: string;
@@ -11,21 +15,134 @@ interface OrbitColors {
 interface ManifoldsPanelProps {
   manifoldState: Pick<
     ManifoldState,
-    'showUnstableManifold' | 'showStableManifold' | 'intersectionThreshold' | 'intersections'
+    | 'showUnstableManifold'
+    | 'showDeterministicImageBoundary'
+    | 'showNoiseBalls'
+    | 'showBoundarySamplePoints'
+    | 'maximumManifoldPointSpacing'
+    | 'showStableManifold'
+    | 'intersectionThreshold'
+    | 'intersections'
   >;
   setManifoldState: StateSetter<ManifoldState>;
   ORBIT_COLORS: OrbitColors;
+  hasClosedMisBoundary?: boolean;
+  boundaryLayerError?: string | null;
+  systemEpsilon?: number;
+  boundarySampling?: {
+    unstable: BoundarySamplingSummary | null;
+    deterministic: BoundarySamplingSummary | null;
+  };
 }
 
-export const ManifoldsPanel = ({ manifoldState, setManifoldState, ORBIT_COLORS }: ManifoldsPanelProps) => {
+export const ManifoldsPanel = ({
+  manifoldState,
+  setManifoldState,
+  ORBIT_COLORS,
+  hasClosedMisBoundary = false,
+  boundaryLayerError = null,
+  systemEpsilon = 0,
+  boundarySampling,
+}: ManifoldsPanelProps) => {
+  const boundaryLayersAvailable = manifoldState.showUnstableManifold
+    && hasClosedMisBoundary
+    && !boundaryLayerError;
+
   return (
     <Collapsible title="Manifolds" defaultOpen={true}>
       <Toggle
         label="Unstable manifold"
-        colorLine={ORBIT_COLORS.manifold}
+        colorLine={BOUNDARY_LAYER_COLORS.invariant}
         checked={manifoldState.showUnstableManifold}
         onChange={(v) => setManifoldState(prev => ({ ...prev, showUnstableManifold: v }))}
       />
+
+      {manifoldState.showUnstableManifold && (
+        <div className="boundary-layer-section">
+          {!hasClosedMisBoundary && !boundaryLayerError && (
+            <div className="boundary-layer-status">
+              Waiting for a closed unstable-manifold boundary.
+            </div>
+          )}
+          {boundaryLayerError && (
+            <div className="boundary-layer-status error" role="alert">
+              {boundaryLayerError}
+            </div>
+          )}
+
+          <Toggle
+            label="Remove noise"
+            colorLine={BOUNDARY_LAYER_COLORS.deterministicImage}
+            checked={manifoldState.showDeterministicImageBoundary}
+            disabled={!boundaryLayersAvailable}
+            onChange={showDeterministicImageBoundary => setManifoldState(previous => ({
+              ...previous,
+              showDeterministicImageBoundary,
+            }))}
+          />
+
+          <Toggle
+            label="Show noise balls"
+            colorLine={BOUNDARY_LAYER_COLORS.noiseBall}
+            checked={manifoldState.showNoiseBalls}
+            disabled={!boundaryLayersAvailable || systemEpsilon <= 0}
+            onChange={showNoiseBalls => setManifoldState(previous => ({
+              ...previous,
+              showNoiseBalls,
+            }))}
+          />
+
+          <Toggle
+            label="Show points"
+            checked={manifoldState.showBoundarySamplePoints}
+            disabled={!boundaryLayersAvailable}
+            onChange={showBoundarySamplePoints => setManifoldState(previous => ({
+              ...previous,
+              showBoundarySamplePoints,
+            }))}
+          />
+
+          <div className="boundary-refinement-control">
+            <Slider
+              label="Maximum point spacing"
+              hint="recomputes manifold"
+              min={0.0005}
+              max={0.02}
+              step={0.0005}
+              value={manifoldState.maximumManifoldPointSpacing}
+              onChange={maximumManifoldPointSpacing => setManifoldState(previous => ({
+                ...previous,
+                maximumManifoldPointSpacing,
+              }))}
+            />
+            <div className="boundary-refinement-note">
+              Smaller spacing performs more extended boundary-map calculations.
+            </div>
+          </div>
+
+          {boundaryLayersAvailable && boundarySampling?.unstable && (
+              <div className="boundary-sampling" aria-label="Boundary sampling density">
+                <div className="boundary-sampling-title">Computed geometry</div>
+                <div>
+                  <span>Unstable</span>
+                  <strong>{boundarySampling.unstable.sampleCount} points · max gap {boundarySampling.unstable.maximumGap.toPrecision(2)}</strong>
+                </div>
+                {boundarySampling.deterministic && (
+                  <div>
+                    <span>Deterministic</span>
+                    <strong>{boundarySampling.deterministic.sampleCount} points · max gap {boundarySampling.deterministic.maximumGap.toPrecision(2)}</strong>
+                  </div>
+                )}
+              </div>
+          )}
+
+          {systemEpsilon <= 0 && (
+            <div className="boundary-layer-status">
+              ε = 0: the deterministic and noisy boundaries coincide.
+            </div>
+          )}
+        </div>
+      )}
 
       <Toggle
         label="Stable manifold"

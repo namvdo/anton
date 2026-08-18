@@ -79,6 +79,7 @@ interface SolverConfiguration {
   };
   manifold: {
     intersectionThreshold: number;
+    maximumPointSpacing: number;
     computeStable: boolean;
     computeUnstable: boolean;
   };
@@ -612,6 +613,11 @@ const normalizeSolvers = (
         manifold.intersectionThreshold,
         'Manifold intersection threshold',
         { minimum: 0 },
+      ),
+      maximumPointSpacing: requireFinite(
+        manifold.maximumPointSpacing ?? DEFAULT_MANIFOLD_SETTINGS.maximumPointSpacing,
+        'Maximum manifold point spacing',
+        { minimum: 0.0001, maximum: 0.05 },
       ),
       computeStable: Boolean(manifold.computeStable),
       computeUnstable: Boolean(manifold.computeUnstable),

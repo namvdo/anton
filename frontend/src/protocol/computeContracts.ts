@@ -49,6 +49,7 @@ export interface ManifoldComputePayload extends BaseComputePayload {
   showStableManifold: boolean;
   showUnstableManifold: boolean;
   intersectionThreshold: number;
+  maximumPointSpacing: number;
 }
 
 export interface ManifoldComputeResult {
