@@ -1,4 +1,4 @@
-# Bounded Invariant Set Toolbox (BIST)
+# Numerical toolbox for Invariant Objects with Bounded Noise (BIST)
 
 <div align="center">
   <img src="./frontend/public/bist-logo-full.png" alt="BIST - Bounded Invariant Set Toolbox logo" width="520" />
