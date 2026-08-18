@@ -1,8 +1,8 @@
-# ANTINO
+# ANTON
 
 **A numerical toolbox for invariant objects with bounded noise.**
 
-ANTINO is an interactive, web-based research tool for exploring invariant objects in set-valued dynamical systems with additive bounded noise. It was developed as part of the Applied Computing Project (ACP2) research course at the University of Oulu.
+ANTON is an interactive, web-based research tool for exploring invariant objects in set-valued dynamical systems with additive bounded noise. It was developed as part of the Applied Computing Project (ACP2) research course at the University of Oulu.
 
 #### Live at: [https://namvdo.github.io/set-valued-viz](https://namvdo.github.io/set-valued-viz)
 #### Technical report: [https://namvdo.github.io/bist_technical_report_24042026.pdf](https://namvdo.github.io/bist_technical_report_24042026.pdf)
@@ -41,7 +41,7 @@ Rather than tracking every possible point within the noise ball $B_\epsilon(f(x)
 
 ### Parameter animation and video recording
 
-The **Parameter animation** panel advances one parameter value at a time. Before starting, it applies the parameter values and periodic-search controls currently shown in the sidebar, including grid sizes, residual threshold, and **Use continuation**, then holds that search configuration fixed for the run. Every generated value updates both the computation and the visible system parameter control, so a run starting at \(a=0.4\) with range \(+0.1\) ends with the upper control at \(a=0.5\). Each step waits for the periodic-orbit search, the dependent manifold computation, and an explicit canvas-render acknowledgement before the next step starts. The previous valid orbit objects remain visible while the replacement is computed; they are swapped only after the complete new periodic result is ready. When recording is enabled, ANTINO captures the initial state and then exactly one frame from each fully computed and painted step, so the video does not contain transient frames in which periodic orbits have been cleared or manifold data belongs to a different parameter value.
+The **Parameter animation** panel advances one parameter value at a time. Before starting, it applies the parameter values and periodic-search controls currently shown in the sidebar, including grid sizes, residual threshold, and **Use continuation**, then holds that search configuration fixed for the run. Every generated value updates both the computation and the visible system parameter control, so a run starting at \(a=0.4\) with range \(+0.1\) ends with the upper control at \(a=0.5\). Each step waits for the periodic-orbit search, the dependent manifold computation, and an explicit canvas-render acknowledgement before the next step starts. The previous valid orbit objects remain visible while the replacement is computed; they are swapped only after the complete new periodic result is ready. When recording is enabled, ANTON captures the initial state and then exactly one frame from each fully computed and painted step, so the video does not contain transient frames in which periodic orbits have been cleared or manifold data belongs to a different parameter value.
 
 ## **Getting Started**
 
