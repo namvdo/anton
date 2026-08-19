@@ -73,10 +73,12 @@ let cachedPeriodicComputation: PeriodicCache | null = null;
 
 const ensureWasm = async (): Promise<BistWasmModule> => {
   if (!wasmPromise) {
-    wasmPromise = import('../pkg/bist').then(async (mod) => {
-      await mod.default();
+    wasmPromise = (async () => {
+      const mod = await import('../pkg/bist');
+      const wasmUrl = (await import('../pkg/bist_bg.wasm?url')).default;
+      await mod.default(wasmUrl);
       return mod;
-    });
+    })();
   }
   return wasmPromise;
 };

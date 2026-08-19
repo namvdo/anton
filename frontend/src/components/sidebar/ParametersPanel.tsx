@@ -87,7 +87,7 @@ export const ParametersPanel = ({
         </div>
       )}
 
-      <Slider label="ε" hint="noise radius; 0 = deterministic" min={0} max={(systemId === 'duffing_ode' || systemId === 'custom_ode') ? 0.5 : 0.2} step={0.001} value={params.epsilon} onChange={v => setParams(prev => ({ ...prev, epsilon: v }))} disabled={disabled} />
+      <Slider label="ε" hint="noise radius" min={0} max={0.5} step={0.001} value={params.epsilon} onChange={v => setParams(prev => ({ ...prev, epsilon: v }))} disabled={disabled} />
 
 
       {!isContinuous && (

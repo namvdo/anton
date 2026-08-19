@@ -25,7 +25,7 @@ impl DuffingParams {
             return Err("Epsilon must be non-negative".to_string());
         }
 
-        if a.abs() > 10.0 || epsilon > 1.0 || b.abs() > 10.0 {
+        if a.abs() > 10.0 || epsilon > 2.0 || b.abs() > 10.0 {
             return Err("Parameters outside reasonable range".to_string());
         }
 

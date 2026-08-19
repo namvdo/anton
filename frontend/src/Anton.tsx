@@ -913,7 +913,8 @@ const SetValuedViz = () => {
         const loadWasm = async () => {
             try {
                 const wasm = await import('../pkg/bist');
-                await wasm.default();
+                const wasmUrl = (await import('../pkg/bist_bg.wasm?url')).default;
+                await wasm.default(wasmUrl);
                 setWasmModule(wasm);
                 console.log('WASM module loaded successfully');
             } catch (err) {

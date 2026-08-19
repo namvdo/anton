@@ -66,6 +66,6 @@ describe('ParametersPanel', () => {
     const updater = setParams.mock.calls.at(-1)?.[0];
     expect(updater).toBeTypeOf('function');
     expect(updater(baseProps.params)).toMatchObject({ epsilon: 0 });
-    expect(screen.getByText('noise radius; 0 = deterministic')).toBeInTheDocument();
+    expect(screen.getByText('noise radius')).toBeInTheDocument();
   });
 });
