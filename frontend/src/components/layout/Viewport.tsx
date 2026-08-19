@@ -46,10 +46,11 @@ interface ViewportProps {
   handleZoomOut: () => void;
   handleResetView: () => void;
   handlePanMode: () => void;
+  isPanMode?: boolean;
   savePNG: () => void;
 }
 
-export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOffsetState, ulamState, hasBoundarySamples = false, displayRange, handleZoomIn, handleZoomOut, handleResetView, handlePanMode, savePNG }: ViewportProps) => {
+export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOffsetState, ulamState, hasBoundarySamples = false, displayRange, handleZoomIn, handleZoomOut, handleResetView, handlePanMode, isPanMode = false, savePNG }: ViewportProps) => {
   const tooltipData: TooltipData | null = tooltip.data ?? null;
   const tooltipX = tooltip.x ?? 0;
   const tooltipY = tooltip.y ?? 0;
@@ -104,7 +105,7 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
         {type === 'continuous' && (
           <button type="button" className="vp-btn active" title="Place start point" aria-label="Place start point">◎</button>
         )}
-        <button type="button" className="vp-btn" title="Pan" aria-label="Pan" onClick={handlePanMode}>⊹</button>
+        <button type="button" className={`vp-btn ${isPanMode ? 'active' : ''}`} title="Pan view (Hold & drag)" aria-label="Pan view" onClick={handlePanMode}>⊹</button>
         <div className="vp-sep"></div>
         <button type="button" className="vp-btn" title="Save PNG" aria-label="Save PNG" onClick={savePNG}>↓</button>
       </div>

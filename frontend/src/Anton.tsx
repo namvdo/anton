@@ -244,31 +244,24 @@ const createCoordinateSystem = (
     viewportSize?: { width: number; height: number }
 ): THREE.Group => {
     const { gridDivisions, axisColor, gridColor } = GRID_STYLE;
-    let { xMin, xMax, yMin, yMax } = range;
+    const limit = RANGE_LIMIT;
 
-    if (viewportSize && viewportSize.width > 0 && viewportSize.height > 0) {
-        const aspect = viewportSize.width / viewportSize.height;
-        const gridHeight = yMax - yMin;
-        const gridWidth = xMax - xMin;
-        if (gridHeight > 0) {
-            const targetWidth = gridHeight * aspect;
-            if (targetWidth > gridWidth) {
-                const centerX = (xMin + xMax) / 2;
-                xMin = centerX - targetWidth / 2;
-                xMax = centerX + targetWidth / 2;
-            }
-        }
-    }
+    let xMin = -limit;
+    let xMax = limit;
+    let yMin = -limit;
+    let yMax = limit;
 
-    const xStep = (xMax - xMin) / gridDivisions;
-    const yStep = (yMax - yMin) / gridDivisions;
+    const xStep = (range.xMax - range.xMin) / gridDivisions;
+    const yStep = (range.yMax - range.yMin) / gridDivisions;
 
     const gridGroup = new THREE.Group();
     gridGroup.name = 'coordinate-system';
 
-    for (let i = 0; i <= gridDivisions; i++) {
-        const x = xMin + i * xStep;
-        const isAxis = Math.abs(x) < 0.01;
+    const numXSteps = Math.ceil((xMax - xMin) / xStep);
+    for (let i = -numXSteps; i <= numXSteps; i++) {
+        const x = Number((i * xStep).toFixed(6));
+        if (x < xMin || x > xMax) continue;
+        const isAxis = Math.abs(x) < 0.001;
         const points = [
             new THREE.Vector3(x, yMin, -0.01),
             new THREE.Vector3(x, yMax, -0.01)
@@ -277,16 +270,18 @@ const createCoordinateSystem = (
         const material = new THREE.LineBasicMaterial({
             color: isAxis ? axisColor : gridColor,
             transparent: true,
-            opacity: isAxis ? 1.0 : 0.4
+            opacity: isAxis ? 1.0 : 0.35
         });
         const line = new THREE.Line(geometry, material);
         line.userData.isGrid = true;
         gridGroup.add(line);
     }
 
-    for (let i = 0; i <= gridDivisions; i++) {
-        const y = yMin + i * yStep;
-        const isAxis = Math.abs(y) < 0.01;
+    const numYSteps = Math.ceil((yMax - yMin) / yStep);
+    for (let i = -numYSteps; i <= numYSteps; i++) {
+        const y = Number((i * yStep).toFixed(6));
+        if (y < yMin || y > yMax) continue;
+        const isAxis = Math.abs(y) < 0.001;
         const points = [
             new THREE.Vector3(xMin, y, -0.01),
             new THREE.Vector3(xMax, y, -0.01)
@@ -295,7 +290,7 @@ const createCoordinateSystem = (
         const material = new THREE.LineBasicMaterial({
             color: isAxis ? axisColor : gridColor,
             transparent: true,
-            opacity: isAxis ? 1.0 : 0.4
+            opacity: isAxis ? 1.0 : 0.35
         });
         const line = new THREE.Line(geometry, material);
         line.userData.isGrid = true;
@@ -331,27 +326,21 @@ const createCoordinateSystem = (
     };
 
     const tickStride = Math.max(1, Math.floor(gridDivisions / 4));
-    const xLabelInset = Math.min((xMax - xMin) * 0.04, 0.18);
-    const yLabelInset = Math.min((yMax - yMin) * 0.05, 0.14);
-
-    for (let i = 0; i <= gridDivisions; i += tickStride) {
-        const x = xMin + i * xStep;
-        if (Math.abs(x) > 0.01) {
-            const labelX = Math.min(xMax - xLabelInset, Math.max(xMin + xLabelInset, x));
-            gridGroup.add(createTextSprite(x.toFixed(1), new THREE.Vector3(labelX, yMin + yLabelInset, 0), 0.12));
+    for (let i = -numXSteps; i <= numXSteps; i += tickStride) {
+        const x = Number((i * xStep).toFixed(6));
+        if (Math.abs(x) > 0.01 && x >= -limit && x <= limit) {
+            gridGroup.add(createTextSprite(x.toFixed(1), new THREE.Vector3(x, -0.14, 0), 0.12));
         }
     }
-    for (let i = 0; i <= gridDivisions; i += tickStride) {
-        const y = yMin + i * yStep;
-        if (Math.abs(y) > 0.01) {
-            const lowerInset = i === 0 ? yLabelInset * 2.2 : yLabelInset;
-            const labelY = Math.min(yMax - yLabelInset, Math.max(yMin + lowerInset, y));
-            gridGroup.add(createTextSprite(y.toFixed(1), new THREE.Vector3(xMin + xLabelInset, labelY, 0), 0.12));
+    for (let i = -numYSteps; i <= numYSteps; i += tickStride) {
+        const y = Number((i * yStep).toFixed(6));
+        if (Math.abs(y) > 0.01 && y >= -limit && y <= limit) {
+            gridGroup.add(createTextSprite(y.toFixed(1), new THREE.Vector3(-0.14, y, 0), 0.12));
         }
     }
 
-    gridGroup.add(createTextSprite('x', new THREE.Vector3(xMax - xLabelInset, 0.12, 0), 0.18));
-    gridGroup.add(createTextSprite('y', new THREE.Vector3(0.12, yMax - yLabelInset, 0), 0.18));
+    gridGroup.add(createTextSprite('x', new THREE.Vector3(range.xMax - 0.18, 0.12, 0), 0.18));
+    gridGroup.add(createTextSprite('y', new THREE.Vector3(0.12, range.yMax - 0.14, 0), 0.18));
     gridGroup.add(createTextSprite('0', new THREE.Vector3(-0.12, -0.12, 0), 0.1));
 
     scene.add(gridGroup);
@@ -670,6 +659,15 @@ const SetValuedViz = () => {
     const viewportRangeRef = useRef(viewportRange);
     const viewportRangeTargetRef = useRef(viewportRange);
     const gridGroupRef = useRef<THREE.Group | null>(null);
+
+    const [isPanMode, setIsPanMode] = useState(false);
+    const isDraggingRef = useRef(false);
+    const hasDraggedRef = useRef(false);
+    const dragStartRef = useRef<{ x: number; y: number; range: ViewRange } | null>(null);
+
+    const handlePanMode = useCallback(() => {
+        setIsPanMode(prev => !prev);
+    }, []);
 
     const raycasterRef = useRef(new THREE.Raycaster());
     const mouseRef = useRef(new THREE.Vector2());
@@ -1303,7 +1301,87 @@ const SetValuedViz = () => {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
+        const handlePointerDown = (event: PointerEvent): void => {
+            if (event.button !== 0) return;
+            try {
+                canvas.setPointerCapture(event.pointerId);
+            } catch (_) {
+                // Ignore if pointer capture fails
+            }
+            isDraggingRef.current = true;
+            hasDraggedRef.current = false;
+            dragStartRef.current = {
+                x: event.clientX,
+                y: event.clientY,
+                range: { ...viewportRangeRef.current },
+            };
+            canvas.classList.add('panning');
+        };
+
+        const handlePointerMove = (event: PointerEvent): void => {
+            handleMouseMove(event);
+
+            if (!isDraggingRef.current || !dragStartRef.current) return;
+
+            const dx = event.clientX - dragStartRef.current.x;
+            const dy = event.clientY - dragStartRef.current.y;
+            const distance = Math.hypot(dx, dy);
+
+            if (distance > 3) {
+                hasDraggedRef.current = true;
+            }
+
+            if (hasDraggedRef.current) {
+                const rect = canvas.getBoundingClientRect();
+                const startRange = dragStartRef.current.range;
+
+                const camera = cameraRef.current;
+                if (!camera) return;
+
+                const frustumWidth = camera.right - camera.left;
+                const frustumHeight = camera.top - camera.bottom;
+
+                const worldDx = (dx / (rect.width || 1)) * frustumWidth;
+                const worldDy = (dy / (rect.height || 1)) * frustumHeight;
+
+                const newRange: ViewRange = {
+                    xMin: startRange.xMin - worldDx,
+                    xMax: startRange.xMax - worldDx,
+                    yMin: startRange.yMin + worldDy,
+                    yMax: startRange.yMax + worldDy,
+                };
+
+                cancelViewRangeTransition();
+                viewportRangeRef.current = newRange;
+                viewportRangeTargetRef.current = newRange;
+                applyViewRangeToCamera(newRange);
+            }
+        };
+
+        const handlePointerUp = (event: PointerEvent): void => {
+            if (isDraggingRef.current) {
+                try {
+                    canvas.releasePointerCapture(event.pointerId);
+                } catch (_) {
+                    // Ignore pointer release error
+                }
+                canvas.classList.remove('panning');
+            }
+            const wasDragging = hasDraggedRef.current;
+            isDraggingRef.current = false;
+            dragStartRef.current = null;
+
+            if (wasDragging) {
+                setViewportRange({ ...viewportRangeRef.current });
+            }
+        };
+
         const handleClick = (event: MouseEvent): void => {
+            if (hasDraggedRef.current) {
+                hasDraggedRef.current = false;
+                return;
+            }
+
             const camera = cameraRef.current;
             const scene = sceneRef.current;
             if (!camera || !scene) return;
@@ -1342,14 +1420,31 @@ const SetValuedViz = () => {
             }
         };
 
-        canvas.addEventListener('mousemove', handleMouseMove);
+        const handleWheel = (event: WheelEvent): void => {
+            event.preventDefault();
+            const factor = event.deltaY > 0 ? ZOOM_OUT_FACTOR : ZOOM_IN_FACTOR;
+            const baseRange = viewTransitionFrameRef.current !== null
+                ? viewportRangeTargetRef.current
+                : viewportRangeRef.current;
+            transitionViewRange(zoomViewRange(baseRange, factor));
+        };
+
+        canvas.addEventListener('pointerdown', handlePointerDown);
+        canvas.addEventListener('pointermove', handlePointerMove);
+        canvas.addEventListener('pointerup', handlePointerUp);
+        canvas.addEventListener('pointercancel', handlePointerUp);
         canvas.addEventListener('click', handleClick);
+        canvas.addEventListener('wheel', handleWheel, { passive: false });
 
         return () => {
-            canvas.removeEventListener('mousemove', handleMouseMove);
+            canvas.removeEventListener('pointerdown', handlePointerDown);
+            canvas.removeEventListener('pointermove', handlePointerMove);
+            canvas.removeEventListener('pointerup', handlePointerUp);
+            canvas.removeEventListener('pointercancel', handlePointerUp);
             canvas.removeEventListener('click', handleClick);
+            canvas.removeEventListener('wheel', handleWheel);
         };
-    }, [handleMouseMove, ulamState.showUlamOverlay, ulamState.gridBoxes.length, handleUlamClick]);
+    }, [handleMouseMove, ulamState.showUlamOverlay, ulamState.gridBoxes.length, handleUlamClick, applyViewRangeToCamera, cancelViewRangeTransition, readViewportSize, transitionViewRange]);
 
     useEffect(() => {
         if (!wasmModule) return;
@@ -3607,7 +3702,8 @@ const SetValuedViz = () => {
                 handleZoomIn={handleZoomIn}
                 handleZoomOut={handleZoomOut}
                 handleResetView={resetViewportRange}
-                handlePanMode={() => { }}
+                handlePanMode={handlePanMode}
+                isPanMode={isPanMode}
             />
         </Shell>
     );

@@ -999,6 +999,12 @@ select:disabled { cursor: not-allowed; }
   left: 0;
   width: 100%;
   height: calc(100% - var(--viewport-header-height));
+  cursor: grab;
+  touch-action: none;
+}
+.vp-canvas:active,
+.vp-canvas.panning {
+  cursor: grabbing !important;
 }
 
 /* Subtle grid */
