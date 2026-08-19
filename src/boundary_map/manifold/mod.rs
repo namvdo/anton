@@ -706,7 +706,7 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
     /// When two consecutive points P_j and P_{j+1} are too far apart,
     /// we create a new initial condition at parameter (m_j + m_{j+1})/2:
     ///   new_initial = state_0 + midpoint_param * dist_vec_0
-    /// Then apply the boundary map 'iteration' times.
+    /// Then apply the boundary map 'iteration' times for this new initial value.
     fn refine_segment(
         &self,
         state_0: ExtendedState, // initial perturbed state (at saddle + delta*eigenvec)
