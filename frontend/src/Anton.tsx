@@ -27,7 +27,7 @@ import {
     shouldRecordTrajectoryHistoryPoint
 } from './utils/trajectoryState';
 import {
-    buildGeometricOffsetSeed,
+    collectGeometricOffsetBoundaryPoints,
     collectExtendedManifoldBranches,
 } from './utils/geometricOffsetSeed';
 import {
@@ -262,8 +262,7 @@ const formatTickNumber = (num: number): string => {
 
 const createCoordinateSystem = (
     scene: THREE.Scene,
-    range: ViewRange,
-    viewportSize?: { width: number; height: number }
+    range: ViewRange
 ): THREE.Group => {
     const { axisColor, gridColor } = GRID_STYLE;
     const limit = RANGE_LIMIT;
@@ -490,11 +489,8 @@ const SetValuedViz = () => {
         ? manifoldState.rawManifolds
         : manifoldState.manifolds;
 
-    const geometricOffsetSeed = useMemo(
-        () => buildGeometricOffsetSeed(
-            boundarySourceManifolds,
-            DEFAULT_GEOMETRIC_OFFSET_SETTINGS.maximumSeedPoints,
-        ),
+    const geometricOffsetBoundaryPoints = useMemo(
+        () => collectGeometricOffsetBoundaryPoints(boundarySourceManifolds),
         [boundarySourceManifolds]
     );
 
@@ -759,7 +755,7 @@ const SetValuedViz = () => {
             if (gridGroupRef.current) {
                 scene.remove(gridGroupRef.current);
             }
-            gridGroupRef.current = createCoordinateSystem(scene, target, readViewportSize());
+            gridGroupRef.current = createCoordinateSystem(scene, target);
         }
 
         const startedAt = performance.now();
@@ -855,7 +851,7 @@ const SetValuedViz = () => {
 
         const initialViewportRange = viewportRangeRef.current;
         applyViewRangeToCamera(initialViewportRange);
-        gridGroupRef.current = createCoordinateSystem(scene, initialViewportRange, initialSize);
+        gridGroupRef.current = createCoordinateSystem(scene, initialViewportRange);
 
         const handleResize = () => {
             const range = viewportRangeRef.current;
@@ -865,7 +861,7 @@ const SetValuedViz = () => {
             if (gridGroupRef.current) {
                 scene.remove(gridGroupRef.current);
             }
-            gridGroupRef.current = createCoordinateSystem(scene, range, size);
+            gridGroupRef.current = createCoordinateSystem(scene, range);
             scene.traverse(object => {
                 if (object instanceof Line2) {
                     object.material.resolution.set(
@@ -905,7 +901,7 @@ const SetValuedViz = () => {
         if (gridGroupRef.current) {
             scene.remove(gridGroupRef.current);
         }
-        gridGroupRef.current = createCoordinateSystem(scene, viewportRange, readViewportSize());
+        gridGroupRef.current = createCoordinateSystem(scene, viewportRange);
         applyViewRangeToCamera(viewportRange);
     }, [viewportRange, applyViewRangeToCamera, readViewportSize]);
 
@@ -1336,7 +1332,7 @@ const SetValuedViz = () => {
             if (event.button !== 0) return;
             try {
                 canvas.setPointerCapture(event.pointerId);
-            } catch (_) {
+            } catch {
                 // Ignore if pointer capture fails
             }
             isDraggingRef.current = true;
@@ -1393,7 +1389,7 @@ const SetValuedViz = () => {
             if (isDraggingRef.current) {
                 try {
                     canvas.releasePointerCapture(event.pointerId);
-                } catch (_) {
+                } catch {
                     // Ignore pointer release error
                 }
                 canvas.classList.remove('panning');
@@ -2151,10 +2147,10 @@ const SetValuedViz = () => {
     }, [recordingState.recordingEnabled]);
 
     const computeGeometricOffsets = useCallback(async () => {
-        if (dynamicSystem !== 'henon' || geometricOffsetSeed.length < 3) {
+        if (dynamicSystem !== 'henon' || geometricOffsetBoundaryPoints.length === 0) {
             setGeometricOffsetState(prev => ({
                 ...prev,
-                error: 'A nondegenerate unstable-manifold boundary with attached normals is required.'
+                error: 'At least one unstable-manifold boundary point with an attached normal is required.'
             }));
             return;
         }
@@ -2175,7 +2171,7 @@ const SetValuedViz = () => {
         }));
         try {
             const request = buildGeometricOffsetBatchRequest(
-                geometricOffsetSeed,
+                geometricOffsetBoundaryPoints,
                 geometricOffsetState.contours,
             );
             const batch = await runComputeTask('computeGeometricOffsetBatch', request);
@@ -2239,7 +2235,7 @@ const SetValuedViz = () => {
         }
     }, [
         dynamicSystem,
-        geometricOffsetSeed,
+        geometricOffsetBoundaryPoints,
         geometricOffsetState.contours,
         readViewportSize,
         runComputeTask,
@@ -2251,7 +2247,7 @@ const SetValuedViz = () => {
         if (dynamicSystem !== 'henon' || sources.length === 0) {
             setGeometricOffsetState(previous => ({
                 ...previous,
-                inverseError: 'Compute at least one closed geometric offset contour first.'
+                inverseError: 'Compute at least one geometric offset source first.'
             }));
             return;
         }
@@ -2610,29 +2606,23 @@ const SetValuedViz = () => {
                             ? [{ x: projected.x, y: projected.y }]
                             : [];
                     });
-                    if (points.length < 3) return;
-                    const closedPoints = [...points, points[0]];
-                    const geometry = new LineGeometry();
-                    geometry.setPositions(closedPoints.flatMap(point => [
+                    if (points.length === 0) return;
+                    const geometry = new THREE.BufferGeometry();
+                    geometry.setAttribute('position', new THREE.Float32BufferAttribute(points.flatMap(point => [
                         point.x,
                         point.y,
                         0.22 + contourIndex * 0.004 + levelIndex * 0.001,
-                    ]));
-                    const material = new LineMaterial({
+                    ]), 3));
+                    const material = new THREE.PointsMaterial({
                         color: geometricOffsetContourColor(contourIndex),
-                        linewidth: selected ? 3.8 : 2.1,
-                        dashed: true,
-                        dashSize: 0.035,
-                        gapSize: 0.018,
+                        size: selected ? 5 : 3.5,
+                        sizeAttenuation: false,
                         transparent: true,
                         opacity: selected ? 1 : 0.9,
                         depthTest: false,
                     });
-                    const viewportSize = readViewportSize();
-                    material.resolution.set(viewportSize.width, viewportSize.height);
-                    const line = new Line2(geometry, material);
-                    line.computeLineDistances();
-                    line.userData = {
+                    const pointCloud = new THREE.Points(geometry, material);
+                    pointCloud.userData = {
                         type: 'geometricOffset',
                         contourId: contour.id,
                         epsilon: contour.epsilon,
@@ -2640,7 +2630,7 @@ const SetValuedViz = () => {
                         targetDistance: level.target_distance,
                         selected,
                     };
-                    scene.add(line);
+                    scene.add(pointCloud);
                 });
             });
         });
@@ -2660,6 +2650,37 @@ const SetValuedViz = () => {
                     const points = (curve.points || []).filter(point => (
                         Number.isFinite(point.x) && Number.isFinite(point.y)
                     ));
+                    if (points.length === 0) return;
+                    if (curve.is_closed === false) {
+                        const geometry = new THREE.BufferGeometry();
+                        geometry.setAttribute('position', new THREE.Float32BufferAttribute(
+                            points.flatMap(point => [
+                                point.x,
+                                point.y,
+                                0.25 + 0.006 * curve.inverse_iteration + contourIndex * 0.0005,
+                            ]),
+                            3,
+                        ));
+                        const pointCloud = new THREE.Points(geometry, new THREE.PointsMaterial({
+                            color: inverseOffsetCurveColor(
+                                contourIndex,
+                                geometricOffsetState.contours.length,
+                                curve.inverse_iteration,
+                            ),
+                            size: contour.id === geometricOffsetState.selectedContourId ? 5 : 3.5,
+                            sizeAttenuation: false,
+                            transparent: true,
+                            opacity: Math.max(0.72, 0.98 - 0.035 * (curve.inverse_iteration - 1)),
+                            depthTest: false,
+                        }));
+                        pointCloud.userData = {
+                            type: 'inverseGeometricOffset',
+                            contourId: contour.id,
+                            inverseIteration: curve.inverse_iteration,
+                        };
+                        scene.add(pointCloud);
+                        return;
+                    }
                     if (points.length < 3) return;
                     const closedPoints = [...points, points[0]];
                     const geometry = new LineGeometry();
@@ -2776,7 +2797,7 @@ const SetValuedViz = () => {
             scene.add(sphere);
         }
 
-    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, readViewportSize, geometricOffsetSeed, boundaryLayers, hasBoundarySamples, params.epsilon]);
+    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, readViewportSize, geometricOffsetBoundaryPoints, boundaryLayers, hasBoundarySamples, params.epsilon]);
 
     useEffect(() => {
         if (!sceneRef.current) return;
@@ -3687,7 +3708,7 @@ const SetValuedViz = () => {
                     unstable: boundaryLayers.unstableSampling,
                     deterministic: boundaryLayers.deterministicSampling,
                 }}
-                canComputeGeometricOffsets={!manifoldState.isComputing && geometricOffsetSeed.length >= 3}
+                canComputeGeometricOffsets={!manifoldState.isComputing && geometricOffsetBoundaryPoints.length > 0}
                 computeGeometricOffsets={computeGeometricOffsets}
                 computeInverseGeometricOffsets={computeInverseGeometricOffsets}
                 fitInverseGeometricOffsets={fitInverseGeometricOffsets}

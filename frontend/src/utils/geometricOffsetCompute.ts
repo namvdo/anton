@@ -1,7 +1,9 @@
 import type {
   ExtendedPointLike,
   ExtendedPointTuple,
+  GeometricOffsetLevel,
   GeometricOffsetResult,
+  InverseOffsetResult,
   PointLike,
 } from '../types/domain';
 import type { GeometricOffsetBatchComputePayload } from '../protocol/computeContracts';
@@ -27,8 +29,8 @@ const validateDirectProjectionInput = (
   if (!Number.isFinite(epsilon) || epsilon <= 0) {
     throw new Error('Contour ε must be positive and finite.');
   }
-  if (!Array.isArray(boundary) || boundary.length < 3) {
-    throw new Error('A nondegenerate unstable-manifold boundary is required.');
+  if (!Array.isArray(boundary) || boundary.length === 0) {
+    throw new Error('At least one unstable-manifold boundary point is required.');
   }
 
   boundary.forEach(point => {
@@ -51,6 +53,136 @@ export const buildSingleGeometricOffsetRequest = (
   return {
     boundary: boundary.map(extendedPoint),
     params: { epsilon }
+  };
+};
+
+/** Apply the geometric offset as an index-preserving point map. */
+export const projectGeometricOffsetBoundary = (
+  boundary: ExtendedPointLike[],
+  contourEpsilon: number,
+): GeometricOffsetResult => {
+  const { boundary: points, params } = buildSingleGeometricOffsetRequest(
+    boundary,
+    contourEpsilon,
+  );
+  const projected = points.map(([x, y, nx, ny]) => {
+    const length = Math.hypot(nx, ny);
+    const unitNx = nx / length;
+    const unitNy = ny / length;
+    return {
+      x: x + params.epsilon * unitNx,
+      y: y + params.epsilon * unitNy,
+      nx: unitNx,
+      ny: unitNy,
+    };
+  });
+  const first = projected[0];
+  const last = projected[projected.length - 1];
+  const isClosed = projected.length >= 2
+    && Math.hypot(first.x - last.x, first.y - last.y) <= 1e-14
+    && Math.hypot(first.nx - last.nx, first.ny - last.ny) <= 1e-14;
+
+  return {
+    levels: [{
+      level: 1,
+      target_distance: params.epsilon,
+      boundary_components: [{
+        id: 0,
+        points: projected,
+        is_closed: isClosed,
+        is_hole: false,
+      }],
+      component_count: 1,
+    }],
+    completed_levels: 1,
+    epsilon: params.epsilon,
+    stop_reason: 'requested_levels_completed',
+  };
+};
+
+const inverseHenonExtendedPoint = (
+  point: ExtendedPointLike,
+  a: number,
+  b: number,
+  epsilon: number,
+): { x: number; y: number; nx: number; ny: number } => {
+  const [mappedX, mappedY, mappedNx, mappedNy] = extendedPoint(point);
+  if (![a, b, epsilon, mappedX, mappedY, mappedNx, mappedNy].every(Number.isFinite)
+    || Math.abs(b) < 1e-12 || epsilon < 0) {
+    throw new Error('Open preimage mapping requires finite parameters and nonzero Hénon b.');
+  }
+  const mappedNormalLength = Math.hypot(mappedNx, mappedNy);
+  if (mappedNormalLength < 1e-14) {
+    throw new Error('Open preimage source contains a degenerate normal.');
+  }
+  const mx = mappedNx / mappedNormalLength;
+  const my = mappedNy / mappedNormalLength;
+  const x = (mappedY - epsilon * my) / b;
+  const y = mappedX - epsilon * mx - 1 + a * x * x;
+  const rawNx = -2 * a * x * mx + b * my;
+  const rawNy = mx;
+  const normalLength = Math.hypot(rawNx, rawNy);
+  if (!Number.isFinite(normalLength) || normalLength < 1e-14) {
+    throw new Error('Open preimage mapping produced a degenerate normal.');
+  }
+  return { x, y, nx: rawNx / normalLength, ny: rawNy / normalLength };
+};
+
+/** Map open offset samples through the inverse extended Hénon map point by point. */
+export const computeOpenGeometricOffsetPreimages = (
+  levels: GeometricOffsetLevel[],
+  params: { a: number; b: number; epsilon: number },
+  iterations: number,
+): InverseOffsetResult => {
+  if (!Number.isSafeInteger(iterations) || iterations < 1 || iterations > 8) {
+    throw new Error('Inverse offset iterations must lie between 1 and 8.');
+  }
+  const curves: NonNullable<InverseOffsetResult['curves']> = [];
+  let totalOutputPoints = 0;
+  for (const level of levels) {
+    for (const [componentIndex, component] of (level.boundary_components || []).entries()) {
+      let source = component.points || [];
+      if (source.length === 0) {
+        throw new Error('An open preimage source requires at least one point.');
+      }
+      for (let inverseIteration = 1; inverseIteration <= iterations; inverseIteration += 1) {
+        const points = source.map(point => inverseHenonExtendedPoint(
+          point as ExtendedPointLike,
+          params.a,
+          params.b,
+          params.epsilon,
+        ));
+        totalOutputPoints += points.length;
+        curves.push({
+          source_level: level.level,
+          source_component_id: component.id ?? componentIndex,
+          inverse_iteration: inverseIteration,
+          is_closed: false,
+          points,
+          input_point_count: source.length,
+          output_point_count: points.length,
+          closure_position_residual: 0,
+          closure_normal_residual: 0,
+          max_position_chord_error: 0,
+          max_normal_chord_error: 0,
+          subdivision_limit_reached: false,
+          source_relation: 'open_point_set',
+        });
+        source = points;
+      }
+    }
+  }
+  return {
+    curves,
+    source_curve_count: levels.reduce(
+      (count, level) => count + (level.boundary_components || []).length,
+      0,
+    ),
+    completed_iterations: iterations,
+    total_output_points: totalOutputPoints,
+    max_position_chord_error: 0,
+    max_normal_chord_error: 0,
+    subdivision_limit_reached: false,
   };
 };
 

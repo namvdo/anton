@@ -61,6 +61,12 @@ export const inverseCurveNestingSummary = (
       message: 'Raw boundary-map preimage; source nesting was not checked.'
     };
   }
+  if (relations.includes('open_point_set')) {
+    return {
+      passed: false,
+      message: 'Open pointwise preimage computed; polygonal nesting does not apply.'
+    };
+  }
   if (relations.includes('source_not_simple')) {
     return {
       passed: false,

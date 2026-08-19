@@ -19,6 +19,21 @@ $F(x) = B_\epsilon(f(x)) = \{f(x) + \xi : \|\xi\| \leq \epsilon\}$ where $f: \ma
 
 Rather than tracking every possible point within the noise ball $B_\epsilon(f(x))$ which would be computationally expensive to compute as the noise balls grow, we instead track the boundary evolution through an extended boundary map $F(x,y,nx,ny)=\bigl(f(x,y)+\varepsilon\,\mathbf{nx}',\mathbf{ny}'\bigr)$. Since the maximum uncertainty occurs at the boundary $\partial B_\epsilon(f(x))$ (points at distance exactly $\epsilon$ from the deterministic image), we focus exclusively on tracking how these boundary points evolve.
 
+<<<<<<< HEAD
+=======
+The viewport renders every computed unstable-manifold branch in its native traversal
+order without inferring a closing edge. It shows the noisy manifold samples, reconstructs
+their deterministic images from $f(x_i)=p_i-\epsilon n_i$, and optionally overlays
+one circle $\partial B_\epsilon(f(x_i))$ for every deterministic sample. These system-noise layers use
+the applied noise radius and remain separate from the geometric-offset analysis
+distance configured in the Geometric offsets panel. Branches are curves by default;
+**Show points** replaces them with all computed, color-matched samples. The **Maximum
+state spacing** control applies the Euclidean extended-state metric
+$\sqrt{\|\Delta x\|_2^2+\|\Delta n\|_2^2}$ and recomputes the manifold rather than
+interpolating display points. Geometric offsets are pointwise: every available extended-state sample is mapped by
+$q_i=p_i+\epsilon_g n_i$ and displayed as a point. Direct projection does not require
+or infer a closed curve.
+>>>>>>> 5ca2c86 (feat(frontend): map geometric offsets directly and streamline viewport toolbar)
 
 ### Unstable manifold visualization for boundary map evolution with a=0.4, b=0.3 and epsilon=0.0625
 

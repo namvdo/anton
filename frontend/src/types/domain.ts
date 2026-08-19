@@ -158,6 +158,7 @@ export interface ManifoldState {
 
 export interface BoundaryComponent extends UnknownRecord {
   id?: number;
+  is_closed?: boolean;
   is_hole?: boolean;
   points: Array<ProjectedState | ExtendedState | ExtendedPointTuple>;
 }
@@ -180,6 +181,7 @@ export interface InverseOffsetCurve extends UnknownRecord {
   source_level?: number;
   source_component_id?: number;
   inverse_iteration: number;
+  is_closed?: boolean;
   points?: ProjectedState[];
   source_relation?: string;
   closure_position_residual?: number;

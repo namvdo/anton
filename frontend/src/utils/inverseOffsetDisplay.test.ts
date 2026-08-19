@@ -33,6 +33,12 @@ describe('inverse offset display utilities', () => {
       passed: false,
       message: 'Preimage crosses its source; it is not a nested basin boundary.'
     });
+    expect(inverseCurveNestingSummary([
+      { source_relation: 'open_point_set' }
+    ])).toEqual({
+      passed: false,
+      message: 'Open pointwise preimage computed; polygonal nesting does not apply.'
+    });
   });
 
   it('generates deterministic distinct colors without a fixed palette size', () => {

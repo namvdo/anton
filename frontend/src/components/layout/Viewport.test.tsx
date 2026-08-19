@@ -51,27 +51,27 @@ describe('Viewport', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Reset view' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fit view' }));
 
     expect(handleZoomIn).toHaveBeenCalledOnce();
     expect(handleZoomOut).toHaveBeenCalledOnce();
     expect(handleResetView).toHaveBeenCalledOnce();
   });
 
-  it('presents the current plot context and a clear fit action', () => {
+  it('presents a clear fit action', () => {
     const handleResetView = vi.fn();
     render(<Viewport {...baseProps} type="discrete" handleResetView={handleResetView} />);
 
-    expect(screen.getByRole('heading', { name: 'Discrete boundary-map phase space' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Fit view' }));
     expect(handleResetView).toHaveBeenCalledOnce();
   });
 
-  it('identifies a computed geometric-offset comparison', () => {
+  it('identifies a computed geometric-offset comparison in legend', () => {
     const contour = readyContour(0.05);
     render(<Viewport {...baseProps} type="discrete" geometricOffsetState={{ contours: [contour] }} />);
 
-    expect(screen.getByRole('heading', { name: 'Geometric ε-offset comparison' })).toBeInTheDocument();
+    expect(screen.getByTestId('geometric-offset-point-swatch')).toHaveClass('lg-dot');
+    expect(screen.getByTestId('geometric-offset-point-swatch')).not.toHaveClass('lg-line');
   });
 
   it('labels unstable, deterministic-image, noise-ball, and mapped-point layers', () => {
@@ -82,7 +82,6 @@ describe('Viewport', () => {
       showNoiseBalls: true,
     }} />);
 
-    expect(screen.getByRole('heading', { name: 'Discrete boundary-map phase space' })).toBeInTheDocument();
     expect(screen.getByText('Unstable manifold')).toBeInTheDocument();
     expect(screen.getByText('Deterministic image boundary')).toBeInTheDocument();
     expect(screen.getByText('Noise balls')).toBeInTheDocument();
@@ -126,8 +125,9 @@ describe('Viewport', () => {
     expect(screen.getByLabelText('Preimage epsilon 0.025 step 2')).toBeInTheDocument();
     expect(screen.getByLabelText('Preimage epsilon 0.075 step 1')).toBeInTheDocument();
     expect(screen.getByLabelText('Preimage epsilon 0.075 step 2')).toBeInTheDocument();
-    const swatches = container.querySelectorAll<HTMLElement>('.vp-legend .lg-line');
-    const inverseSwatches = Array.from(swatches).slice(2).map(swatch => swatch.style.background);
+    const inverseSwatches = Array.from(
+      container.querySelectorAll<HTMLElement>('.vp-legend .lg-line'),
+    ).map(swatch => swatch.style.background);
     expect(new Set(inverseSwatches).size).toBe(4);
   });
 

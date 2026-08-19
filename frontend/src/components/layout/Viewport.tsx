@@ -58,17 +58,6 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
     ? `${displayRange.xMin},${displayRange.xMax},${displayRange.yMin},${displayRange.yMax}`
     : undefined;
   const contours = geometricOffsetState?.contours ?? [];
-  const computedContourCount = contours.filter(contour => contour.result).length;
-  const plotTitle = computedContourCount > 0
-    ? 'Geometric ε-offset comparison'
-    : type === 'discrete'
-      ? 'Discrete boundary-map phase space'
-      : 'Continuous boundary-flow phase space';
-  const plotSubtitle = computedContourCount > 0
-    ? 'Select a contour or sidebar row to inspect and compare its boundary.'
-    : type === 'discrete'
-      ? 'Inspect boundary maps, periodic states, manifolds, and trajectories.'
-      : 'Inspect boundary flow, trajectories, and invariant-set approximations.';
   const sourceIds = new Set(geometricOffsetState?.preimageSourceIds ?? []);
   if (geometricOffsetState?.selectedContourId) {
     sourceIds.add(geometricOffsetState.selectedContourId);
@@ -90,17 +79,10 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
 
   return (
     <div className="viewport" data-view-range={serializedDisplayRange}>
-      <header className="vp-header">
-        <div className="vp-header-copy">
-          <h1>{plotTitle}</h1>
-          <p>{plotSubtitle}</p>
-        </div>
-        <button type="button" className="vp-fit-button" onClick={handleResetView}>Fit view</button>
-      </header>
       <div className="vp-tools">
         <button type="button" className="vp-btn" title="Zoom in" aria-label="Zoom in" onClick={handleZoomIn}>+</button>
         <button type="button" className="vp-btn" title="Zoom out" aria-label="Zoom out" onClick={handleZoomOut}>−</button>
-        <button type="button" className="vp-btn" title="Reset view" aria-label="Reset view" onClick={handleResetView}>⌂</button>
+        <button type="button" className="vp-btn" title="Fit view" aria-label="Fit view" onClick={handleResetView}>⌂</button>
         <div className="vp-sep"></div>
         {type === 'continuous' && (
           <button type="button" className="vp-btn active" title="Place start point" aria-label="Place start point">◎</button>
@@ -144,9 +126,10 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
         {contours.map((contour, contourIndex) => contour.visible && contour.result ? (
           <div className="lg-item" key={`geometric-offset-${contour.id}`}
             aria-label={`Geometric contour epsilon ${formatContourEpsilon(contour.epsilon)}${contour.id === geometricOffsetState.selectedContourId ? ' selected' : ''}`}>
-            <div className="lg-line" style={{
-              background: `repeating-linear-gradient(90deg, ${geometricOffsetContourColor(contourIndex)} 0 7px, transparent 7px 11px)`,
-              height: contour.id === geometricOffsetState.selectedContourId ? '3px' : '2px',
+            <div className="lg-dot" data-testid="geometric-offset-point-swatch" style={{
+              background: geometricOffsetContourColor(contourIndex),
+              width: contour.id === geometricOffsetState.selectedContourId ? '9px' : '7px',
+              height: contour.id === geometricOffsetState.selectedContourId ? '9px' : '7px',
             }}></div>
             ε<sub>g</sub> = {formatContourEpsilon(contour.epsilon)}
             {contour.id === geometricOffsetState.selectedContourId ? ' · selected' : ''}

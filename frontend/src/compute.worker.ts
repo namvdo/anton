@@ -25,6 +25,10 @@ import type {
   UlamComputeResult,
   UlamTransitionsPayload,
 } from './protocol/computeContracts';
+import {
+  computeOpenGeometricOffsetPreimages,
+  projectGeometricOffsetBoundary,
+} from './utils/geometricOffsetCompute';
 import type {
   BistWasmModule,
   GeometricOffsetResult,
@@ -540,24 +544,13 @@ const getUlamTransitions = async (payload: UlamTransitionsPayload): Promise<Ulam
 const computeGeometricOffsets = async (
   payload: GeometricOffsetsComputePayload,
 ): Promise<GeometricOffsetResult> => {
-  const wasm = await ensureWasm();
-  if (typeof wasm.computeGeometricOffsetContours !== 'function') {
-    throw new Error('Geometric offset export is unavailable; rebuild WebAssembly');
-  }
   const { boundary, params } = payload;
-  return wasm.computeGeometricOffsetContours(
-    boundary,
-    params.epsilon
-  ) as GeometricOffsetResult;
+  return projectGeometricOffsetBoundary(boundary, params.epsilon);
 };
 
 const computeGeometricOffsetBatch = async (
   payload: GeometricOffsetBatchComputePayload,
 ): Promise<GeometricOffsetBatchComputeResult> => {
-  const wasm = await ensureWasm();
-  if (typeof wasm.computeGeometricOffsetContours !== 'function') {
-    throw new Error('Geometric offset export is unavailable; rebuild WebAssembly');
-  }
   if (!Array.isArray(payload.contours) || payload.contours.length === 0) {
     throw new Error('A geometric-offset batch requires at least one contour.');
   }
@@ -565,10 +558,7 @@ const computeGeometricOffsetBatch = async (
     contours: payload.contours.map(({ id, epsilon }) => ({
       id,
       epsilon,
-      result: wasm.computeGeometricOffsetContours(
-        payload.boundary,
-        epsilon,
-      ) as GeometricOffsetResult,
+      result: projectGeometricOffsetBoundary(payload.boundary, epsilon),
     })),
   };
 };
@@ -576,6 +566,16 @@ const computeGeometricOffsetBatch = async (
 const computeInverseGeometricOffsets = async (
   payload: InverseGeometricOffsetsComputePayload,
 ): Promise<InverseOffsetResult> => {
+  const hasOpenComponent = payload.levels.some(level => (
+    (level.boundary_components || []).some(component => component.is_closed !== true)
+  ));
+  if (hasOpenComponent) {
+    return computeOpenGeometricOffsetPreimages(
+      payload.levels,
+      payload.params,
+      payload.settings.iterations,
+    );
+  }
   const wasm = await ensureWasm();
   if (typeof wasm.computeInverseGeometricOffsetContours !== 'function') {
     throw new Error('Inverse geometric offset export is unavailable; rebuild WebAssembly');
@@ -605,19 +605,26 @@ const computeInverseGeometricOffsetBatch = async (
   }
   const { params, settings } = payload;
   return {
-    sources: payload.sources.map(source => ({
-      id: source.id,
-      result: wasm.computeInverseGeometricOffsetContours(
-        source.levels,
-        params.a,
-        params.b,
-        params.epsilon,
-        settings.iterations,
-        source.positionTolerance,
-        settings.normalTolerance,
-        settings.maxSubdivisionDepth,
-      ) as InverseOffsetResult,
-    })),
+    sources: payload.sources.map(source => {
+      const hasOpenComponent = source.levels.some(level => (
+        (level.boundary_components || []).some(component => component.is_closed !== true)
+      ));
+      return {
+        id: source.id,
+        result: hasOpenComponent
+          ? computeOpenGeometricOffsetPreimages(source.levels, params, settings.iterations)
+          : wasm.computeInverseGeometricOffsetContours(
+            source.levels,
+            params.a,
+            params.b,
+            params.epsilon,
+            settings.iterations,
+            source.positionTolerance,
+            settings.normalTolerance,
+            settings.maxSubdivisionDepth,
+          ) as InverseOffsetResult,
+      };
+    }),
   };
 };
 

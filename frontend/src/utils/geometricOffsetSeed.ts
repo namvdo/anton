@@ -20,7 +20,7 @@ export const collectExtendedManifoldBranches = (
 ): ExtendedPointTuple[][] => (manifolds || []).flatMap(manifold => (
   [manifold.plus, manifold.minus]
     .map(branch => cleanExtendedPoints(branch?.extended_points))
-    .filter(branch => branch.length >= 2)
+    .filter(branch => branch.length > 0)
 ));
 
 interface TopologyArc {
@@ -163,15 +163,13 @@ export const buildVerifiedBoundaryCycle = (
   return cycles.length === 1 ? cycles[0] : [];
 };
 
-export const buildGeometricOffsetSeed = (
+/**
+ * Return every calculated unstable-manifold extended state exactly once.
+ *
+ * A geometric offset is a pointwise map, not a continuation seeded from a
+ * reduced sample. Branch order and repeated calculated samples are therefore
+ * retained and no closure is inferred.
+ */
+export const collectGeometricOffsetBoundaryPoints = (
   manifolds: Manifold[],
-  maxPoints = 4000,
-): ExtendedPointTuple[] => {
-  if (!Number.isSafeInteger(maxPoints) || maxPoints < 3) {
-    throw new Error('Geometric-offset seed limit must be an integer of at least three.');
-  }
-  const seed = buildVerifiedBoundaryCycle(manifolds);
-  if (seed.length === 0) return [];
-  const stride = Math.max(1, Math.ceil(seed.length / maxPoints));
-  return seed.filter((_, index) => index % stride === 0);
-};
+): ExtendedPointTuple[] => collectExtendedManifoldBranches(manifolds).flat();

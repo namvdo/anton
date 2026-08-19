@@ -1,4 +1,4 @@
-//! Direct normal-projection contours around a closed MIS boundary.
+//! Direct pointwise normal projections of an MIS boundary.
 //!
 //! For each ordered extended boundary sample `(p_i, n_i)`, the implementation
 //! normalizes the attached outward normal and stores `p_i + epsilon * n_i`.
@@ -26,6 +26,9 @@ pub struct ExtendedBoundaryPoint {
 pub struct BoundaryComponent {
     pub id: usize,
     pub points: Vec<ExtendedBoundaryPoint>,
+    /// True only when the input explicitly repeats its first point at the end.
+    #[serde(default)]
+    pub is_closed: bool,
     pub is_hole: bool,
     pub perimeter: f64,
     pub is_simple: bool,
@@ -58,6 +61,7 @@ pub struct InverseOffsetCurve {
     pub source_level: usize,
     pub source_component_id: usize,
     pub inverse_iteration: usize,
+    pub is_closed: bool,
     pub is_hole: bool,
     pub points: Vec<ExtendedBoundaryPoint>,
     pub input_point_count: usize,
@@ -78,6 +82,7 @@ pub struct InverseOffsetCurve {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum InverseCurveSourceRelation {
+    OpenPointSet,
     NestedOutside,
     CrossesSource,
     SourceNotEnclosed,
@@ -112,9 +117,10 @@ impl Point2 {
     }
 }
 
-fn perimeter(points: &[Point2]) -> f64 {
-    (0..points.len())
-        .map(|index| points[index].distance(points[(index + 1) % points.len()]))
+fn path_length(points: &[Point2]) -> f64 {
+    points
+        .windows(2)
+        .map(|pair| pair[0].distance(pair[1]))
         .sum()
 }
 
@@ -361,51 +367,32 @@ fn normalize_vector(x: f64, y: f64, context: &str) -> Result<(f64, f64), String>
     Ok((x / length, y / length))
 }
 
-fn clean_seed(seed: &[(f64, f64, f64, f64)]) -> Result<Vec<ExtendedBoundaryPoint>, String> {
-    if seed.len() < 3 {
-        return Err("MIS boundary seed needs at least three extended points".to_string());
+fn validate_boundary(
+    boundary: &[(f64, f64, f64, f64)],
+) -> Result<Vec<ExtendedBoundaryPoint>, String> {
+    if boundary.is_empty() {
+        return Err("MIS boundary needs at least one extended point".to_string());
     }
 
-    let mut points = Vec::with_capacity(seed.len());
-    for &(x, y, nx, ny) in seed {
+    let mut points = Vec::with_capacity(boundary.len());
+    for &(x, y, nx, ny) in boundary {
         if ![x, y, nx, ny].iter().all(|value| value.is_finite()) {
-            return Err("MIS boundary seed contains a non-finite position or normal".to_string());
+            return Err("MIS boundary contains a non-finite position or normal".to_string());
         }
-        let position = Point2::new(x, y);
-        if points
-            .last()
-            .map_or(true, |previous: &ExtendedBoundaryPoint| {
-                Point2::new(previous.x, previous.y).distance(position) > NORMAL_EPSILON
-            })
-        {
-            let (nx, ny) = normalize_vector(nx, ny, "Attached MIS boundary normal")?;
-            points.push(ExtendedBoundaryPoint { x, y, nx, ny });
-        }
-    }
-
-    if points
-        .first()
-        .zip(points.last())
-        .is_some_and(|(first, last)| {
-            Point2::new(first.x, first.y).distance(Point2::new(last.x, last.y)) <= NORMAL_EPSILON
-        })
-    {
-        points.pop();
-    }
-    if points.len() < 3 {
-        return Err("MIS boundary seed needs at least three distinct extended points".to_string());
+        let (nx, ny) = normalize_vector(nx, ny, "Attached MIS boundary normal")?;
+        points.push(ExtendedBoundaryPoint { x, y, nx, ny });
     }
     Ok(points)
 }
 
 fn direct_normal_projection(
-    seed: &[ExtendedBoundaryPoint],
+    boundary: &[ExtendedBoundaryPoint],
     epsilon: f64,
 ) -> Result<BoundaryComponent, String> {
-    let mut points = Vec::with_capacity(seed.len());
-    let mut projected_positions = Vec::with_capacity(seed.len());
+    let mut points = Vec::with_capacity(boundary.len());
+    let mut projected_positions = Vec::with_capacity(boundary.len());
 
-    for current in seed {
+    for current in boundary {
         let projected = Point2::new(
             current.x + epsilon * current.nx,
             current.y + epsilon * current.ny,
@@ -422,27 +409,38 @@ fn direct_normal_projection(
         });
     }
 
+    let is_closed = boundary.len() >= 2
+        && boundary
+            .first()
+            .zip(boundary.last())
+            .is_some_and(|(first, last)| {
+                Point2::new(first.x, first.y).distance(Point2::new(last.x, last.y))
+                    <= NORMAL_EPSILON
+                    && (first.nx - last.nx).hypot(first.ny - last.ny) <= NORMAL_EPSILON
+            });
+
     Ok(BoundaryComponent {
         id: 0,
         points,
+        is_closed,
         is_hole: false,
-        perimeter: perimeter(&projected_positions),
-        is_simple: !has_self_intersection(&projected_positions),
+        perimeter: path_length(&projected_positions),
+        is_simple: projected_positions.len() < 3 || !has_self_intersection(&projected_positions),
     })
 }
 
-/// Construct one closed offset polygon by projecting every MIS boundary
-/// sample exactly `epsilon` along its attached outward unit normal.
+/// Project every MIS boundary sample exactly `epsilon` along its attached
+/// outward unit normal, preserving input length and order without closing it.
 pub fn compute_geometric_offset_contours(
-    seed: &[(f64, f64, f64, f64)],
+    boundary: &[(f64, f64, f64, f64)],
     epsilon: f64,
 ) -> Result<GeometricOffsetResult, String> {
     if !epsilon.is_finite() || epsilon <= 0.0 {
         return Err("Geometric offset distance must be positive and finite".to_string());
     }
 
-    let seed = clean_seed(seed)?;
-    let component = direct_normal_projection(&seed, epsilon)?;
+    let boundary = validate_boundary(boundary)?;
+    let component = direct_normal_projection(&boundary, epsilon)?;
     let level = GeometricOffsetLevel {
         level: 1,
         target_distance: epsilon,
@@ -685,11 +683,27 @@ pub fn compute_inverse_geometric_offset_contours(
     for level in levels {
         for component in &level.boundary_components {
             let mut source_points = component.points.clone();
+            if component.is_closed && source_points.first() == source_points.last() {
+                source_points.pop();
+            }
             for inverse_iteration in 1..=iterations {
                 let input_point_count = source_points.len();
                 let (points, closure_position_residual, closure_normal_residual, diagnostics) =
-                    invert_offset_component(&source_points, &settings)?;
-                let source_relation = classify_inverse_source_relation(&source_points, &points);
+                    if component.is_closed {
+                        invert_offset_component(&source_points, &settings)?
+                    } else {
+                        let points = source_points
+                            .iter()
+                            .copied()
+                            .map(|point| inverse_offset_point(point, a, b, epsilon))
+                            .collect::<Result<Vec<_>, _>>()?;
+                        (points, 0.0, 0.0, InverseSubdivisionDiagnostics::default())
+                    };
+                let source_relation = if component.is_closed {
+                    classify_inverse_source_relation(&source_points, &points)
+                } else {
+                    InverseCurveSourceRelation::OpenPointSet
+                };
                 total_output_points = total_output_points
                     .checked_add(points.len())
                     .ok_or("Inverse offset point count overflow")?;
@@ -701,6 +715,7 @@ pub fn compute_inverse_geometric_offset_contours(
                     source_level: level.level,
                     source_component_id: component.id,
                     inverse_iteration,
+                    is_closed: component.is_closed,
                     is_hole: component.is_hole,
                     input_point_count,
                     output_point_count: points.len(),
@@ -812,11 +827,7 @@ mod tests {
 
     #[test]
     fn invalid_direct_projection_inputs_fail_fast() {
-        assert!(compute_geometric_offset_contours(
-            &[(0.0, 0.0, 1.0, 0.0), (1.0, 0.0, 1.0, 0.0)],
-            0.1
-        )
-        .is_err());
+        assert!(compute_geometric_offset_contours(&[], 0.1).is_err());
         assert!(compute_geometric_offset_contours(&circle(1.0, 64, false), 0.0).is_err());
         assert!(compute_geometric_offset_contours(
             &[
@@ -922,19 +933,35 @@ mod tests {
     }
 
     #[test]
-    fn duplicate_closing_sample_is_removed() {
+    fn every_input_sample_has_exactly_one_projected_output() {
         let mut seed = circle(0.5, 32, false);
         seed.push(seed[0]);
         let result = compute_geometric_offset_contours(&seed, 0.1).unwrap();
-        assert_eq!(
-            result.levels[0].boundary_components[0].points.len(),
-            seed.len() - 1
-        );
+        let component = &result.levels[0].boundary_components[0];
+        assert_eq!(component.points.len(), seed.len());
+        assert!(component.is_closed);
+        for (source, projected) in seed.iter().zip(&component.points) {
+            let normal_length = source.2.hypot(source.3);
+            assert!((projected.x - (source.0 + 0.1 * source.2 / normal_length)).abs() < 1e-12);
+            assert!((projected.y - (source.1 + 0.1 * source.3 / normal_length)).abs() < 1e-12);
+        }
+    }
+
+    #[test]
+    fn a_single_boundary_point_is_projected_without_curve_inference() {
+        let result = compute_geometric_offset_contours(&[(1.0, 2.0, 0.0, 1.0)], 0.25).unwrap();
+        let component = &result.levels[0].boundary_components[0];
+        assert_eq!(component.points.len(), 1);
+        assert_eq!(component.points[0].x, 1.0);
+        assert_eq!(component.points[0].y, 2.25);
+        assert!(!component.is_closed);
     }
 
     #[test]
     fn inverse_offset_curves_preserve_cyclic_components_and_unit_normals() {
-        let offsets = compute_geometric_offset_contours(&circle(0.5, 128, false), 0.1).unwrap();
+        let mut closed_circle = circle(0.5, 128, false);
+        closed_circle.push(closed_circle[0]);
+        let offsets = compute_geometric_offset_contours(&closed_circle, 0.1).unwrap();
         let inverse = compute_inverse_geometric_offset_contours(
             &offsets.levels,
             0.4,
@@ -962,6 +989,32 @@ mod tests {
                     && (point.nx.hypot(point.ny) - 1.0).abs() < 1e-12
             }));
         }
+    }
+
+    #[test]
+    fn open_inverse_offsets_preserve_point_correspondence_without_closure() {
+        let offsets =
+            compute_geometric_offset_contours(&[(0.2, 0.1, 1.0, 0.0), (0.4, 0.2, 0.0, 1.0)], 0.1)
+                .unwrap();
+        let inverse = compute_inverse_geometric_offset_contours(
+            &offsets.levels,
+            0.4,
+            0.3,
+            0.1,
+            2,
+            1e-3,
+            0.02,
+            7,
+        )
+        .unwrap();
+
+        assert_eq!(inverse.curves.len(), 2);
+        assert!(inverse.curves.iter().all(|curve| {
+            !curve.is_closed
+                && curve.input_point_count == 2
+                && curve.output_point_count == 2
+                && curve.source_relation == InverseCurveSourceRelation::OpenPointSet
+        }));
     }
 
     #[test]

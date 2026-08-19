@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ExtendedPointTuple, Manifold } from '../types/domain';
 import {
-  buildGeometricOffsetSeed,
   buildVerifiedBoundaryCycle,
   buildVerifiedBoundaryCycles,
+  collectGeometricOffsetBoundaryPoints,
   collectExtendedManifoldBranches,
 } from './geometricOffsetSeed';
 
@@ -40,7 +40,20 @@ describe('verified geometric-offset seed', () => {
     const nearlyClosed = [point(0, 0), point(1, 0), point(1, 1), point(0, 1), point(1e-8, 0)];
     const manifolds = [{ plus: { extended_points: nearlyClosed } }];
     expect(buildVerifiedBoundaryCycles(manifolds)).toEqual([]);
-    expect(buildGeometricOffsetSeed(manifolds)).toEqual([]);
+    expect(buildVerifiedBoundaryCycle(manifolds)).toEqual([]);
+  });
+
+  it('uses all calculated extended points when topology cycle is absent', () => {
+    const upper = [point(0, 1), point(1, 1), point(2, 1)];
+    const lower = [point(0, 0), point(1, 0), point(2, 0)];
+    const manifolds = [{
+      plus: { extended_points: upper },
+      minus: { extended_points: lower },
+    }];
+
+    expect(collectExtendedManifoldBranches(manifolds)).toEqual([upper, lower]);
+    expect(buildVerifiedBoundaryCycle(manifolds)).toEqual([]);
+    expect(collectGeometricOffsetBoundaryPoints(manifolds)).toEqual([...upper, ...lower]);
   });
 
   it('assembles a cycle only from explicit source and target topology', () => {
@@ -80,11 +93,20 @@ describe('verified geometric-offset seed', () => {
     expect(buildVerifiedBoundaryCycle(manifolds)).toEqual([]);
   });
 
-  it('caps only an unambiguous verified cycle for worker transfer', () => {
-    const upper = Array.from({ length: 60 }, (_, index) => point(index / 59, 0));
-    const lower = Array.from({ length: 60 }, (_, index) => point(1 - index / 59, 1));
+  it('keeps every calculated point without seed downsampling', () => {
+    const upper = Array.from({ length: 2050 }, (_, index) => point(index / 2049, 0));
+    const lower = Array.from({ length: 2050 }, (_, index) => point(1 - index / 2049, 1));
     const manifolds = [arc(0, 1, upper), arc(1, 0, lower)];
-    expect(buildVerifiedBoundaryCycle(manifolds)).toHaveLength(120);
-    expect(buildGeometricOffsetSeed(manifolds, 20).length).toBeLessThanOrEqual(20);
+    expect(buildVerifiedBoundaryCycle(manifolds)).toHaveLength(4100);
+    expect(collectGeometricOffsetBoundaryPoints(manifolds)).toEqual([...upper, ...lower]);
+  });
+
+  it('retains a valid isolated boundary sample and repeated samples', () => {
+    const repeated = point(1, 2);
+    const isolated = point(3, 4);
+    expect(collectGeometricOffsetBoundaryPoints([{
+      plus: { extended_points: [repeated, repeated] },
+      minus: { extended_points: [isolated] },
+    }])).toEqual([repeated, repeated, isolated]);
   });
 });

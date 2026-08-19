@@ -4,6 +4,7 @@ import {
   generateEvenlySpacedEpsilons,
   geometricOffsetContourColor,
   geometricOffsetContourId,
+  geometricOffsetSourceContours,
   removeGeometricOffsetContour,
   replaceGeometricOffsetContours,
   selectGeometricOffsetContour,
@@ -73,5 +74,24 @@ describe('geometric offset batch state', () => {
       expect(colors.every(color => /^#[0-9a-f]{6}$/.test(color))).toBe(true);
     });
     expect(geometricOffsetContourColor(-1)).toBe(geometricOffsetContourColor(0));
+  });
+
+  it('allows an open pointwise offset to be selected as a preimage source', () => {
+    const state = stateFor([0.1]);
+    state.contours[0].result = {
+      completed_levels: 1,
+      levels: [{
+        level: 1,
+        target_distance: 0.1,
+        boundary_components: [{
+          is_closed: false,
+          points: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
+        }],
+      }],
+    };
+    expect(geometricOffsetSourceContours(state)).toEqual([state.contours[0]]);
+
+    state.contours[0].result.levels[0].boundary_components![0].is_closed = true;
+    expect(geometricOffsetSourceContours(state)).toEqual([state.contours[0]]);
   });
 });
