@@ -75,8 +75,7 @@ const ensureWasm = async (): Promise<BistWasmModule> => {
   if (!wasmPromise) {
     wasmPromise = (async () => {
       const mod = await import('../pkg/bist');
-      const wasmUrl = (await import('../pkg/bist_bg.wasm?url')).default;
-      await mod.default(wasmUrl);
+      await mod.default();
       return mod;
     })();
   }
