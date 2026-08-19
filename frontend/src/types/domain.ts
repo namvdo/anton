@@ -104,12 +104,15 @@ export interface ManifoldBranch extends UnknownRecord {
   points?: PointTuple[];
   extended_points?: ExtendedPointTuple[];
   eigenvalue?: number;
+  stop_reason?: string;
+  reached_target_id?: number | null;
 }
 
 export interface Manifold extends UnknownRecord {
   plus?: ManifoldBranch;
   minus?: ManifoldBranch;
   eigenvalue?: number;
+  source_topology_id?: number | null;
 }
 
 export interface IntersectionDiagnostic extends UnknownRecord {

@@ -32,7 +32,7 @@ interface ViewportProps {
     | 'showStableManifold'
     | 'showOrbits'
   >;
-  hasClosedMisBoundary?: boolean;
+  hasBoundarySamples?: boolean;
   geometricOffsetState: {
     contours?: GeometricOffsetContour[];
     selectedContourId?: string | null;
@@ -49,7 +49,7 @@ interface ViewportProps {
   savePNG: () => void;
 }
 
-export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOffsetState, ulamState, hasClosedMisBoundary = false, displayRange, handleZoomIn, handleZoomOut, handleResetView, handlePanMode, savePNG }: ViewportProps) => {
+export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOffsetState, ulamState, hasBoundarySamples = false, displayRange, handleZoomIn, handleZoomOut, handleResetView, handlePanMode, savePNG }: ViewportProps) => {
   const tooltipData: TooltipData | null = tooltip.data ?? null;
   const tooltipX = tooltip.x ?? 0;
   const tooltipY = tooltip.y ?? 0;
@@ -122,7 +122,7 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
             Unstable manifold
           </div>
         )}
-        {hasClosedMisBoundary && manifoldState.showUnstableManifold
+        {hasBoundarySamples && manifoldState.showUnstableManifold
           && manifoldState.showDeterministicImageBoundary && (
           <div className="lg-item">
             <div
@@ -132,7 +132,7 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
             Deterministic image boundary
           </div>
         )}
-        {hasClosedMisBoundary && manifoldState.showUnstableManifold
+        {hasBoundarySamples && manifoldState.showUnstableManifold
           && manifoldState.showNoiseBalls && (
           <div className="lg-item">
             <div className="lg-ring" style={{ borderColor: BOUNDARY_LAYER_COLORS.noiseBall }}></div>

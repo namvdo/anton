@@ -152,6 +152,7 @@ impl DuffingManifoldComputer {
                     return Ok(Trajectory {
                         points: traj_add,
                         stop_reason: StopReason::Converged,
+                        reached_target_id: None,
                     });
                 }
             };
@@ -174,6 +175,7 @@ impl DuffingManifoldComputer {
                 return Ok(Trajectory {
                     points: traj_add,
                     stop_reason: StopReason::Converged,
+                    reached_target_id: None,
                 });
             }
 
@@ -191,6 +193,7 @@ impl DuffingManifoldComputer {
                 return Ok(Trajectory {
                     points: traj_add,
                     stop_reason: StopReason::MaxIterations,
+                    reached_target_id: None,
                 });
             }
 
@@ -198,6 +201,7 @@ impl DuffingManifoldComputer {
                 return Ok(Trajectory {
                     points: traj_add,
                     stop_reason: StopReason::MaxPoints,
+                    reached_target_id: None,
                 });
             }
 
@@ -205,6 +209,7 @@ impl DuffingManifoldComputer {
                 return Ok(Trajectory {
                     points: traj_add,
                     stop_reason: StopReason::Converged,
+                    reached_target_id: None,
                 });
             }
 
@@ -213,6 +218,7 @@ impl DuffingManifoldComputer {
                 return Ok(Trajectory {
                     points: traj_add,
                     stop_reason: StopReason::ApproachedTargetPoint,
+                    reached_target_id: None,
                 });
             }
 
@@ -221,6 +227,7 @@ impl DuffingManifoldComputer {
                 return Ok(Trajectory {
                     points: traj_add,
                     stop_reason: StopReason::TimeExceeded,
+                    reached_target_id: None,
                 });
             }
 

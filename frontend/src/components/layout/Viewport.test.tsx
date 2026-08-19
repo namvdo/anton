@@ -75,7 +75,7 @@ describe('Viewport', () => {
   });
 
   it('labels unstable, deterministic-image, noise-ball, and mapped-point layers', () => {
-    render(<Viewport {...baseProps} type="discrete" hasClosedMisBoundary manifoldState={{
+    render(<Viewport {...baseProps} type="discrete" hasBoundarySamples manifoldState={{
       ...baseProps.manifoldState,
       showUnstableManifold: true,
       showDeterministicImageBoundary: true,

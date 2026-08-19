@@ -100,7 +100,7 @@ const baseProps = {
     startPoint: { x: 0.1, y: 0.1, nx: 1, ny: 0 },
   },
   setManifoldState: vi.fn(),
-  hasClosedMisBoundary: false,
+  hasBoundarySamples: false,
   boundaryLayerError: null,
   boundarySampling: { unstable: null, deterministic: null },
   geometricOffsetState: {

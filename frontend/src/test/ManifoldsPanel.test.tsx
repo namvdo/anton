@@ -40,14 +40,14 @@ describe('ManifoldsPanel', () => {
     expect(screen.getAllByRole('checkbox')).toHaveLength(2);
   });
 
-  it('shows simple boundary-layer controls and sampling density for a closed curve', () => {
+  it('shows simple boundary-layer controls and branch sampling density', () => {
     const setManifoldState = vi.fn();
     render(
       <ManifoldsPanel
         manifoldState={{ ...defaultManifoldState, showUnstableManifold: true }}
         setManifoldState={setManifoldState}
         ORBIT_COLORS={ORBIT_COLORS}
-        hasClosedMisBoundary
+        hasBoundarySamples
         systemEpsilon={0.0625}
         boundarySampling={{
           unstable: { sampleCount: 320, perimeter: 8, pointsPerUnit: 40, maximumGap: 0.031 },
@@ -61,12 +61,14 @@ describe('ManifoldsPanel', () => {
     expect(screen.getByLabelText('Show points')).toBeEnabled();
     expect(screen.getByRole('spinbutton', { name: '' })).toHaveValue(0.005);
     expect(screen.getByText('Smaller spacing performs more extended boundary-map calculations.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Boundary sampling density')).toHaveTextContent('Unstable320 points · max gap 0.031');
-    expect(screen.getByLabelText('Boundary sampling density')).toHaveTextContent('Deterministic320 points · max gap 0.027');
+    expect(screen.getByText('Maximum state spacing')).toBeInTheDocument();
+    expect(screen.getByText('‖(Δx, Δn)‖; recomputes')).toBeInTheDocument();
+    expect(screen.getByLabelText('Boundary sampling density')).toHaveTextContent('Unstable320 · 40.0/unit · Δx max 0.031');
+    expect(screen.getByLabelText('Boundary sampling density')).toHaveTextContent('Deterministic320 · 50.0/unit · Δx max 0.027');
     expect(screen.queryByText('Wei boundary construction')).not.toBeInTheDocument();
   });
 
-  it('disables boundary layers until a closed curve is available', () => {
+  it('disables dependent layers until calculated branch samples are available', () => {
     render(
       <ManifoldsPanel
         manifoldState={{ ...defaultManifoldState, showUnstableManifold: true }}
@@ -76,7 +78,7 @@ describe('ManifoldsPanel', () => {
       />
     );
 
-    expect(screen.getByText(/Waiting for a closed unstable-manifold boundary/)).toBeInTheDocument();
+    expect(screen.queryByText(/closed unstable-manifold boundary/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('Remove noise')).toBeDisabled();
     expect(screen.getByLabelText('Show noise balls')).toBeDisabled();
     expect(screen.getByLabelText('Show points')).toBeDisabled();

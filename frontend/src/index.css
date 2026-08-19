@@ -15,8 +15,8 @@
   --amber:       #d6a84f;
   --red:         #cf7272;
   --traj:        #a780c6;
-  --sidebar-width: clamp(316px, 25vw, 356px);
-  --viewport-header-height: 72px;
+  --sidebar-width: clamp(260px, 20vw, 280px);
+  --viewport-header-height: 52px;
   --font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Code', 'Fira Mono', 'Consolas', monospace;
 }
@@ -83,8 +83,8 @@ select:disabled { cursor: not-allowed; }
 
 /* ─── App name ──────────────────────────────────────── */
 .app-name {
-  min-height: 54px;
-  padding: 12px 18px;
+  min-height: 44px;
+  padding: 10px 14px;
   font-size: 14px;
   font-weight: 800;
   letter-spacing: .1em;
@@ -116,7 +116,7 @@ select:disabled { cursor: not-allowed; }
 
 /* ─── System type toggle ────────────────────────────── */
 .type-toggle-wrap {
-  padding: 14px 18px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--line);
 }
 .type-toggle-label {
@@ -169,7 +169,7 @@ select:disabled { cursor: not-allowed; }
 
 /* ─── System picker ─────────────────────────────────── */
 .system-pick-wrap {
-  padding: 12px 18px 14px;
+  padding: 10px 14px 12px;
   border-bottom: 1px solid var(--line);
 }
 .sys-pick-label {
@@ -219,7 +219,7 @@ select:disabled { cursor: not-allowed; }
 
 /* ─── Equation display ──────────────────────────────── */
 .eq-display {
-  padding: 12px 18px 14px;
+  padding: 10px 14px 12px;
   border-bottom: 1px solid var(--line);
   background: var(--bg);
 }
@@ -298,7 +298,7 @@ select:disabled { cursor: not-allowed; }
 }
 .section.open .sec-caret { transform: rotate(90deg); }
 .sec-body {
-  padding: 2px 18px 16px;
+  padding: 2px 14px 14px;
   display: none;
 }
 .section.open .sec-body { display: block; }
@@ -561,6 +561,16 @@ select:disabled { cursor: not-allowed; }
   border-top: 1px solid var(--line);
 }
 .boundary-refinement-control .p-row { margin-bottom: 2px; }
+.boundary-refinement-control .p-head { align-items: flex-start; gap: 10px; }
+.boundary-refinement-control .p-name {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.25;
+}
+.boundary-refinement-control .p-name small { margin-left: 0; }
+.boundary-refinement-control .p-val { flex: 0 0 78px; }
 .boundary-refinement-note {
   color: var(--text-3);
   font-size: 9px;
@@ -949,7 +959,7 @@ select:disabled { cursor: not-allowed; }
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 0 18px;
+  padding: 0 16px;
   background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
@@ -962,7 +972,7 @@ select:disabled { cursor: not-allowed; }
   letter-spacing: .01em;
 }
 .vp-header p {
-  margin: 6px 0 0;
+  margin: 2px 0 0;
   color: var(--text-3);
   font-size: 10px;
   font-weight: 600;
@@ -972,8 +982,8 @@ select:disabled { cursor: not-allowed; }
 }
 .vp-fit-button {
   flex: 0 0 auto;
-  min-height: 38px;
-  padding: 0 13px;
+  min-height: 32px;
+  padding: 0 12px;
   border: 1px solid var(--line-hi);
   border-radius: 5px;
   background: var(--surface);
@@ -1358,16 +1368,16 @@ select {
 ::selection { background: rgba(214,168,79,.32); color: var(--text); }
 
 @media (max-width: 900px) {
-  :root { --sidebar-width: 300px; }
-  .vp-header { padding-inline: 14px; }
-  .vp-header p { max-width: 360px; }
+  :root { --sidebar-width: 250px; }
+  .vp-header { padding-inline: 12px; }
+  .vp-header p { max-width: 320px; }
   .vp-legend { right: 58px; max-width: 220px; }
 }
 
 @media (max-width: 720px) {
-  :root { --sidebar-width: 280px; }
-  .sec-body { padding-inline: 14px; }
-  .sec-head { padding-inline: 14px; }
+  :root { --sidebar-width: 230px; }
+  .sec-body { padding-inline: 12px; }
+  .sec-head { padding-inline: 12px; }
   .vp-header p { display: none; }
   .vp-legend { max-width: 180px; }
 }

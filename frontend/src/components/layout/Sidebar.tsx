@@ -68,7 +68,7 @@ interface SidebarProps {
   setManifoldState: StateSetter<ManifoldState>;
   geometricOffsetState: GeometricOffsetState;
   setGeometricOffsetState: StateSetter<GeometricOffsetState>;
-  hasClosedMisBoundary: boolean;
+  hasBoundarySamples: boolean;
   boundaryLayerError: string | null;
   boundarySampling: {
     unstable: BoundarySamplingSummary | null;
@@ -195,7 +195,7 @@ export const Sidebar = (props: SidebarProps) => {
               manifoldState={props.manifoldState}
               setManifoldState={props.setManifoldState}
               ORBIT_COLORS={ORBIT_COLORS}
-              hasClosedMisBoundary={props.hasClosedMisBoundary}
+              hasBoundarySamples={props.hasBoundarySamples}
               boundaryLayerError={props.boundaryLayerError}
               boundarySampling={props.boundarySampling}
               systemEpsilon={(props.appliedParams || props.params).epsilon}

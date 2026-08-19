@@ -26,11 +26,14 @@ import {
     appendTrajectoryHistoryPoint,
     shouldRecordTrajectoryHistoryPoint
 } from './utils/trajectoryState';
-import { buildGeometricOffsetSeed } from './utils/geometricOffsetSeed';
+import {
+    buildGeometricOffsetSeed,
+    collectExtendedManifoldBranches,
+} from './utils/geometricOffsetSeed';
 import {
     BOUNDARY_LAYER_COLORS,
     reconstructDeterministicImageBoundary,
-    summarizeClosedBoundarySampling
+    summarizeOrderedBoundaryBranches,
 } from './utils/boundaryLayers';
 import {
     buildGeometricOffsetBatchRequest,
@@ -235,9 +238,28 @@ const clampToRange = (
 };
 
 
-const createCoordinateSystem = (scene: THREE.Scene, range: ViewRange): THREE.Group => {
+const createCoordinateSystem = (
+    scene: THREE.Scene,
+    range: ViewRange,
+    viewportSize?: { width: number; height: number }
+): THREE.Group => {
     const { gridDivisions, axisColor, gridColor } = GRID_STYLE;
-    const { xMin, xMax, yMin, yMax } = range;
+    let { xMin, xMax, yMin, yMax } = range;
+
+    if (viewportSize && viewportSize.width > 0 && viewportSize.height > 0) {
+        const aspect = viewportSize.width / viewportSize.height;
+        const gridHeight = yMax - yMin;
+        const gridWidth = xMax - xMin;
+        if (gridHeight > 0) {
+            const targetWidth = gridHeight * aspect;
+            if (targetWidth > gridWidth) {
+                const centerX = (xMin + xMax) / 2;
+                xMin = centerX - targetWidth / 2;
+                xMax = centerX + targetWidth / 2;
+            }
+        }
+    }
+
     const xStep = (xMax - xMin) / gridDivisions;
     const yStep = (yMax - yMin) / gridDivisions;
 
@@ -444,20 +466,28 @@ const SetValuedViz = () => {
         };
     });
 
+    const boundarySourceManifolds = manifoldState.rawManifolds?.length > 0
+        ? manifoldState.rawManifolds
+        : manifoldState.manifolds;
+
     const geometricOffsetSeed = useMemo(
         () => buildGeometricOffsetSeed(
-            manifoldState.rawManifolds?.length > 0 ? manifoldState.rawManifolds : manifoldState.manifolds,
+            boundarySourceManifolds,
             DEFAULT_GEOMETRIC_OFFSET_SETTINGS.maximumSeedPoints,
-            { a: params.a, b: params.b, epsilon: params.epsilon }
         ),
-        [manifoldState.rawManifolds, manifoldState.manifolds, params.a, params.b, params.epsilon]
+        [boundarySourceManifolds]
+    );
+
+    const calculatedBoundaryBranches = useMemo(
+        () => collectExtendedManifoldBranches(boundarySourceManifolds),
+        [boundarySourceManifolds]
     );
 
     const boundaryLayers = useMemo(() => {
-        if (geometricOffsetSeed.length < 3) {
+        if (calculatedBoundaryBranches.length === 0) {
             return {
-                deterministicImage: [] as ExtendedState[],
-                invariantBoundary: [] as ExtendedState[],
+                deterministicBranches: [] as ExtendedState[][],
+                invariantBranches: [] as ExtendedState[][],
                 noiseBallCenters: [] as ProjectedState[],
                 unstableSampling: null,
                 deterministicSampling: null,
@@ -465,41 +495,39 @@ const SetValuedViz = () => {
             };
         }
         try {
-            const deterministicImage = reconstructDeterministicImageBoundary(
-                geometricOffsetSeed,
-                params.epsilon,
-            );
-            const invariantBoundary = deterministicImage.map(({ x, y, nx, ny }) => ({
-                x: x + params.epsilon * nx,
-                y: y + params.epsilon * ny,
-                nx,
-                ny,
-            }));
+            const deterministicBranches = calculatedBoundaryBranches
+                .map(branch => reconstructDeterministicImageBoundary(branch, params.epsilon));
+            const invariantBranches = deterministicBranches.map(branch => (
+                branch.map(({ x, y, nx, ny }) => ({
+                    x: x + params.epsilon * nx,
+                    y: y + params.epsilon * ny,
+                    nx,
+                    ny,
+                }))
+            ));
             return {
-                deterministicImage,
-                invariantBoundary,
-                noiseBallCenters: params.epsilon > 0 ? deterministicImage : [],
-                unstableSampling: summarizeClosedBoundarySampling(
-                    invariantBoundary,
-                ),
-                deterministicSampling: summarizeClosedBoundarySampling(deterministicImage),
+                deterministicBranches,
+                invariantBranches,
+                noiseBallCenters: params.epsilon > 0 ? deterministicBranches.flat() : [],
+                unstableSampling: summarizeOrderedBoundaryBranches(invariantBranches),
+                deterministicSampling: summarizeOrderedBoundaryBranches(deterministicBranches),
                 error: null,
             };
         } catch (error) {
             return {
-                deterministicImage: [] as ExtendedState[],
-                invariantBoundary: [] as ExtendedState[],
+                deterministicBranches: [] as ExtendedState[][],
+                invariantBranches: [] as ExtendedState[][],
                 noiseBallCenters: [] as ProjectedState[],
                 unstableSampling: null,
                 deterministicSampling: null,
                 error: error instanceof Error ? error.message : String(error),
             };
         }
-    }, [geometricOffsetSeed, params.epsilon]);
+    }, [calculatedBoundaryBranches, params.epsilon]);
 
-    const hasClosedMisBoundary = geometricOffsetSeed.length >= 3
+    const hasBoundarySamples = calculatedBoundaryBranches.length > 0
         && boundaryLayers.error === null
-        && boundaryLayers.deterministicImage.length >= 3;
+        && boundaryLayers.deterministicBranches.length > 0;
 
     const [filters, setFilters] = useState<OrbitFilters>({
         period1: true, period2: true, period3: true,
@@ -702,7 +730,7 @@ const SetValuedViz = () => {
             if (gridGroupRef.current) {
                 scene.remove(gridGroupRef.current);
             }
-            gridGroupRef.current = createCoordinateSystem(scene, target);
+            gridGroupRef.current = createCoordinateSystem(scene, target, readViewportSize());
         }
 
         const startedAt = performance.now();
@@ -798,13 +826,17 @@ const SetValuedViz = () => {
 
         const initialViewportRange = viewportRangeRef.current;
         applyViewRangeToCamera(initialViewportRange);
-        gridGroupRef.current = createCoordinateSystem(scene, initialViewportRange);
+        gridGroupRef.current = createCoordinateSystem(scene, initialViewportRange, initialSize);
 
         const handleResize = () => {
             const range = viewportRangeRef.current;
             const size = readViewportSize();
             applyViewRangeToCamera(range);
             renderer.setSize(size.width, size.height, false);
+            if (gridGroupRef.current) {
+                scene.remove(gridGroupRef.current);
+            }
+            gridGroupRef.current = createCoordinateSystem(scene, range, size);
             scene.traverse(object => {
                 if (object instanceof Line2) {
                     object.material.resolution.set(
@@ -844,9 +876,9 @@ const SetValuedViz = () => {
         if (gridGroupRef.current) {
             scene.remove(gridGroupRef.current);
         }
-        gridGroupRef.current = createCoordinateSystem(scene, viewportRange);
+        gridGroupRef.current = createCoordinateSystem(scene, viewportRange, readViewportSize());
         applyViewRangeToCamera(viewportRange);
-    }, [viewportRange, applyViewRangeToCamera]);
+    }, [viewportRange, applyViewRangeToCamera, readViewportSize]);
 
     useEffect(() => {
         computationViewRangeRef.current = viewRange;
@@ -2250,17 +2282,18 @@ const SetValuedViz = () => {
             scene.remove(obj);
         });
 
-        const addClosedBoundaryLine = (
+        const addBoundaryLine = (
             points: ProjectedState[],
             color: string,
             linewidth: number,
             zPosition: number,
             boundaryRole: string,
+            closeCycle = false,
         ): void => {
-            if (points.length < 3) return;
-            const closedPoints = [...points, points[0]];
+            if (points.length < 2) return;
+            const renderedPoints = closeCycle ? [...points, points[0]] : points;
             const geometry = new LineGeometry();
-            geometry.setPositions(closedPoints.flatMap(point => [point.x, point.y, zPosition]));
+            geometry.setPositions(renderedPoints.flatMap(point => [point.x, point.y, zPosition]));
             const material = new LineMaterial({
                 color,
                 linewidth,
@@ -2283,7 +2316,7 @@ const SetValuedViz = () => {
             zPosition: number,
             boundaryRole: string,
         ): void => {
-            if (points.length < 3) return;
+            if (points.length < 1) return;
             const geometry = new THREE.BufferGeometry().setFromPoints(
                 points.map(point => new THREE.Vector3(point.x, point.y, zPosition)),
             );
@@ -2302,41 +2335,45 @@ const SetValuedViz = () => {
             scene.add(samples);
         };
 
-        if (manifoldState.showUnstableManifold && hasClosedMisBoundary) {
-            if (manifoldState.showBoundarySamplePoints) {
-                addBoundarySamplePoints(
-                    boundaryLayers.invariantBoundary,
-                    BOUNDARY_LAYER_COLORS.invariant,
-                    0.26,
-                    'unstable-manifold',
-                );
-            } else {
-                addClosedBoundaryLine(
-                    boundaryLayers.invariantBoundary,
-                    BOUNDARY_LAYER_COLORS.invariant,
-                    3.4,
-                    0.24,
-                    'unstable-manifold',
-                );
-            }
-
-            if (manifoldState.showDeterministicImageBoundary) {
+        if (manifoldState.showUnstableManifold && hasBoundarySamples) {
+            boundaryLayers.invariantBranches.forEach(branch => {
                 if (manifoldState.showBoundarySamplePoints) {
                     addBoundarySamplePoints(
-                        boundaryLayers.deterministicImage,
-                        BOUNDARY_LAYER_COLORS.deterministicImage,
-                        0.255,
-                        'deterministic-image',
+                        branch,
+                        BOUNDARY_LAYER_COLORS.invariant,
+                        0.26,
+                        'unstable-manifold',
                     );
                 } else {
-                    addClosedBoundaryLine(
-                        boundaryLayers.deterministicImage,
-                        BOUNDARY_LAYER_COLORS.deterministicImage,
-                        2.6,
-                        0.23,
-                        'deterministic-image',
+                    addBoundaryLine(
+                        branch,
+                        BOUNDARY_LAYER_COLORS.invariant,
+                        3.4,
+                        0.24,
+                        'unstable-manifold',
                     );
                 }
+            });
+
+            if (manifoldState.showDeterministicImageBoundary) {
+                boundaryLayers.deterministicBranches.forEach(branch => {
+                    if (manifoldState.showBoundarySamplePoints) {
+                        addBoundarySamplePoints(
+                            branch,
+                            BOUNDARY_LAYER_COLORS.deterministicImage,
+                            0.255,
+                            'deterministic-image',
+                        );
+                    } else {
+                        addBoundaryLine(
+                            branch,
+                            BOUNDARY_LAYER_COLORS.deterministicImage,
+                            2.6,
+                            0.23,
+                            'deterministic-image',
+                        );
+                    }
+                });
             }
 
             if (manifoldState.showNoiseBalls && params.epsilon > 0) {
@@ -2396,16 +2433,23 @@ const SetValuedViz = () => {
             manifoldState.manifolds.forEach(manifold => {
                 [manifold.plus, manifold.minus].forEach(trajectory => {
                     if (!trajectory?.points || trajectory.points.length <= 1) return;
-                    trajectory.points.forEach(([x, y]) => {
-                        const geometry = new THREE.SphereGeometry(0.008, 6, 6);
-                        const material = new THREE.MeshBasicMaterial({
-                            color: new THREE.Color(ORBIT_COLORS.manifold)
-                        });
-                        const sphere = new THREE.Mesh(geometry, material);
-                        sphere.position.set(x, y, 0.1);
-                        sphere.userData.type = 'manifold';
-                        scene.add(sphere);
-                    });
+                    const points = trajectory.points.map(([x, y]) => ({ x, y }));
+                    if (manifoldState.showBoundarySamplePoints) {
+                        addBoundarySamplePoints(
+                            points,
+                            BOUNDARY_LAYER_COLORS.invariant,
+                            0.26,
+                            'unstable-manifold',
+                        );
+                    } else {
+                        addBoundaryLine(
+                            points,
+                            BOUNDARY_LAYER_COLORS.invariant,
+                            3.4,
+                            0.24,
+                            'unstable-manifold',
+                        );
+                    }
                 });
             });
         }
@@ -2606,7 +2650,7 @@ const SetValuedViz = () => {
             scene.add(sphere);
         }
 
-    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, readViewportSize, geometricOffsetSeed, boundaryLayers, hasClosedMisBoundary, params.epsilon]);
+    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, readViewportSize, geometricOffsetSeed, boundaryLayers, hasBoundarySamples, params.epsilon]);
 
     useEffect(() => {
         if (!sceneRef.current) return;
@@ -3511,7 +3555,7 @@ const SetValuedViz = () => {
                 setManifoldState={setManifoldState}
                 geometricOffsetState={geometricOffsetState}
                 setGeometricOffsetState={setGeometricOffsetState}
-                hasClosedMisBoundary={hasClosedMisBoundary}
+                hasBoundarySamples={hasBoundarySamples}
                 boundaryLayerError={boundaryLayers.error}
                 boundarySampling={{
                     unstable: boundaryLayers.unstableSampling,
@@ -3557,7 +3601,7 @@ const SetValuedViz = () => {
                 manifoldState={manifoldState}
                 geometricOffsetState={geometricOffsetState}
                 ulamState={ulamState}
-                hasClosedMisBoundary={hasClosedMisBoundary}
+                hasBoundarySamples={hasBoundarySamples}
                 displayRange={viewportRange}
                 savePNG={savePNG}
                 handleZoomIn={handleZoomIn}

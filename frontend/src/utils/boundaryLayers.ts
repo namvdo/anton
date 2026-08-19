@@ -46,6 +46,33 @@ export const summarizeClosedBoundarySampling = (
   };
 };
 
+/** Measure ordered manifold branches without inventing gaps between branches or a closing seam. */
+export const summarizeOrderedBoundaryBranches = (
+  branches: Array<Array<Pick<ExtendedState, 'x' | 'y'>>>,
+): BoundarySamplingSummary | null => {
+  const usable = branches.filter(branch => branch.length >= 2);
+  if (usable.length === 0) return null;
+  if (usable.some(branch => branch.some(point => (
+    !Number.isFinite(point.x) || !Number.isFinite(point.y)
+  )))) {
+    throw new Error('Boundary branch sampling requires finite positions.');
+  }
+
+  const gaps = usable.flatMap(branch => branch.slice(1).map((point, index) => (
+    positionDistance(branch[index], point)
+  )));
+  const perimeter = gaps.reduce((sum, gap) => sum + gap, 0);
+  if (!Number.isFinite(perimeter) || perimeter <= NORMAL_TOLERANCE) return null;
+  const sampleCount = usable.reduce((sum, branch) => sum + branch.length, 0);
+
+  return {
+    sampleCount,
+    perimeter,
+    pointsPerUnit: sampleCount / perimeter,
+    maximumGap: Math.max(...gaps),
+  };
+};
+
 /**
  * Recover the deterministic-image boundary from the Euclidean boundary-map
  * relation p = f(x) + epsilon n. The input is the ordered normal-bundle
@@ -59,12 +86,11 @@ export const reconstructDeterministicImageBoundary = (
   if (!Number.isFinite(epsilon) || epsilon < 0) {
     throw new Error('System noise epsilon must be finite and nonnegative.');
   }
-  if (!Array.isArray(boundary) || boundary.length < 3) {
-    throw new Error('At least three ordered extended boundary samples are required.');
+  if (!Array.isArray(boundary) || boundary.length < 2) {
+    throw new Error('At least two ordered extended branch samples are required.');
   }
 
-  const cleaned: ExtendedState[] = [];
-  boundary.forEach((sample, index) => {
+  return boundary.map((sample, index) => {
     if (!Array.isArray(sample) || sample.length < 4) {
       throw new Error(`Boundary sample ${index} is not an extended state.`);
     }
@@ -76,27 +102,13 @@ export const reconstructDeterministicImageBoundary = (
     if (normalLength < NORMAL_TOLERANCE) {
       throw new Error(`Boundary sample ${index} contains a degenerate normal.`);
     }
-    const point = { x, y, nx: nx / normalLength, ny: ny / normalLength };
-    const previous = cleaned.at(-1);
-    if (!previous || positionDistance(previous, point) > NORMAL_TOLERANCE) {
-      cleaned.push(point);
-    }
+    const nxUnit = nx / normalLength;
+    const nyUnit = ny / normalLength;
+    return {
+      x: x - epsilon * nxUnit,
+      y: y - epsilon * nyUnit,
+      nx: nxUnit,
+      ny: nyUnit,
+    };
   });
-
-  const first = cleaned[0];
-  const last = cleaned.at(-1);
-  if (first && last && cleaned.length > 1
-      && positionDistance(first, last) <= NORMAL_TOLERANCE) {
-    cleaned.pop();
-  }
-  if (cleaned.length < 3) {
-    throw new Error('The boundary needs at least three distinct positions.');
-  }
-
-  return cleaned.map(({ x, y, nx, ny }) => ({
-    x: x - epsilon * nx,
-    y: y - epsilon * ny,
-    nx,
-    ny,
-  }));
 };

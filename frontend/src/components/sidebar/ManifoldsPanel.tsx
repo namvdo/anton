@@ -26,7 +26,7 @@ interface ManifoldsPanelProps {
   >;
   setManifoldState: StateSetter<ManifoldState>;
   ORBIT_COLORS: OrbitColors;
-  hasClosedMisBoundary?: boolean;
+  hasBoundarySamples?: boolean;
   boundaryLayerError?: string | null;
   systemEpsilon?: number;
   boundarySampling?: {
@@ -39,13 +39,13 @@ export const ManifoldsPanel = ({
   manifoldState,
   setManifoldState,
   ORBIT_COLORS,
-  hasClosedMisBoundary = false,
+  hasBoundarySamples = false,
   boundaryLayerError = null,
   systemEpsilon = 0,
   boundarySampling,
 }: ManifoldsPanelProps) => {
   const boundaryLayersAvailable = manifoldState.showUnstableManifold
-    && hasClosedMisBoundary
+    && hasBoundarySamples
     && !boundaryLayerError;
 
   return (
@@ -59,11 +59,6 @@ export const ManifoldsPanel = ({
 
       {manifoldState.showUnstableManifold && (
         <div className="boundary-layer-section">
-          {!hasClosedMisBoundary && !boundaryLayerError && (
-            <div className="boundary-layer-status">
-              Waiting for a closed unstable-manifold boundary.
-            </div>
-          )}
           {boundaryLayerError && (
             <div className="boundary-layer-status error" role="alert">
               {boundaryLayerError}
@@ -104,11 +99,11 @@ export const ManifoldsPanel = ({
 
           <div className="boundary-refinement-control">
             <Slider
-              label="Maximum point spacing"
-              hint="recomputes manifold"
-              min={0.0005}
+              label="Maximum state spacing"
+              hint="‖(Δx, Δn)‖; recomputes"
+              min={0.0001}
               max={0.02}
-              step={0.0005}
+              step={0.0001}
               value={manifoldState.maximumManifoldPointSpacing}
               onChange={maximumManifoldPointSpacing => setManifoldState(previous => ({
                 ...previous,
@@ -125,12 +120,12 @@ export const ManifoldsPanel = ({
                 <div className="boundary-sampling-title">Computed geometry</div>
                 <div>
                   <span>Unstable</span>
-                  <strong>{boundarySampling.unstable.sampleCount} points · max gap {boundarySampling.unstable.maximumGap.toPrecision(2)}</strong>
+                  <strong>{boundarySampling.unstable.sampleCount} · {boundarySampling.unstable.pointsPerUnit.toFixed(1)}/unit · Δx max {boundarySampling.unstable.maximumGap.toPrecision(2)}</strong>
                 </div>
                 {boundarySampling.deterministic && (
                   <div>
                     <span>Deterministic</span>
-                    <strong>{boundarySampling.deterministic.sampleCount} points · max gap {boundarySampling.deterministic.maximumGap.toPrecision(2)}</strong>
+                    <strong>{boundarySampling.deterministic.sampleCount} · {boundarySampling.deterministic.pointsPerUnit.toFixed(1)}/unit · Δx max {boundarySampling.deterministic.maximumGap.toPrecision(2)}</strong>
                   </div>
                 )}
               </div>

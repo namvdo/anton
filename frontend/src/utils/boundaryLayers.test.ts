@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   reconstructDeterministicImageBoundary,
   summarizeClosedBoundarySampling,
+  summarizeOrderedBoundaryBranches,
 } from './boundaryLayers';
 import type { ExtendedPointTuple } from '../types/domain';
 
@@ -37,6 +38,21 @@ describe('Wei boundary-layer construction', () => {
     });
   });
 
+  it('keeps one deterministic sample for every calculated extended state', () => {
+    const repeated: ExtendedPointTuple[] = [
+      [1, 0, 1, 0],
+      [1, 0, 1, 0],
+      [2, 0, 1, 0],
+    ];
+    const deterministic = reconstructDeterministicImageBoundary(repeated, 0.25);
+    expect(deterministic).toHaveLength(repeated.length);
+    expect(deterministic.map(({ x, y }) => [x, y])).toEqual([
+      [0.75, 0],
+      [0.75, 0],
+      [1.75, 0],
+    ]);
+  });
+
   it('fails fast for invalid normals and noise radii', () => {
     expect(() => reconstructDeterministicImageBoundary(boundary, -0.1)).toThrow(/nonnegative/);
     expect(() => reconstructDeterministicImageBoundary([
@@ -67,5 +83,17 @@ describe('Wei boundary-layer construction', () => {
       { x: Number.NaN, y: 0 },
       { x: 0, y: 1 },
     ])).toThrow(/finite positions/);
+  });
+
+  it('summarizes open branches without inventing inter-branch or closing gaps', () => {
+    expect(summarizeOrderedBoundaryBranches([
+      [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 3, y: 0 }],
+      [{ x: 100, y: 0 }, { x: 104, y: 0 }],
+    ])).toEqual({
+      sampleCount: 5,
+      perimeter: 7,
+      pointsPerUnit: 5 / 7,
+      maximumGap: 4,
+    });
   });
 });

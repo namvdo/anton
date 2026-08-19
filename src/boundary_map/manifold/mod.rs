@@ -56,6 +56,13 @@ fn validated_manifold_config(spacing_tol: f64) -> Result<ManifoldConfig, JsValue
     })
 }
 
+#[inline]
+fn extended_state_distance(left: &ExtendedState, right: &ExtendedState) -> f64 {
+    let position_delta = right.pos - left.pos;
+    let normal_delta = right.normal - left.normal;
+    (position_delta.norm_squared() + normal_delta.norm_squared()).sqrt()
+}
+
 fn normalize_display_range(x_min: f64, x_max: f64, y_min: f64, y_max: f64) -> (f64, f64, f64, f64) {
     let (x_min, x_max) = clamp_pair(x_min, x_max, RANGE_LIMIT);
     let (y_min, y_max) = clamp_pair(y_min, y_max, RANGE_LIMIT);
@@ -145,8 +152,11 @@ impl Default for ManifoldConfig {
             perturb_tol: 1e-5,
             spacing_tol: 5e-3,
             spacing_upper: 10.0,
-            conv_tol: 1e-14,
-            stable_tol: 1e-19,
+            // Wei's reference implementation uses these separately: the
+            // branch-to-target tolerance is 1e-14 and the iteration
+            // convergence tolerance is 1e-19.
+            conv_tol: 1e-19,
+            stable_tol: 1e-14,
             max_iter: 8000,
             max_points: 700_000,
             time_limit: 10.0,
@@ -238,6 +248,13 @@ impl SaddlePoint {
 pub struct Trajectory {
     pub points: Vec<ExtendedState>,
     pub stop_reason: StopReason,
+    pub reached_target_id: Option<usize>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ManifoldTarget {
+    pub id: usize,
+    pub state: ExtendedState,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -415,7 +432,7 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
         &self,
         saddle: &SaddlePoint,
         direction_sign: f64,
-        target_points: &[Vector2<f64>],
+        target_points: &[ManifoldTarget],
     ) -> Result<Trajectory, String> {
         console_log!(
             "Starting manifold computation from ({:.4}, {:.4})",
@@ -532,6 +549,7 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
                 return Ok(Trajectory {
                     points: trajectory,
                     stop_reason: StopReason::MaxIterations,
+                    reached_target_id: None,
                 });
             }
 
@@ -540,6 +558,7 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
                 return Ok(Trajectory {
                     points: trajectory,
                     stop_reason: StopReason::MaxPoints,
+                    reached_target_id: None,
                 });
             }
 
@@ -549,6 +568,7 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
                 return Ok(Trajectory {
                     points: trajectory,
                     stop_reason: StopReason::TimeExceeded,
+                    reached_target_id: None,
                 });
             }
 
@@ -560,12 +580,14 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
                     return Ok(Trajectory {
                         points: trajectory,
                         stop_reason: StopReason::Converged,
+                        reached_target_id: None,
                     });
                 }
             };
 
             // check convergence - distance between consecutive iterations
             let step_distance = (next_state.pos - current_state.pos).norm();
+            let refinement_distance = extended_state_distance(&current_state, &next_state);
 
             // enable self-crossing check once we're far enough from saddle
             if step_distance > 1e-2 {
@@ -578,28 +600,33 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
                 return Ok(Trajectory {
                     points: trajectory,
                     stop_reason: StopReason::Converged,
+                    reached_target_id: None,
                 });
             }
 
             // check if approaching target points (closure to stable points)
             if !target_points.is_empty() {
-                let min_dist_to_target = target_points
+                let nearest_target = target_points
                     .iter()
-                    .map(|tp| (next_state.pos - tp).norm())
-                    .fold(f64::INFINITY, f64::min);
+                    .map(|target| (target, extended_state_distance(&next_state, &target.state)))
+                    .min_by(|left, right| left.1.total_cmp(&right.1));
 
-                if min_dist_to_target < self.config.stable_tol {
-                    console_log!(
-                        "Approached target point at iteration {}, dist={:.2e}",
-                        iteration,
-                        min_dist_to_target
-                    );
-                    trajectory.push(current_state);
-                    trajectory.push(next_state);
-                    return Ok(Trajectory {
-                        points: trajectory,
-                        stop_reason: StopReason::ApproachedTargetPoint,
-                    });
+                if let Some((target, min_dist_to_target)) = nearest_target {
+                    if min_dist_to_target < self.config.stable_tol {
+                        console_log!(
+                            "Approached target point {} at iteration {}, dist={:.2e}",
+                            target.id,
+                            iteration,
+                            min_dist_to_target
+                        );
+                        trajectory.push(current_state);
+                        trajectory.push(next_state);
+                        return Ok(Trajectory {
+                            points: trajectory,
+                            stop_reason: StopReason::ApproachedTargetPoint,
+                            reached_target_id: Some(target.id),
+                        });
+                    }
                 }
             }
 
@@ -622,6 +649,7 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
                     return Ok(Trajectory {
                         points: trajectory,
                         stop_reason: StopReason::SelfIntersection,
+                        reached_target_id: None,
                     });
                 }
             }
@@ -632,7 +660,8 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
             trajectory.push(current_state);
 
             // Adaptive refinement if gap too large but not too huge
-            if step_distance > spacing_tol && step_distance < self.config.spacing_upper {
+            if refinement_distance > spacing_tol && refinement_distance < self.config.spacing_upper
+            {
                 match self.refine_segment(
                     state_0,
                     dist_vec_0_pos,
@@ -657,6 +686,7 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
                         return Ok(Trajectory {
                             points: trajectory,
                             stop_reason: reason,
+                            reached_target_id: None,
                         });
                     }
                 }
@@ -704,7 +734,7 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
             let mut indices_to_refine: Vec<usize> = Vec::new();
 
             for j in 0..(add_pt.len() - 1) {
-                let dist = (add_pt[j + 1].0.pos - add_pt[j].0.pos).norm();
+                let dist = extended_state_distance(&add_pt[j].0, &add_pt[j + 1].0);
                 if dist > spacing_tol && dist < self.config.spacing_upper {
                     indices_to_refine.push(j);
                 }
@@ -804,7 +834,7 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
     pub fn compute_manifold(
         &self,
         saddle: &SaddlePoint,
-        target_points: &[Vector2<f64>],
+        target_points: &[ManifoldTarget],
     ) -> Result<(Trajectory, Trajectory), String> {
         let traj_plus = self.compute_direction(saddle, 1.0, target_points)?;
         let traj_minus = self.compute_direction(saddle, -1.0, target_points)?;
@@ -818,6 +848,7 @@ pub struct TrajectoryRet {
     pub points: Vec<(f64, f64)>,
     pub extended_points: Vec<(f64, f64, f64, f64)>,
     pub stop_reason: String,
+    pub reached_target_id: Option<usize>,
 }
 
 fn trajectory_ret(traj: &Trajectory) -> TrajectoryRet {
@@ -841,6 +872,7 @@ fn trajectory_ret(traj: &Trajectory) -> TrajectoryRet {
             .map(|state| (state.pos.x, state.pos.y, state.normal.x, state.normal.y))
             .collect(),
         stop_reason: format!("{:?}", traj.stop_reason),
+        reached_target_id: traj.reached_target_id,
     }
 }
 
@@ -850,6 +882,7 @@ pub struct ManifoldResult {
     pub minus: TrajectoryRet,
     pub saddle_point: (f64, f64),
     pub eigenvalue: f64,
+    pub source_topology_id: Option<usize>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1007,7 +1040,7 @@ pub fn compute_manifold_simple(
     }
 
     let mut fixed_points_result = Vec::new();
-    let mut all_fixed_points_pos = Vec::new(); // ALL fixed points for manifold termination
+    let mut all_fixed_point_targets = Vec::new();
     let mut unstable_points_indices = Vec::new();
 
     for state in &unique_states {
@@ -1062,7 +1095,10 @@ pub fn compute_manifold_simple(
             stability: stability.to_string(),
         });
 
-        all_fixed_points_pos.push(state.pos);
+        all_fixed_point_targets.push(ManifoldTarget {
+            id: fixed_points_result.len() - 1,
+            state: *state,
+        });
 
         if stability == "Saddle" || stability == "Repeller" {
             unstable_points_indices.push(fixed_points_result.len() - 1);
@@ -1091,11 +1127,16 @@ pub fn compute_manifold_simple(
 
     console_log!(
         "Termination targets: {} points for manifold closure",
-        all_fixed_points_pos.len()
+        all_fixed_point_targets.len()
     );
 
-    for (i, pos) in all_fixed_points_pos.iter().enumerate() {
-        console_log!("  Target {}: ({:.4}, {:.4})", i, pos.x, pos.y);
+    for target in &all_fixed_point_targets {
+        console_log!(
+            "  Target {}: ({:.4}, {:.4})",
+            target.id,
+            target.state.pos.x,
+            target.state.pos.y
+        );
     }
 
     console_log!(
@@ -1142,7 +1183,7 @@ pub fn compute_manifold_simple(
         );
 
         if let Ok((traj_plus, traj_minus)) =
-            computer.compute_manifold(&saddle_pt, &all_fixed_points_pos)
+            computer.compute_manifold(&saddle_pt, &all_fixed_point_targets)
         {
             console_log!(
                 "Manifold from ({:.4}, {:.4}): plus {} pts ({:?}), minus {} pts ({:?})",
@@ -1159,6 +1200,10 @@ pub fn compute_manifold_simple(
                 minus: trajectory_ret(&traj_minus),
                 saddle_point: (pos.x, pos.y),
                 eigenvalue: saddle_pt.eigenvalue,
+                // This fixed-point path has no verified periodic normal-state
+                // topology. Keep its branches renderable, but do not certify
+                // them as edges of a boundary cycle.
+                source_topology_id: None,
             });
         }
     }
@@ -1483,6 +1528,7 @@ pub fn compute_user_defined_manifold(
                     minus: trajectory_ret(&traj_minus),
                     saddle_point: (fp_pos.x, fp_pos.y),
                     eigenvalue: unstable_lambda,
+                    source_topology_id: None,
                 });
             }
         }
@@ -1815,8 +1861,7 @@ pub fn compute_manifold_from_orbits(
                 py
             );
 
-            if let Ok((traj_plus, traj_minus)) = computer.compute_manifold(&saddle_pt, &all_points)
-            {
+            if let Ok((traj_plus, traj_minus)) = computer.compute_manifold(&saddle_pt, &[]) {
                 let plus_points: Vec<(f64, f64)> = traj_plus
                     .points
                     .iter()
@@ -1842,6 +1887,7 @@ pub fn compute_manifold_from_orbits(
                     minus: trajectory_ret(&traj_minus),
                     saddle_point: (px, py),
                     eigenvalue: unstable_lambda,
+                    source_topology_id: None,
                 });
             }
         } // end for point_idx in orbit.points
@@ -1981,6 +2027,7 @@ pub fn compute_stable_and_unstable_manifolds(
     );
 
     let mut all_points: Vec<Vector2<f64>> = Vec::new();
+    let mut manifold_targets: Vec<ManifoldTarget> = Vec::new();
     let mut saddle_orbits: Vec<&OrbitInput> = Vec::new();
     let mut fixed_points_result: Vec<FixedPointResult> = Vec::new();
 
@@ -1994,8 +2041,27 @@ pub fn compute_stable_and_unstable_manifolds(
             continue;
         }
 
-        for (x, y) in &orbit.points {
+        for (point_index, (x, y)) in orbit.points.iter().enumerate() {
+            let topology_id = all_points.len();
             all_points.push(Vector2::new(*x, *y));
+            if let Some((_, _, nx, ny)) = orbit
+                .extended_points
+                .as_ref()
+                .and_then(|points| points.get(point_index))
+                .copied()
+            {
+                let normal = Vector2::new(nx, ny);
+                let normal_length = normal.norm();
+                if normal_length.is_finite() && normal_length > 1e-10 {
+                    manifold_targets.push(ManifoldTarget {
+                        id: topology_id,
+                        state: ExtendedState {
+                            pos: Vector2::new(*x, *y),
+                            normal: normal / normal_length,
+                        },
+                    });
+                }
+            }
             fixed_points_result.push(FixedPointResult {
                 x: *x,
                 y: *y,
@@ -2163,8 +2229,18 @@ pub fn compute_stable_and_unstable_manifolds(
                 )
             };
 
+            let source_topology_id = normal_opt.and_then(|normal| {
+                manifold_targets
+                    .iter()
+                    .find(|target| {
+                        (target.state.pos - pos).norm() < 1e-12
+                            && (target.state.normal - normal).norm() < 1e-12
+                    })
+                    .map(|target| target.id)
+            });
+
             let unstable_result = if let Ok((traj_plus, traj_minus)) =
-                computer.compute_manifold(&saddle_unstable, &all_points)
+                computer.compute_manifold(&saddle_unstable, &manifold_targets)
             {
                 let plus_points: Vec<(f64, f64)> = traj_plus
                     .points
@@ -2191,6 +2267,7 @@ pub fn compute_stable_and_unstable_manifolds(
                     minus: trajectory_ret(&traj_minus),
                     saddle_point: (px, py),
                     eigenvalue: unstable_lambda,
+                    source_topology_id,
                 })
             } else {
                 None
@@ -2218,7 +2295,7 @@ pub fn compute_stable_and_unstable_manifolds(
             };
 
             let stable_result = if let Ok((traj_plus, traj_minus)) =
-                computer.compute_manifold(&saddle_stable, &all_points)
+                computer.compute_manifold(&saddle_stable, &manifold_targets)
             {
                 let plus_points: Vec<(f64, f64)> = traj_plus
                     .points
@@ -2245,6 +2322,7 @@ pub fn compute_stable_and_unstable_manifolds(
                     minus: trajectory_ret(&traj_minus),
                     saddle_point: (px, py),
                     eigenvalue: stable_lambda,
+                    source_topology_id,
                 })
             } else {
                 None
@@ -2549,13 +2627,13 @@ pub fn compute_manifold_from_orbits_user_defined(
                 )
             };
 
-            if let Ok((traj_plus, traj_minus)) = computer.compute_manifold(&saddle_pt, &all_points)
-            {
+            if let Ok((traj_plus, traj_minus)) = computer.compute_manifold(&saddle_pt, &[]) {
                 manifolds_result.push(ManifoldResult {
                     plus: trajectory_ret(&traj_plus),
                     minus: trajectory_ret(&traj_minus),
                     saddle_point: (px, py),
                     eigenvalue: unstable_lambda,
+                    source_topology_id: None,
                 });
             }
         }
@@ -2624,6 +2702,7 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
     };
 
     let mut all_points: Vec<Vector2<f64>> = Vec::new();
+    let mut manifold_targets: Vec<ManifoldTarget> = Vec::new();
     let mut saddle_orbits: Vec<&OrbitInput> = Vec::new();
     let mut fixed_points_result: Vec<FixedPointResult> = Vec::new();
 
@@ -2636,8 +2715,27 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
             continue;
         }
 
-        for (x, y) in &orbit.points {
+        for (point_index, (x, y)) in orbit.points.iter().enumerate() {
+            let topology_id = all_points.len();
             all_points.push(Vector2::new(*x, *y));
+            if let Some((_, _, nx, ny)) = orbit
+                .extended_points
+                .as_ref()
+                .and_then(|points| points.get(point_index))
+                .copied()
+            {
+                let normal = Vector2::new(nx, ny);
+                let normal_length = normal.norm();
+                if normal_length.is_finite() && normal_length > 1e-10 {
+                    manifold_targets.push(ManifoldTarget {
+                        id: topology_id,
+                        state: ExtendedState {
+                            pos: Vector2::new(*x, *y),
+                            normal: normal / normal_length,
+                        },
+                    });
+                }
+            }
             fixed_points_result.push(FixedPointResult {
                 x: *x,
                 y: *y,
@@ -2747,21 +2845,33 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
             let saddle_stable =
                 make_saddle(stable_eigenvec, stable_lambda, SaddleType::DualRepeller);
 
-            if let Ok((tp, tm)) = computer.compute_manifold(&saddle_unstable, &all_points) {
+            let source_topology_id = normal_opt.and_then(|normal| {
+                manifold_targets
+                    .iter()
+                    .find(|target| {
+                        (target.state.pos - pos).norm() < 1e-12
+                            && (target.state.normal - normal).norm() < 1e-12
+                    })
+                    .map(|target| target.id)
+            });
+
+            if let Ok((tp, tm)) = computer.compute_manifold(&saddle_unstable, &manifold_targets) {
                 unstable_manifolds.push(ManifoldResult {
                     plus: trajectory_ret(&tp),
                     minus: trajectory_ret(&tm),
                     saddle_point: (px, py),
                     eigenvalue: unstable_lambda,
+                    source_topology_id,
                 });
             }
 
-            if let Ok((tp, tm)) = computer.compute_manifold(&saddle_stable, &all_points) {
+            if let Ok((tp, tm)) = computer.compute_manifold(&saddle_stable, &manifold_targets) {
                 stable_manifolds.push(ManifoldResult {
                     plus: trajectory_ret(&tp),
                     minus: trajectory_ret(&tm),
                     saddle_point: (px, py),
                     eigenvalue: stable_lambda,
+                    source_topology_id,
                 });
             }
         }
@@ -2838,6 +2948,20 @@ mod tests {
         assert!(validate_manifold_point_spacing(0.0).is_err());
         assert!(validate_manifold_point_spacing(0.0501).is_err());
         assert!(validate_manifold_point_spacing(f64::NAN).is_err());
+    }
+
+    #[test]
+    fn refinement_distance_uses_position_and_normal_coordinates() {
+        let left = ExtendedState {
+            pos: Vector2::new(1.0, -2.0),
+            normal: Vector2::new(1.0, 0.0),
+        };
+        let right = ExtendedState {
+            pos: Vector2::new(1.0, -2.0),
+            normal: Vector2::new(0.0, 1.0),
+        };
+
+        assert!((extended_state_distance(&left, &right) - 2.0_f64.sqrt()).abs() < 1e-15);
     }
 
     #[derive(Clone, Copy)]
@@ -2925,6 +3049,38 @@ mod tests {
             fine.len() > coarse.len(),
             "smaller spacing must produce more calculated extended states"
         );
+    }
+
+    #[test]
+    fn target_termination_records_the_explicit_topology_id() {
+        let config = ManifoldConfig {
+            stable_tol: 1e-12,
+            max_iter: 4,
+            max_points: 100,
+            time_limit: 1.0,
+            ..ManifoldConfig::default()
+        };
+        let computer = UnstableManifoldComputer::new(LinearExpandingSystem, config);
+        let saddle = SaddlePoint::from_2d_eigenvector(
+            Vector2::new(0.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            1,
+            2.0,
+            SaddleType::Regular,
+            None,
+        );
+        let target = ManifoldTarget {
+            id: 37,
+            state: ExtendedState {
+                pos: Vector2::new(4e-5, 0.0),
+                normal: Vector2::new(0.0, 1.0),
+            },
+        };
+
+        let trajectory = computer.compute_direction(&saddle, 1.0, &[target]).unwrap();
+
+        assert_eq!(trajectory.stop_reason, StopReason::ApproachedTargetPoint);
+        assert_eq!(trajectory.reached_target_id, Some(37));
     }
 
     #[test]
