@@ -17,8 +17,6 @@ $F(A) = \bigcup_{x \in A} F(x)$
 In our setting, we model bounded additive noise through set-valued map:
 $F(x) = B_\epsilon(f(x)) = \{f(x) + \xi : \|\xi\| \leq \epsilon\}$ where $f: \mathbb{R}^n \to \mathbb{R}^n$ is the underlying single-valued deterministic map (the Hénon map in our case), and $B_\epsilon(f(x))$ represent all possible perturbed states within distance $\epsilon$ of the deterministic image.
 
-The system noise radius accepts $\epsilon=0$ and non-negative values within each system's configured range. Set $\epsilon=0$ in the Parameters panel to remove bounded noise; position updates then reduce exactly to the underlying deterministic map or ODE flow. Geometric contour offsets are separate analysis distances and must remain positive.
-
 Rather than tracking every possible point within the noise ball $B_\epsilon(f(x))$ which would be computationally expensive to compute as the noise balls grow, we instead track the boundary evolution through an extended boundary map $F(x,y,nx,ny)=\bigl(f(x,y)+\varepsilon\,\mathbf{nx}',\mathbf{ny}'\bigr)$. Since the maximum uncertainty occurs at the boundary $\partial B_\epsilon(f(x))$ (points at distance exactly $\epsilon$ from the deterministic image), we focus exclusively on tracking how these boundary points evolve.
 
 
