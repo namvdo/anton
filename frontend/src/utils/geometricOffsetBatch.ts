@@ -4,7 +4,7 @@ import type {
 } from '../types/domain';
 import { categoricalCurveColor } from './categoricalCurveColor';
 
-export const MIN_CONTOUR_EPSILON = 0.001;
+export const MIN_CONTOUR_EPSILON = 0;
 export const MAX_CONTOUR_EPSILON = 1;
 export const MAX_BATCH_CONTOURS = 12;
 
