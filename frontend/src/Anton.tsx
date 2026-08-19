@@ -238,30 +238,57 @@ const clampToRange = (
 };
 
 
+const calculateNiceStep = (span: number): number => {
+    const rawStep = Math.abs(span) / 4;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const residual = rawStep / magnitude;
+
+    let step: number;
+    if (residual < 1.5) step = 1 * magnitude;
+    else if (residual < 3.5) step = 2 * magnitude;
+    else if (residual < 7.5) step = 5 * magnitude;
+    else step = 10 * magnitude;
+
+    return Number(step.toFixed(6));
+};
+
+const formatTickNumber = (num: number): string => {
+    const rounded = Number(num.toFixed(6));
+    if (Math.abs(rounded) < 1e-6) return '0';
+    const str = rounded.toString();
+    if (!str.includes('.')) return `${str}.0`;
+    return str;
+};
+
 const createCoordinateSystem = (
     scene: THREE.Scene,
     range: ViewRange,
     viewportSize?: { width: number; height: number }
 ): THREE.Group => {
-    const { gridDivisions, axisColor, gridColor } = GRID_STYLE;
+    const { axisColor, gridColor } = GRID_STYLE;
     const limit = RANGE_LIMIT;
 
-    let xMin = -limit;
-    let xMax = limit;
-    let yMin = -limit;
-    let yMax = limit;
+    const xMin = -limit;
+    const xMax = limit;
+    const yMin = -limit;
+    const yMax = limit;
 
-    const xStep = (range.xMax - range.xMin) / gridDivisions;
-    const yStep = (range.yMax - range.yMin) / gridDivisions;
+    const xSpan = Math.abs(range.xMax - range.xMin);
+    const ySpan = Math.abs(range.yMax - range.yMin);
+
+    const xTickStep = calculateNiceStep(xSpan);
+    const yTickStep = calculateNiceStep(ySpan);
 
     const gridGroup = new THREE.Group();
     gridGroup.name = 'coordinate-system';
 
-    const numXSteps = Math.ceil((xMax - xMin) / xStep);
-    for (let i = -numXSteps; i <= numXSteps; i++) {
-        const x = Number((i * xStep).toFixed(6));
-        if (x < xMin || x > xMax) continue;
+    const xGridStep = xTickStep / 2;
+    const numX = Math.ceil(limit / xGridStep);
+    for (let i = -numX; i <= numX; i++) {
+        const x = Number((i * xGridStep).toFixed(6));
+        if (Math.abs(x) > limit) continue;
         const isAxis = Math.abs(x) < 0.001;
+        const isMajor = Math.abs(x % xTickStep) < 0.001 || Math.abs(Math.abs(x % xTickStep) - xTickStep) < 0.001;
         const points = [
             new THREE.Vector3(x, yMin, -0.01),
             new THREE.Vector3(x, yMax, -0.01)
@@ -270,18 +297,20 @@ const createCoordinateSystem = (
         const material = new THREE.LineBasicMaterial({
             color: isAxis ? axisColor : gridColor,
             transparent: true,
-            opacity: isAxis ? 1.0 : 0.35
+            opacity: isAxis ? 1.0 : isMajor ? 0.35 : 0.15
         });
         const line = new THREE.Line(geometry, material);
         line.userData.isGrid = true;
         gridGroup.add(line);
     }
 
-    const numYSteps = Math.ceil((yMax - yMin) / yStep);
-    for (let i = -numYSteps; i <= numYSteps; i++) {
-        const y = Number((i * yStep).toFixed(6));
-        if (y < yMin || y > yMax) continue;
+    const yGridStep = yTickStep / 2;
+    const numY = Math.ceil(limit / yGridStep);
+    for (let i = -numY; i <= numY; i++) {
+        const y = Number((i * yGridStep).toFixed(6));
+        if (Math.abs(y) > limit) continue;
         const isAxis = Math.abs(y) < 0.001;
+        const isMajor = Math.abs(y % yTickStep) < 0.001 || Math.abs(Math.abs(y % yTickStep) - yTickStep) < 0.001;
         const points = [
             new THREE.Vector3(xMin, y, -0.01),
             new THREE.Vector3(xMax, y, -0.01)
@@ -290,7 +319,7 @@ const createCoordinateSystem = (
         const material = new THREE.LineBasicMaterial({
             color: isAxis ? axisColor : gridColor,
             transparent: true,
-            opacity: isAxis ? 1.0 : 0.35
+            opacity: isAxis ? 1.0 : isMajor ? 0.35 : 0.15
         });
         const line = new THREE.Line(geometry, material);
         line.userData.isGrid = true;
@@ -325,17 +354,19 @@ const createCoordinateSystem = (
         return sprite;
     };
 
-    const tickStride = Math.max(1, Math.floor(gridDivisions / 4));
-    for (let i = -numXSteps; i <= numXSteps; i += tickStride) {
-        const x = Number((i * xStep).toFixed(6));
-        if (Math.abs(x) > 0.01 && x >= -limit && x <= limit) {
-            gridGroup.add(createTextSprite(x.toFixed(1), new THREE.Vector3(x, -0.14, 0), 0.12));
+    const numXTicks = Math.ceil(limit / xTickStep);
+    for (let i = -numXTicks; i <= numXTicks; i++) {
+        const x = Number((i * xTickStep).toFixed(6));
+        if (Math.abs(x) > 0.001 && Math.abs(x) <= limit) {
+            gridGroup.add(createTextSprite(formatTickNumber(x), new THREE.Vector3(x, -0.14, 0), 0.12));
         }
     }
-    for (let i = -numYSteps; i <= numYSteps; i += tickStride) {
-        const y = Number((i * yStep).toFixed(6));
-        if (Math.abs(y) > 0.01 && y >= -limit && y <= limit) {
-            gridGroup.add(createTextSprite(y.toFixed(1), new THREE.Vector3(-0.14, y, 0), 0.12));
+
+    const numYTicks = Math.ceil(limit / yTickStep);
+    for (let i = -numYTicks; i <= numYTicks; i++) {
+        const y = Number((i * yTickStep).toFixed(6));
+        if (Math.abs(y) > 0.001 && Math.abs(y) <= limit) {
+            gridGroup.add(createTextSprite(formatTickNumber(y), new THREE.Vector3(-0.14, y, 0), 0.12));
         }
     }
 
