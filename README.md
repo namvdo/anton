@@ -21,17 +21,6 @@ The system noise radius accepts $\epsilon=0$ and non-negative values within each
 
 Rather than tracking every possible point within the noise ball $B_\epsilon(f(x))$ which would be computationally expensive to compute as the noise balls grow, we instead track the boundary evolution through an extended boundary map $F(x,y,nx,ny)=\bigl(f(x,y)+\varepsilon\,\mathbf{nx}',\mathbf{ny}'\bigr)$. Since the maximum uncertainty occurs at the boundary $\partial B_\epsilon(f(x))$ (points at distance exactly $\epsilon$ from the deterministic image), we focus exclusively on tracking how these boundary points evolve.
 
-The viewport renders every computed unstable-manifold branch in its native traversal
-order without inferring a closing edge. It shows the noisy manifold samples, reconstructs
-their deterministic images from $f(x_i)=p_i-\epsilon n_i$, and optionally overlays
-one circle $\partial B_\epsilon(f(x_i))$ for every deterministic sample. These system-noise layers use
-the applied noise radius and remain separate from the geometric-offset analysis
-distance configured in the Geometric offsets panel. Branches are curves by default;
-**Show points** replaces them with all computed, color-matched samples. The **Maximum
-state spacing** control applies the Euclidean extended-state metric
-$\sqrt{\|\Delta x\|_2^2+\|\Delta n\|_2^2}$ and recomputes the manifold rather than
-interpolating display points. A closed polygon is exposed to contour analysis only when
-explicit source/target branch identities form one unambiguous directed cycle.
 
 ### Unstable manifold visualization for boundary map evolution with a=0.4, b=0.3 and epsilon=0.0625
 
