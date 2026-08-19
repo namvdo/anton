@@ -394,7 +394,7 @@ const SetValuedViz = () => {
         };
     }, []);
 
-    const [dynamicSystem, setDynamicSystem] = useState<SystemId>('duffing_ode');
+    const [dynamicSystem, setDynamicSystem] = useState<SystemId>('henon');
     const [customEquations, setCustomEquations] = useState<CustomEquations>(INITIAL_CUSTOM_EQUATIONS);
     const [draftCustomEquations, setDraftCustomEquations] = useState<CustomEquations>(INITIAL_CUSTOM_EQUATIONS);
     const [customParams, setCustomParams] = useState<CustomParameters>(INITIAL_CUSTOM_PARAMS);
