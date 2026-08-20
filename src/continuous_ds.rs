@@ -535,7 +535,7 @@ mod tests {
         let val = ode.vector_field(pos).unwrap();
 
         assert!((val.x - (2.0 * 0.5 - 2.0)).abs() < 1e-12);
-        assert!((val.y - (-1.5 * -2.0)).abs() < 1e-12);
+        assert!((val.y - (1.5 * 2.0)).abs() < 1e-12);
     }
 
     #[test]
@@ -620,8 +620,8 @@ mod tests {
         let pos = Vector2::new(2.0, -1.0);
         let val = ode.vector_field(pos).unwrap();
 
-        assert!((val.x - (1.1 * 2.0 + -0.3 * -1.0 + 0.7)).abs() < 1e-12);
-        assert!((val.y - (2.0 * 2.0 + -1.5 * -1.0)).abs() < 1e-12);
+        assert!((val.x - (1.1 * 2.0 + 0.3 * 1.0 + 0.7)).abs() < 1e-12);
+        assert!((val.y - (2.0 * 2.0 + 1.5 * 1.0)).abs() < 1e-12);
     }
 
     #[test]

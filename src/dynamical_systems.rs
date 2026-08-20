@@ -362,8 +362,8 @@ mod tests {
         let pos = Vector2::new(2.0, -1.0);
         let result = system.map(pos).unwrap();
 
-        assert!((result.x - (1.5 * 2.0 + -0.25 * -1.0 + 0.75)).abs() < 1e-12);
-        assert!((result.y - (-2.0 * 2.0 + 3.0 * -1.0)).abs() < 1e-12);
+        assert!((result.x - (1.5 * 2.0 + 0.25 * 1.0 + 0.75)).abs() < 1e-12);
+        assert!((result.y - (-2.0 * 2.0 - 3.0 * 1.0)).abs() < 1e-12);
     }
 
     #[test]

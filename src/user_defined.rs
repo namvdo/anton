@@ -174,6 +174,6 @@ mod tests {
         let (x_out, y_out) = eq.eval(0.5, -2.0).unwrap();
 
         assert!((x_out - (2.0 * 0.5 - 2.0)).abs() < 1e-12);
-        assert!((y_out - (-1.0 * -2.0)).abs() < 1e-12);
+        assert!((y_out - (1.0 * 2.0)).abs() < 1e-12);
     }
 }
