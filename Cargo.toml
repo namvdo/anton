@@ -10,14 +10,6 @@ repository = "https://github.com/namvdo/set-valued-viz"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[[example]]
-name = "imperial_core_lab"
-test = false
-
-[[example]]
-name = "imperial_practice"
-test = true
-
 [dependencies]
 nalgebra = "0.33.0"
 wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }

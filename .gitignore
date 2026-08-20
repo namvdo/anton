@@ -18,7 +18,7 @@ frontend/frontend/
 
 # Generated reports and render intermediates
 tmp/
-# output/
+output/
 release/
 
 # Operating-system metadata
