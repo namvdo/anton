@@ -32,6 +32,8 @@ interface BaseComputePayload {
 export interface PeriodicComputePayload extends BaseComputePayload {
   params: Pick<BistParameters, 'a' | 'b' | 'delta' | 'h' | 'epsilon' | 'maxPeriod'>;
   periodicSearchSettings: PeriodicSearchSettings;
+  customEquations?: CustomEquation;
+  customParams?: CustomParameter[];
 }
 
 export interface PeriodicComputeResult {

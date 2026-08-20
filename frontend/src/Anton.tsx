@@ -1487,7 +1487,7 @@ const SetValuedViz = () => {
             residualThreshold: periodicSearchSettings.residualThreshold,
             useContinuation: periodicSearchSettings.useContinuation
         };
-        if (dynamicSystem === 'custom' || dynamicSystem === 'custom_ode') {
+        if (dynamicSystem === 'custom_ode' || (dynamicSystem === 'custom' && !appliedParamValidation.valid)) {
             ulamSupportRef.current = null;
             setPeriodicState(prev => ({
                 ...prev,
@@ -1524,7 +1524,9 @@ const SetValuedViz = () => {
                         thetaGridSize: requestSearchSettings.thetaGridSize,
                         residualThreshold: requestSearchSettings.residualThreshold,
                         useContinuation: requestSearchSettings.useContinuation
-                    }
+                    },
+                    customEquations: activeAppliedCustomEquations,
+                    customParams: appliedParamValidation.normalized
                 });
                 if (cancelled) return;
 
@@ -1552,7 +1554,7 @@ const SetValuedViz = () => {
 
         initSystem();
         return () => { cancelled = true; };
-    }, [wasmModule, dynamicSystem, params.a, params.b, params.delta, params.h, params.epsilon, params.maxPeriod, params.startX, params.startY, viewRange, periodicSearchSettings.gridSize, periodicSearchSettings.thetaGridSize, periodicSearchSettings.residualThreshold, periodicSearchSettings.useContinuation, computeRequestId, runComputeTask]);
+    }, [wasmModule, dynamicSystem, params.a, params.b, params.delta, params.h, params.epsilon, params.maxPeriod, params.startX, params.startY, viewRange, periodicSearchSettings.gridSize, periodicSearchSettings.thetaGridSize, periodicSearchSettings.residualThreshold, periodicSearchSettings.useContinuation, activeAppliedCustomEquations, appliedParamValidation, computeRequestId, runComputeTask]);
 
     useEffect(() => {
         if (manifoldDebounceRef.current) {

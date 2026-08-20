@@ -45,7 +45,7 @@ export const PeriodicSearchPanel = ({
   hasPendingChanges,
   disabled
 }: PeriodicSearchPanelProps) => {
-  const supportsBoundarySearchSettings = dynamicSystem === 'henon';
+  const supportsBoundarySearchSettings = dynamicSystem === 'henon' || dynamicSystem === 'custom';
 
   if (!supportsBoundarySearchSettings) {
     return null;
@@ -200,7 +200,7 @@ export const PeriodicSearchPanel = ({
         <span>{periodicState.isReady ? `${periodicState.orbits.length} orbit${periodicState.orbits.length === 1 ? '' : 's'}` : 'Computing orbits…'}</span>
         <span>{runMethod}</span>
         <small>
-          Current result: a = {appliedParameters.a}, b = {appliedParameters.b}, ε = {appliedParameters.epsilon};
+          Current result: {dynamicSystem === 'henon' ? `a = ${appliedParameters.a}, b = ${appliedParameters.b}, ` : ''}ε = {appliedParameters.epsilon};
           {' '}P ≤ {appliedMaxPeriod}, {appliedPeriodicSearchSettings.gridSize} × {appliedPeriodicSearchSettings.gridSize} positions,
           {' '}{appliedPeriodicSearchSettings.thetaGridSize} angles, tolerance {appliedPeriodicSearchSettings.residualThreshold}
         </small>

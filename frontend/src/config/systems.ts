@@ -77,5 +77,5 @@ export const isCustomSystem = (systemId: SystemId): systemId is 'custom' | 'cust
 );
 
 export const supportsPeriodicSearch = (systemId: SystemId): boolean => (
-  systemId === 'henon'
+  systemId === 'henon' || systemId === 'custom'
 );

@@ -171,17 +171,9 @@ const describePeriodicContinuationSkip = (wasm: BistWasmModule, payload: Periodi
 
 const computePeriodic = async (payload: PeriodicComputePayload): Promise<PeriodicComputeResult> => {
   const wasm = await ensureWasm();
-  const { dynamicSystem, params, viewRange, periodicSearchSettings } = payload;
+  const { dynamicSystem, params, viewRange, periodicSearchSettings, customEquations, customParams } = payload;
 
-  if (dynamicSystem === 'custom' || dynamicSystem === 'custom_ode') {
-    return {
-      orbits: [],
-      support: null,
-      unavailableReason: 'Periodic-orbit search is not available for user-defined systems yet.'
-    };
-  }
-
-  if (dynamicSystem === 'duffing_ode') {
+  if (dynamicSystem === 'custom_ode' || dynamicSystem === 'duffing_ode') {
     return {
       orbits: [],
       support: null,
@@ -227,6 +219,24 @@ const computePeriodic = async (payload: PeriodicComputePayload): Promise<Periodi
 
     if (!allOrbits && dynamicSystem === 'duffing') {
       system = new wasm.DuffingSystemWasm(params.a, params.b, params.maxPeriod);
+    } else if (!allOrbits && dynamicSystem === 'custom') {
+      if (!customEquations || !customParams) {
+        throw new Error('Custom equations and parameters are required for custom periodic orbit search.');
+      }
+      system = new wasm.BoundaryUserDefinedSystemWasm(
+        customEquations.xEq,
+        customEquations.yEq,
+        customParams,
+        params.epsilon,
+        params.maxPeriod,
+        viewRange.xMin,
+        viewRange.xMax,
+        viewRange.yMin,
+        viewRange.yMax,
+        periodicSearchSettings.gridSize,
+        periodicSearchSettings.thetaGridSize,
+        periodicSearchSettings.residualThreshold
+      );
     } else if (!allOrbits) {
       system = new wasm.BoundaryHenonSystemWasm(
         params.a,

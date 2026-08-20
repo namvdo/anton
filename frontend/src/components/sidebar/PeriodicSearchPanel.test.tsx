@@ -106,4 +106,11 @@ describe('PeriodicSearchPanel', () => {
     const { container } = render(<PeriodicSearchPanel {...baseProps} dynamicSystem="duffing" />);
     expect(container).toBeEmptyDOMElement();
   });
+
+  it('renders for custom discrete systems and formats parameters appropriately', () => {
+    render(<PeriodicSearchPanel {...baseProps} dynamicSystem="custom" />);
+    expect(screen.getByLabelText('Maximum period')).toBeInTheDocument();
+    const result = screen.getByLabelText('Current periodic orbit result configuration');
+    expect(result).toHaveTextContent('ε = 0.0625; P ≤ 4, 8 × 8 positions, 12 angles, tolerance 1e-9');
+  });
 });
