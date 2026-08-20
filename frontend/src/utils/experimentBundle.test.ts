@@ -249,4 +249,29 @@ describe('experiment bundle schema v2', () => {
     expect(() => parseExperimentBundle(JSON.stringify(future)))
       .toThrow('supported versions are 1, 2');
   });
+
+  it('exports cleanly when given flat GUI results with undefined parameterSweep', () => {
+    const bundle = buildReferenceBundle({
+      results: {
+        periodicOrbits: [],
+        periodicComputeMethod: 'newton',
+        periodicSupport: null,
+        manifolds: [],
+        stableManifolds: [],
+        fixedPoints: [],
+        intersections: [],
+        continuousBoundaryPoints: [],
+        geometricOffsets: null,
+        inverseGeometricOffsets: null,
+        ulam: {
+          gridBoxes: [],
+          invariantMeasure: null,
+          leftEigenvector: null,
+        },
+        parameterSweep: undefined,
+      },
+    });
+    expect(bundle.results.periodic.orbits).toEqual([]);
+    expect(bundle.results.parameterSweep).toBeNull();
+  });
 });

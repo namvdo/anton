@@ -826,9 +826,12 @@ const normalizeNullableResultObject = (value: unknown): UnknownRecord | null | u
 const normalizeResults = (results: unknown = {}): ExperimentResults => {
   const value = requireObject(results, 'Experiment results');
   const defaults = emptyResults();
-  const isV2Shape = 'periodic' in value
-    || 'continuousBoundary' in value
-    || 'parameterSweep' in value;
+  const isV2Shape = Boolean(
+    value.periodic
+    && typeof value.periodic === 'object'
+    && !Array.isArray(value.periodic)
+    && !('periodicOrbits' in value)
+  );
   if (!isV2Shape) {
     return {
       periodic: {
@@ -853,17 +856,19 @@ const normalizeResults = (results: unknown = {}): ExperimentResults => {
       },
       ulam: {
         gridBoxes: normalizeArray<UnknownRecord>(
-          requireObject(value.ulam ?? {}, 'Ulam results').gridBoxes || [],
+          (value.ulam && typeof value.ulam === 'object' ? (value.ulam as UnknownRecord).gridBoxes : null) || [],
           'Ulam grid boxes',
         ),
         stationaryDensity: normalizeNullableArray<number>(
-          requireObject(value.ulam ?? {}, 'Ulam results').stationaryDensity
-            ?? requireObject(value.ulam ?? {}, 'Ulam results').invariantMeasure,
+          (value.ulam && typeof value.ulam === 'object'
+            ? (value.ulam as UnknownRecord).stationaryDensity ?? (value.ulam as UnknownRecord).invariantMeasure
+            : null),
           'Ulam stationary density',
         ),
         absorptionProbabilities: normalizeNullableArray<number>(
-          requireObject(value.ulam ?? {}, 'Ulam results').absorptionProbabilities
-            ?? requireObject(value.ulam ?? {}, 'Ulam results').leftEigenvector,
+          (value.ulam && typeof value.ulam === 'object'
+            ? (value.ulam as UnknownRecord).absorptionProbabilities ?? (value.ulam as UnknownRecord).leftEigenvector
+            : null),
           'Ulam absorption probabilities',
         ),
       },
@@ -871,35 +876,32 @@ const normalizeResults = (results: unknown = {}): ExperimentResults => {
     };
   }
 
-  const periodic = requireObject(value.periodic, 'Periodic results');
-  const manifolds = requireObject(value.manifolds, 'Manifold results');
-  const continuousBoundary = requireObject(
-    value.continuousBoundary,
-    'Continuous-boundary results',
-  );
-  const geometricOffsets = requireObject(value.geometricOffsets, 'Geometric-offset results');
-  const ulam = requireObject(value.ulam, 'Ulam results');
+  const periodic = (value.periodic && typeof value.periodic === 'object') ? (value.periodic as UnknownRecord) : {};
+  const manifolds = (value.manifolds && typeof value.manifolds === 'object') ? (value.manifolds as UnknownRecord) : {};
+  const continuousBoundary = (value.continuousBoundary && typeof value.continuousBoundary === 'object') ? (value.continuousBoundary as UnknownRecord) : {};
+  const geometricOffsets = (value.geometricOffsets && typeof value.geometricOffsets === 'object') ? (value.geometricOffsets as UnknownRecord) : {};
+  const ulam = (value.ulam && typeof value.ulam === 'object') ? (value.ulam as UnknownRecord) : {};
   return {
     periodic: {
-      orbits: normalizeArray<ResultOrbit>(periodic.orbits, 'Periodic orbits'),
+      orbits: normalizeArray<ResultOrbit>(periodic.orbits || [], 'Periodic orbits'),
       computeMethod: typeof periodic.computeMethod === 'string' ? periodic.computeMethod : null,
       support: cloneJsonData(periodic.support ?? null),
     },
     manifolds: {
-      unstable: normalizeArray<UnknownRecord>(manifolds.unstable, 'Unstable manifolds'),
-      stable: normalizeArray<UnknownRecord>(manifolds.stable, 'Stable manifolds'),
-      fixedPoints: normalizeArray<UnknownRecord>(manifolds.fixedPoints, 'Fixed points'),
-      intersections: normalizeArray<UnknownRecord>(manifolds.intersections, 'Intersections'),
+      unstable: normalizeArray<UnknownRecord>(manifolds.unstable || [], 'Unstable manifolds'),
+      stable: normalizeArray<UnknownRecord>(manifolds.stable || [], 'Stable manifolds'),
+      fixedPoints: normalizeArray<UnknownRecord>(manifolds.fixedPoints || [], 'Fixed points'),
+      intersections: normalizeArray<UnknownRecord>(manifolds.intersections || [], 'Intersections'),
     },
     continuousBoundary: {
-      points: normalizeArray<unknown>(continuousBoundary.points, 'Continuous boundary points'),
+      points: normalizeArray<unknown>(continuousBoundary.points || [], 'Continuous boundary points'),
     },
     geometricOffsets: {
       direct: normalizeNullableResultObject(geometricOffsets.direct ?? null),
       inverse: normalizeNullableResultObject(geometricOffsets.inverse ?? null),
     },
     ulam: {
-      gridBoxes: normalizeArray<UnknownRecord>(ulam.gridBoxes, 'Ulam grid boxes'),
+      gridBoxes: normalizeArray<UnknownRecord>(ulam.gridBoxes || [], 'Ulam grid boxes'),
       stationaryDensity: normalizeNullableArray<number>(ulam.stationaryDensity, 'Ulam stationary density'),
       absorptionProbabilities: normalizeNullableArray<number>(
         ulam.absorptionProbabilities,
