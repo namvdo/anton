@@ -41,7 +41,6 @@ import {
 } from './utils/geometricOffsetCompute';
 import {
     createGeometricOffsetContour,
-    geometricOffsetContourColor,
     geometricOffsetSourceContours,
     reconcileGeometricOffsetContours
 } from './utils/geometricOffsetBatch';
@@ -50,6 +49,10 @@ import {
     inverseOffsetCurveColor,
     visibleInverseOffsetCurves
 } from './utils/inverseOffsetDisplay';
+import {
+    computeContourVertexColors,
+    computeInverseCurveVertexColors,
+} from './utils/inverseOffsetColors';
 import {
     enrichSolutionPointsWithOrbitNormals,
     fixedPointSolutionsFromOrbits,
@@ -477,6 +480,8 @@ const SetValuedViz = () => {
             preimageSourceIds: [contours[0].id],
             inverseIterations: DEFAULT_GEOMETRIC_OFFSET_SETTINGS.inverseIterations,
             inverseDisplayMode: 'all',
+            inverseColorMode: 'tracer',
+            inverseColormap: 'rainbow',
             showInverseContours: true,
             isComputing: false,
             isComputingInverse: false,
@@ -485,9 +490,7 @@ const SetValuedViz = () => {
         };
     });
 
-    const boundarySourceManifolds = manifoldState.rawManifolds?.length > 0
-        ? manifoldState.rawManifolds
-        : manifoldState.manifolds;
+    const boundarySourceManifolds = manifoldState.manifolds;
 
     const geometricOffsetBoundaryPoints = useMemo(
         () => collectGeometricOffsetBoundaryPoints(boundarySourceManifolds),
@@ -2613,9 +2616,12 @@ const SetValuedViz = () => {
                         point.y,
                         0.22 + contourIndex * 0.004 + levelIndex * 0.001,
                     ]), 3));
+
+                    const colors = computeContourVertexColors(points);
+                    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
                     const material = new THREE.PointsMaterial({
-                        color: geometricOffsetContourColor(contourIndex),
-                        size: selected ? 5 : 3.5,
+                        vertexColors: true,
+                        size: selected ? 5.5 : 4,
                         sizeAttenuation: false,
                         transparent: true,
                         opacity: selected ? 1 : 0.9,
@@ -2651,68 +2657,69 @@ const SetValuedViz = () => {
                         Number.isFinite(point.x) && Number.isFinite(point.y)
                     ));
                     if (points.length === 0) return;
-                    if (curve.is_closed === false) {
-                        const geometry = new THREE.BufferGeometry();
-                        geometry.setAttribute('position', new THREE.Float32BufferAttribute(
-                            points.flatMap(point => [
-                                point.x,
-                                point.y,
-                                0.25 + 0.006 * curve.inverse_iteration + contourIndex * 0.0005,
-                            ]),
-                            3,
-                        ));
-                        const pointCloud = new THREE.Points(geometry, new THREE.PointsMaterial({
+                    const colorResult = computeInverseCurveVertexColors(curve);
+
+                    const geometry = new THREE.BufferGeometry();
+                    geometry.setAttribute('position', new THREE.Float32BufferAttribute(
+                        points.flatMap(point => [
+                            point.x,
+                            point.y,
+                            0.25 + 0.006 * curve.inverse_iteration + contourIndex * 0.0005,
+                        ]),
+                        3,
+                    ));
+                    geometry.setAttribute('color', new THREE.BufferAttribute(colorResult.colors, 3));
+
+                    const pointCloud = new THREE.Points(geometry, new THREE.PointsMaterial({
+                        vertexColors: true,
+                        size: contour.id === geometricOffsetState.selectedContourId ? 5.5 : 4,
+                        sizeAttenuation: false,
+                        transparent: true,
+                        opacity: Math.max(0.75, 0.98 - 0.035 * (curve.inverse_iteration - 1)),
+                        depthTest: false,
+                    }));
+                    pointCloud.userData = {
+                        type: 'inverseGeometricOffset',
+                        contourId: contour.id,
+                        inverseIteration: curve.inverse_iteration,
+                        sourceLevel: curve.source_level,
+                        sourceComponentId: curve.source_component_id,
+                    };
+                    scene.add(pointCloud);
+
+                    if (curve.is_closed && points.length >= 3 && geometricOffsetState.inverseColorMode === 'uniform') {
+                        const closedPoints = [...points, points[0]];
+                        const lineGeometry = new LineGeometry();
+                        lineGeometry.setPositions(closedPoints.flatMap(point => [
+                            point.x,
+                            point.y,
+                            0.25 + 0.006 * curve.inverse_iteration + contourIndex * 0.0005,
+                        ]));
+                        const lineMaterial = new LineMaterial({
                             color: inverseOffsetCurveColor(
                                 contourIndex,
                                 geometricOffsetState.contours.length,
                                 curve.inverse_iteration,
                             ),
-                            size: contour.id === geometricOffsetState.selectedContourId ? 5 : 3.5,
-                            sizeAttenuation: false,
+                            linewidth: contour.id === geometricOffsetState.selectedContourId ? 3.2 : 2.5,
                             transparent: true,
                             opacity: Math.max(0.72, 0.98 - 0.035 * (curve.inverse_iteration - 1)),
                             depthTest: false,
-                        }));
-                        pointCloud.userData = {
+                        });
+                        const viewportSize = readViewportSize();
+                        lineMaterial.resolution.set(viewportSize.width, viewportSize.height);
+                        const line = new Line2(lineGeometry, lineMaterial);
+                        line.computeLineDistances();
+                        line.userData = {
                             type: 'inverseGeometricOffset',
                             contourId: contour.id,
+                            epsilon: contour.epsilon,
+                            sourceLevel: curve.source_level,
+                            sourceComponentId: curve.source_component_id,
                             inverseIteration: curve.inverse_iteration,
                         };
-                        scene.add(pointCloud);
-                        return;
+                        scene.add(line);
                     }
-                    if (points.length < 3) return;
-                    const closedPoints = [...points, points[0]];
-                    const geometry = new LineGeometry();
-                    geometry.setPositions(closedPoints.flatMap(point => [
-                        point.x,
-                        point.y,
-                        0.25 + 0.006 * curve.inverse_iteration + contourIndex * 0.0005,
-                    ]));
-                    const material = new LineMaterial({
-                        color: inverseOffsetCurveColor(
-                            contourIndex,
-                            geometricOffsetState.contours.length,
-                            curve.inverse_iteration,
-                        ),
-                        linewidth: contour.id === geometricOffsetState.selectedContourId ? 3.2 : 2.5,
-                        transparent: true,
-                        opacity: Math.max(0.72, 0.98 - 0.035 * (curve.inverse_iteration - 1)),
-                        depthTest: false,
-                    });
-                    const viewportSize = readViewportSize();
-                    material.resolution.set(viewportSize.width, viewportSize.height);
-                    const line = new Line2(geometry, material);
-                    line.computeLineDistances();
-                    line.userData = {
-                        type: 'inverseGeometricOffset',
-                        contourId: contour.id,
-                        epsilon: contour.epsilon,
-                        sourceLevel: curve.source_level,
-                        sourceComponentId: curve.source_component_id,
-                        inverseIteration: curve.inverse_iteration,
-                    };
-                    scene.add(line);
                 });
             });
         }

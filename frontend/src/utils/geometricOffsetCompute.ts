@@ -8,6 +8,7 @@ import type {
 } from '../types/domain';
 import type { GeometricOffsetBatchComputePayload } from '../protocol/computeContracts';
 import { normalizeContourEpsilons } from './geometricOffsetBatch';
+import { computePointsSpacing } from './inverseOffsetColors';
 
 const coordinatePair = (point: PointLike): [number, number] => (
   Array.isArray(point)
@@ -145,6 +146,7 @@ export const computeOpenGeometricOffsetPreimages = (
       if (source.length === 0) {
         throw new Error('An open preimage source requires at least one point.');
       }
+      let previousSpacing = computePointsSpacing(source, component.is_closed ?? false);
       for (let inverseIteration = 1; inverseIteration <= iterations; inverseIteration += 1) {
         const points = source.map(point => inverseHenonExtendedPoint(
           point as ExtendedPointLike,
@@ -152,12 +154,17 @@ export const computeOpenGeometricOffsetPreimages = (
           params.b,
           params.epsilon,
         ));
+        const currentSpacing = computePointsSpacing(points, component.is_closed ?? false);
+        const densities = currentSpacing.map(s => (s > 1e-14 ? 1 / s : 0));
+        const stepRatios = previousSpacing.map((prev, idx) => (
+          prev > 1e-14 ? currentSpacing[idx] / prev : 1.0
+        ));
         totalOutputPoints += points.length;
         curves.push({
           source_level: level.level,
           source_component_id: component.id ?? componentIndex,
           inverse_iteration: inverseIteration,
-          is_closed: false,
+          is_closed: component.is_closed ?? false,
           points,
           input_point_count: source.length,
           output_point_count: points.length,
@@ -167,7 +174,11 @@ export const computeOpenGeometricOffsetPreimages = (
           max_normal_chord_error: 0,
           subdivision_limit_reached: false,
           source_relation: 'open_point_set',
+          local_spacings: currentSpacing,
+          step_ratios: stepRatios,
+          densities,
         });
+        previousSpacing = currentSpacing;
         source = points;
       }
     }

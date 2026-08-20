@@ -189,6 +189,9 @@ export interface InverseOffsetCurve extends UnknownRecord {
   max_position_chord_error?: number;
   max_normal_chord_error?: number;
   subdivision_limit_reached?: boolean;
+  local_spacings?: number[];
+  step_ratios?: number[];
+  densities?: number[];
 }
 
 export interface InverseOffsetResult extends UnknownRecord {
@@ -200,6 +203,8 @@ export interface InverseOffsetResult extends UnknownRecord {
 }
 
 export type GeometricOffsetEditorMode = 'series' | 'individual';
+export type InverseColorMode = 'density' | 'ratio' | 'tracer' | 'uniform';
+export type InverseColormapName = 'magma' | 'viridis' | 'plasma' | 'rainbow' | 'turbo';
 
 export interface GeometricOffsetContour {
   id: string;
@@ -222,6 +227,8 @@ export interface GeometricOffsetState {
   preimageSourceIds: string[];
   inverseIterations: number;
   inverseDisplayMode: 'all' | 'final';
+  inverseColorMode?: InverseColorMode;
+  inverseColormap?: InverseColormapName;
   showInverseContours: boolean;
   isComputing: boolean;
   isComputingInverse: boolean;

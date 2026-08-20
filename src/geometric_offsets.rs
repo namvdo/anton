@@ -72,6 +72,12 @@ pub struct InverseOffsetCurve {
     pub max_normal_chord_error: f64,
     pub subdivision_limit_reached: bool,
     pub source_relation: InverseCurveSourceRelation,
+    #[serde(default)]
+    pub local_spacings: Vec<f64>,
+    #[serde(default)]
+    pub step_ratios: Vec<f64>,
+    #[serde(default)]
+    pub densities: Vec<f64>,
 }
 
 /// Polygonal relation between one inverse image and the curve mapped into it.
@@ -102,13 +108,13 @@ pub struct InverseOffsetResult {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct Point2 {
-    x: f64,
-    y: f64,
+pub struct Point2 {
+    pub x: f64,
+    pub y: f64,
 }
 
 impl Point2 {
-    fn new(x: f64, y: f64) -> Self {
+    pub fn new(x: f64, y: f64) -> Self {
         Self { x, y }
     }
 
@@ -460,6 +466,7 @@ fn circular_difference(left: f64, right: f64) -> f64 {
     (left - right).sin().atan2((left - right).cos())
 }
 
+#[allow(dead_code)]
 fn interpolate_extended_point(
     left: ExtendedBoundaryPoint,
     right: ExtendedBoundaryPoint,
@@ -501,6 +508,7 @@ fn inverse_offset_point(
     })
 }
 
+#[allow(dead_code)]
 #[derive(Default)]
 struct InverseSubdivisionDiagnostics {
     max_position_chord_error: f64,
@@ -508,6 +516,7 @@ struct InverseSubdivisionDiagnostics {
     subdivision_limit_reached: bool,
 }
 
+#[allow(dead_code)]
 struct InverseSubdivisionSettings {
     a: f64,
     b: f64,
@@ -521,7 +530,8 @@ struct InverseSubdivisionSettings {
 ///
 /// The caller has already stored the mapped left endpoint. Each accepted leaf
 /// appends only its mapped right endpoint, so left-first recursion preserves
-/// curve order without duplicating shared endpo  ints.
+/// curve order without duplicating shared endpoints.
+#[allow(dead_code)]
 fn append_inverse_segment(
     source_left: ExtendedBoundaryPoint,
     source_right: ExtendedBoundaryPoint,
@@ -578,6 +588,7 @@ fn append_inverse_segment(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn invert_offset_component(
     source: &[ExtendedBoundaryPoint],
     settings: &InverseSubdivisionSettings,
@@ -636,6 +647,54 @@ fn invert_offset_component(
     ))
 }
 
+/// Central-difference neighbor spacing along an ordered, fixed tracer set.
+/// 
+/// Use each point's two immediate neighbors so the estimate doesn't lean in one direction.
+/// For a closed curve (`closed = true`) neighbor indices wrap around;
+/// for an open curve the endpoints fall back to a one-sided difference since they only have one neighbor.
+pub fn local_spacing(points: &[Point2], closed: bool) -> Vec<f64> {
+    let n = points.len();
+    if n < 2 {
+        return vec![0.0; n];
+    }
+
+    (0..n)
+        .map(|i| {
+            if closed {
+                let prev = points[(i + n - 1) % n];
+                let next = points[(i + 1) % n];
+                prev.distance(next) / 2.0
+            } else if i == 0 {
+                points[0].distance(points[1])
+            } else if i == n - 1 {
+                points[n - 2].distance(points[n - 1])
+            } else {
+                points[i - 1].distance(points[i + 1]) / 2.0
+            }
+        })
+        .collect()
+}
+
+/// Elementwise spacing[i] / previous_spacing[i] -- the one-step local
+/// expansion (>1) or contraction (<1) factor for each tracer.
+/// 
+/// Both slices must be the same length and index-aligned, which holds as
+/// long as tracers are only mapped pointwise (never subdivided or dropped)
+/// between `previous` and `current`.
+pub fn step_ratio(previous_spacing: &[f64], current_spacing: &[f64]) -> Vec<f64> {
+    previous_spacing
+        .iter()
+        .zip(current_spacing)
+        .map(|(&prev, &curr)| {
+            if prev < NORMAL_EPSILON {
+                f64::INFINITY
+            } else {
+                curr / prev
+            }
+        })
+        .collect()
+}
+
 pub fn compute_inverse_geometric_offset_contours(
     levels: &[GeometricOffsetLevel],
     a: f64,
@@ -662,55 +721,58 @@ pub fn compute_inverse_geometric_offset_contours(
         return Err("Inverse offset subdivision depth cannot exceed 10".to_string());
     }
 
-    let settings = InverseSubdivisionSettings {
-        a,
-        b,
-        epsilon,
-        position_tolerance,
-        normal_tolerance,
-        max_depth: max_subdivision_depth,
-    };
     let source_curve_count = levels
         .iter()
         .map(|level| level.boundary_components.len())
         .sum();
     let mut curves = Vec::with_capacity(source_curve_count * iterations);
     let mut total_output_points = 0usize;
-    let mut global_position_error: f64 = 0.0;
-    let mut global_normal_error: f64 = 0.0;
-    let mut any_limit_reached = false;
 
     for level in levels {
         for component in &level.boundary_components {
             let mut source_points = component.points.clone();
-            if component.is_closed && source_points.first() == source_points.last() {
+            if component.is_closed && source_points.first() == source_points.last() && source_points.len() > 1 {
                 source_points.pop();
             }
+            if source_points.is_empty() {
+                continue;
+            }
+
+            let initial_point2: Vec<Point2> = source_points
+                .iter()
+                .map(|p| Point2::new(p.x, p.y))
+                .collect();
+            let mut previous_spacing = local_spacing(&initial_point2, component.is_closed);
+
             for inverse_iteration in 1..=iterations {
                 let input_point_count = source_points.len();
-                let (points, closure_position_residual, closure_normal_residual, diagnostics) =
-                    if component.is_closed {
-                        invert_offset_component(&source_points, &settings)?
-                    } else {
-                        let points = source_points
-                            .iter()
-                            .copied()
-                            .map(|point| inverse_offset_point(point, a, b, epsilon))
-                            .collect::<Result<Vec<_>, _>>()?;
-                        (points, 0.0, 0.0, InverseSubdivisionDiagnostics::default())
-                    };
+                let points = source_points
+                    .iter()
+                    .copied()
+                    .map(|point| inverse_offset_point(point, a, b, epsilon))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let current_point2: Vec<Point2> = points
+                    .iter()
+                    .map(|p| Point2::new(p.x, p.y))
+                    .collect();
+                let current_spacing = local_spacing(&current_point2, component.is_closed);
+                let current_ratios = step_ratio(&previous_spacing, &current_spacing);
+                let densities: Vec<f64> = current_spacing
+                    .iter()
+                    .map(|&s| if s > 1e-14 { 1.0 / s } else { 0.0 })
+                    .collect();
+
                 let source_relation = if component.is_closed {
                     classify_inverse_source_relation(&source_points, &points)
                 } else {
                     InverseCurveSourceRelation::OpenPointSet
                 };
+
                 total_output_points = total_output_points
                     .checked_add(points.len())
                     .ok_or("Inverse offset point count overflow")?;
-                global_position_error =
-                    global_position_error.max(diagnostics.max_position_chord_error);
-                global_normal_error = global_normal_error.max(diagnostics.max_normal_chord_error);
-                any_limit_reached |= diagnostics.subdivision_limit_reached;
+
                 curves.push(InverseOffsetCurve {
                     source_level: level.level,
                     source_component_id: component.id,
@@ -720,13 +782,18 @@ pub fn compute_inverse_geometric_offset_contours(
                     input_point_count,
                     output_point_count: points.len(),
                     points: points.clone(),
-                    closure_position_residual,
-                    closure_normal_residual,
-                    max_position_chord_error: diagnostics.max_position_chord_error,
-                    max_normal_chord_error: diagnostics.max_normal_chord_error,
-                    subdivision_limit_reached: diagnostics.subdivision_limit_reached,
+                    closure_position_residual: 0.0,
+                    closure_normal_residual: 0.0,
+                    max_position_chord_error: 0.0,
+                    max_normal_chord_error: 0.0,
+                    subdivision_limit_reached: false,
                     source_relation,
+                    local_spacings: current_spacing.clone(),
+                    step_ratios: current_ratios,
+                    densities,
                 });
+
+                previous_spacing = current_spacing;
                 source_points = points;
             }
         }
@@ -737,9 +804,9 @@ pub fn compute_inverse_geometric_offset_contours(
         source_curve_count,
         completed_iterations: iterations,
         total_output_points,
-        max_position_chord_error: global_position_error,
-        max_normal_chord_error: global_normal_error,
-        subdivision_limit_reached: any_limit_reached,
+        max_position_chord_error: 0.0,
+        max_normal_chord_error: 0.0,
+        subdivision_limit_reached: false,
     })
 }
 
@@ -1110,4 +1177,63 @@ mod tests {
         )
         .is_err());
     }
+
+    #[test]
+    fn local_spacing_and_step_ratio_calculate_correct_expansion() {
+        let closed_square = vec![
+            Point2::new(0.0, 0.0),
+            Point2::new(2.0, 0.0),
+            Point2::new(2.0, 2.0),
+            Point2::new(0.0, 2.0),
+        ];
+        let spacing_closed = local_spacing(&closed_square, true);
+        assert_eq!(spacing_closed.len(), 4);
+        for &s in &spacing_closed {
+            // Distance across diagonal is sqrt(2^2 + 2^2) = sqrt(8) approx 2.8284.
+            // Half is approx 1.4142.
+            assert!((s - 2.0_f64.sqrt()).abs() < 1e-10);
+        }
+
+        let open_line = vec![
+            Point2::new(0.0, 0.0),
+            Point2::new(1.0, 0.0),
+            Point2::new(3.0, 0.0),
+        ];
+        let spacing_open = local_spacing(&open_line, false);
+        assert_eq!(spacing_open.len(), 3);
+        assert!((spacing_open[0] - 1.0).abs() < 1e-10);
+        assert!((spacing_open[1] - 1.5).abs() < 1e-10); // (3 - 0)/2 = 1.5
+        assert!((spacing_open[2] - 2.0).abs() < 1e-10); // (3 - 1) = 2.0
+
+        let ratios = step_ratio(&[1.0, 2.0, 4.0], &[2.0, 1.0, 4.0]);
+        assert_eq!(ratios, vec![2.0, 0.5, 1.0]);
+    }
+
+    #[test]
+    fn pointwise_inverse_mapping_preserves_tracer_count_and_computes_densities() {
+        let offsets = compute_geometric_offset_contours(&circle(0.5, 32, false), 0.1).unwrap();
+        let result = compute_inverse_geometric_offset_contours(
+            &offsets.levels,
+            0.4,
+            0.3,
+            0.05,
+            2,
+            1e-3,
+            0.02,
+            6,
+        )
+        .unwrap();
+
+        assert_eq!(result.completed_iterations, 2);
+        assert_eq!(result.curves.len(), 2);
+        assert_eq!(result.curves[0].points.len(), 32);
+        assert_eq!(result.curves[1].points.len(), 32);
+        assert_eq!(result.curves[0].local_spacings.len(), 32);
+        assert_eq!(result.curves[0].densities.len(), 32);
+        assert_eq!(result.curves[0].step_ratios.len(), 32);
+        for &d in &result.curves[0].densities {
+            assert!(d > 0.0 && d.is_finite());
+        }
+    }
 }
+

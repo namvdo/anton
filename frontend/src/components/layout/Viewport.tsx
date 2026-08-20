@@ -18,6 +18,7 @@ import type {
   ViewRange,
 } from '../../types/domain';
 import { BOUNDARY_LAYER_COLORS } from '../../utils/boundaryLayers';
+import { colormapCssGradient } from '../../utils/colormaps';
 
 interface ViewportProps {
   type: SystemType;
@@ -39,6 +40,8 @@ interface ViewportProps {
     preimageSourceIds?: string[];
     showInverseContours?: boolean;
     inverseDisplayMode?: GeometricOffsetState['inverseDisplayMode'];
+    inverseColorMode?: GeometricOffsetState['inverseColorMode'];
+    inverseColormap?: GeometricOffsetState['inverseColormap'];
   };
   ulamState: Pick<UlamState, 'showUlamOverlay'>;
   displayRange?: ViewRange;
@@ -135,6 +138,21 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
             {contour.id === geometricOffsetState.selectedContourId ? ' · selected' : ''}
           </div>
         ) : null)}
+        {inverseLegendEntries.length > 0 && (
+          <div className="lg-colorbar-container" style={{ margin: '6px 0 4px 0', width: '100%' }}>
+            <div style={{ fontSize: '10px', color: 'var(--text-dim, #999)', marginBottom: '3px' }}>Point correspondence (C₀ → IC<sub>k</sub>)</div>
+            <div style={{
+              height: '8px',
+              borderRadius: '3px',
+              background: colormapCssGradient('viridis'),
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+            }}></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: 'var(--text-dim, #888)', marginTop: '2px' }}>
+              <span>Start (i = 0)</span>
+              <span>End (i = N−1)</span>
+            </div>
+          </div>
+        )}
         {inverseLegendEntries.map(({ contour, contourIndex, iteration }) => (
           <div className="lg-item" key={`inverse-offset-${contour.id}-${iteration}`}
             aria-label={`Preimage epsilon ${formatContourEpsilon(contour.epsilon)} step ${iteration}`}>

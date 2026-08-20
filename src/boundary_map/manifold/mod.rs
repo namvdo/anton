@@ -38,9 +38,9 @@ fn cache_key(
 }
 
 fn validate_manifold_point_spacing(spacing_tol: f64) -> Result<f64, String> {
-    if !spacing_tol.is_finite() || !(1e-4..=5e-2).contains(&spacing_tol) {
+    if !spacing_tol.is_finite() || !(1e-4..=0.2).contains(&spacing_tol) {
         return Err(
-            "Maximum manifold point spacing must be finite and between 0.0001 and 0.05."
+            "Maximum manifold point spacing must be finite and between 0.0001 and 0.2."
                 .to_string(),
         );
     }
@@ -2945,8 +2945,9 @@ mod tests {
     #[test]
     fn manifold_point_spacing_is_validated_before_computation() {
         assert_eq!(validate_manifold_point_spacing(0.005), Ok(0.005));
+        assert_eq!(validate_manifold_point_spacing(0.2), Ok(0.2));
         assert!(validate_manifold_point_spacing(0.0).is_err());
-        assert!(validate_manifold_point_spacing(0.0501).is_err());
+        assert!(validate_manifold_point_spacing(0.2001).is_err());
         assert!(validate_manifold_point_spacing(f64::NAN).is_err());
     }
 

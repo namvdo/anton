@@ -102,7 +102,7 @@ export const ManifoldsPanel = ({
               label="Maximum state spacing"
               hint="‖(Δx, Δn)‖; recomputes"
               min={0.0001}
-              max={0.02}
+              max={0.2}
               step={0.0001}
               value={manifoldState.maximumManifoldPointSpacing}
               onChange={maximumManifoldPointSpacing => setManifoldState(previous => ({
