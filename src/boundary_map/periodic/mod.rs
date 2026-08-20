@@ -8,22 +8,18 @@ use crate::dynamical_systems::{
 use crate::parameters::parameter_set_from_js;
 use crate::range::{clamp_pair, PhaseSpaceBounds, RANGE_LIMIT};
 use core::f64;
-use nalgebra::{Matrix4, Matrix5, Vector2, Vector4, Vector5};
+use nalgebra::{Matrix4, Vector2};
 use serde::{Deserialize, Serialize};
 use std::f64::consts::PI;
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use web_sys::console;
 
-mod continuation;
 mod henon;
 mod search;
 mod sweep;
 mod types;
 
-pub use continuation::{
-    follow_branch_arclength, BranchPoint, PseudoArclengthContinuation, StepOutcome,
-};
 pub use henon::*;
 pub use search::{
     find_all_boundary_periodic_orbits_generic,

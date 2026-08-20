@@ -648,7 +648,7 @@ fn invert_offset_component(
 }
 
 /// Central-difference neighbor spacing along an ordered, fixed tracer set.
-/// 
+///
 /// Use each point's two immediate neighbors so the estimate doesn't lean in one direction.
 /// For a closed curve (`closed = true`) neighbor indices wrap around;
 /// for an open curve the endpoints fall back to a one-sided difference since they only have one neighbor.
@@ -677,7 +677,7 @@ pub fn local_spacing(points: &[Point2], closed: bool) -> Vec<f64> {
 
 /// Elementwise spacing[i] / previous_spacing[i] -- the one-step local
 /// expansion (>1) or contraction (<1) factor for each tracer.
-/// 
+///
 /// Both slices must be the same length and index-aligned, which holds as
 /// long as tracers are only mapped pointwise (never subdivided or dropped)
 /// between `previous` and `current`.
@@ -731,7 +731,10 @@ pub fn compute_inverse_geometric_offset_contours(
     for level in levels {
         for component in &level.boundary_components {
             let mut source_points = component.points.clone();
-            if component.is_closed && source_points.first() == source_points.last() && source_points.len() > 1 {
+            if component.is_closed
+                && source_points.first() == source_points.last()
+                && source_points.len() > 1
+            {
                 source_points.pop();
             }
             if source_points.is_empty() {
@@ -752,10 +755,8 @@ pub fn compute_inverse_geometric_offset_contours(
                     .map(|point| inverse_offset_point(point, a, b, epsilon))
                     .collect::<Result<Vec<_>, _>>()?;
 
-                let current_point2: Vec<Point2> = points
-                    .iter()
-                    .map(|p| Point2::new(p.x, p.y))
-                    .collect();
+                let current_point2: Vec<Point2> =
+                    points.iter().map(|p| Point2::new(p.x, p.y)).collect();
                 let current_spacing = local_spacing(&current_point2, component.is_closed);
                 let current_ratios = step_ratio(&previous_spacing, &current_spacing);
                 let densities: Vec<f64> = current_spacing
@@ -1236,4 +1237,3 @@ mod tests {
         }
     }
 }
-

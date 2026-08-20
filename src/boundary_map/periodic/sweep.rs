@@ -465,28 +465,6 @@ struct HenonContinuationParams {
     epsilon: f64,
 }
 
-fn lerp_henon_params(
-    old_params: HenonContinuationParams,
-    new_params: HenonContinuationParams,
-    lambda: f64,
-) -> HenonSystem {
-    HenonSystem::new(
-        old_params.a + (new_params.a - old_params.a) * lambda,
-        old_params.b + (new_params.b - old_params.b) * lambda,
-        old_params.epsilon + (new_params.epsilon - old_params.epsilon) * lambda,
-    )
-}
-
-fn normalize_vector4_normal(z: &mut Vector4<f64>) -> bool {
-    let norm = (z[2] * z[2] + z[3] * z[3]).sqrt();
-    if norm <= 1e-12 || !norm.is_finite() {
-        return false;
-    }
-    z[2] /= norm;
-    z[3] /= norm;
-    true
-}
-
 fn found_orbit_seed(orbit: &FoundPeriodicOrbit) -> Option<ExtendedPoint> {
     orbit
         .extended_points
@@ -516,85 +494,16 @@ fn correct_henon_seed_at_params(
     )
 }
 
-fn continue_henon_seed_to_target_arclength(
-    seed: ExtendedPoint,
-    period: usize,
-    old_params: HenonContinuationParams,
-    new_params: HenonContinuationParams,
-    residual_threshold: f64,
-) -> Option<ExtendedPoint> {
-    let build = |lambda: f64| lerp_henon_params(old_params, new_params, lambda);
-    let mut cont =
-        PseudoArclengthContinuation::new::<HenonSystem, _>(&seed, 0.0, 0.04, period, true, &build)?;
-    cont.lambda_min = -0.05;
-    cont.lambda_max = 1.05;
-    cont.residual_threshold = residual_threshold;
-    cont.newton_max_iter = 40;
-    cont.newton_tol = 1e-11;
-    cont.min_ds = 1e-4;
-    cont.max_ds = 0.08;
-    cont.max_fails = 10;
-
-    let mut previous_lambda = cont.lambda;
-    let mut previous_z = cont.z;
-    let mut closest_lambda = cont.lambda;
-    let mut closest_z = cont.z;
-
-    for _ in 0..120 {
-        match cont.step::<HenonSystem, _>(&build) {
-            StepOutcome::Converged => {
-                let current_lambda = cont.lambda;
-                let current_z = cont.z;
-                if (current_lambda - 1.0).abs() < (closest_lambda - 1.0).abs() {
-                    closest_lambda = current_lambda;
-                    closest_z = current_z;
-                }
-
-                let crossed_target = (previous_lambda - 1.0) * (current_lambda - 1.0) <= 0.0
-                    && (current_lambda - previous_lambda).abs() > 1e-12;
-                if crossed_target {
-                    let alpha = (1.0 - previous_lambda) / (current_lambda - previous_lambda);
-                    let mut z_target = previous_z + (current_z - previous_z) * alpha;
-                    if !normalize_vector4_normal(&mut z_target) {
-                        return None;
-                    }
-                    let target_seed =
-                        ExtendedPoint::new(z_target[0], z_target[1], z_target[2], z_target[3]);
-                    return correct_henon_seed_at_params(
-                        target_seed,
-                        period,
-                        new_params,
-                        residual_threshold,
-                    );
-                }
-
-                if current_lambda > 1.05 {
-                    break;
-                }
-                previous_lambda = current_lambda;
-                previous_z = current_z;
-            }
-            StepOutcome::Retry => continue,
-            StepOutcome::Stalled | StepOutcome::OutOfRange => break,
-        }
-    }
-
-    if (closest_lambda - 1.0).abs() <= 0.05 && normalize_vector4_normal(&mut closest_z) {
-        let target_seed =
-            ExtendedPoint::new(closest_z[0], closest_z[1], closest_z[2], closest_z[3]);
-        return correct_henon_seed_at_params(target_seed, period, new_params, residual_threshold);
-    }
-
-    None
-}
-
-// simple continuation for Henon boundary map
-
+/// Correct cached Hénon periodic orbits directly at the target parameters.
+///
+/// The old parameter arguments remain in the public interface for compatibility
+/// with the existing Rust/Wasm worker protocol. Simple continuation does not use
+/// them because it does not interpolate a parameter path.
 pub fn continue_henon_orbits_from_previous(
     previous_orbits: &[FoundPeriodicOrbit],
-    old_a: f64,
-    old_b: f64,
-    old_epsilon: f64,
+    _old_a: f64,
+    _old_b: f64,
+    _old_epsilon: f64,
     new_a: f64,
     new_b: f64,
     new_epsilon: f64,
@@ -602,11 +511,6 @@ pub fn continue_henon_orbits_from_previous(
     residual_threshold: f64,
 ) -> PeriodicOrbitDatabase {
     let residual_threshold = sanitize_residual_threshold(residual_threshold);
-    let old_params = HenonContinuationParams {
-        a: old_a,
-        b: old_b,
-        epsilon: old_epsilon,
-    };
     let new_params = HenonContinuationParams {
         a: new_a,
         b: new_b,
@@ -624,16 +528,7 @@ pub fn continue_henon_orbits_from_previous(
         };
 
         let corrected =
-            correct_henon_seed_at_params(seed, orbit.period, new_params, residual_threshold)
-                .or_else(|| {
-                    continue_henon_seed_to_target_arclength(
-                        seed,
-                        orbit.period,
-                        old_params,
-                        new_params,
-                        residual_threshold,
-                    )
-                });
+            correct_henon_seed_at_params(seed, orbit.period, new_params, residual_threshold);
 
         if let Some(fp) = corrected {
             try_add_orbit_generic(

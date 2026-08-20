@@ -40,8 +40,7 @@ fn cache_key(
 fn validate_manifold_point_spacing(spacing_tol: f64) -> Result<f64, String> {
     if !spacing_tol.is_finite() || !(1e-4..=0.2).contains(&spacing_tol) {
         return Err(
-            "Maximum manifold point spacing must be finite and between 0.0001 and 0.2."
-                .to_string(),
+            "Maximum manifold point spacing must be finite and between 0.0001 and 0.2.".to_string(),
         );
     }
     Ok(spacing_tol)

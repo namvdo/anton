@@ -1,39 +1,6 @@
 use super::*;
 
 #[test]
-fn test_natural_continuation_tracks_fixed_point() {
-    let (b, eps) = (0.3, 0.01);
-    let build = |a| HenonSystem::new(a, b, eps);
-
-    let sys0 = build(1.4);
-    let db = find_all_boundary_periodic_orbits_generic(&sys0, 1, 15, 12, -3.0, 3.0, -3.0, 3.0);
-    let seed = db
-        .orbits
-        .iter()
-        .find(|o| o.period == 1)
-        .expect("a period-1 orbit at a = 1.4")
-        .extended_points[0];
-
-    let branch = follow_branch_arclength(&seed, 1.4, 0.02, 1, false, 0.5, 1.4, 200, &build);
-    assert!(
-        branch.len() > 1,
-        "continuation should produce multiple points"
-    );
-
-    for bp in &branch {
-        let sys = build(bp.lambda);
-        let m = boundary_map_generic(&sys, bp.point.x, bp.point.y, bp.point.nx, bp.point.ny);
-        let d = ((m.x - bp.point.x).powi(2) + (m.y - bp.point.y).powi(2)).sqrt();
-        assert!(
-            d < 1e-6,
-            "point at lambda={} not fixed (d={})",
-            bp.lambda,
-            d
-        );
-    }
-}
-
-#[test]
 fn test_jacobian_multiply_identity() {
     let a = Jacobian::new(1.0, 2.0, 3.0, 4.0);
     let id = Jacobian::identity();
@@ -839,7 +806,7 @@ fn test_sweep_and_viz_grid_consistency() {
 }
 
 #[test]
-fn test_continue_henon_orbits_tracks_parameter_shift() {
+fn test_simple_continuation_tracks_small_parameter_shift() {
     let old_system = HenonSystem::new(0.4, 0.3, 0.1);
     let old_db =
         find_all_boundary_periodic_orbits_generic(&old_system, 1, 10, 8, -3.0, 3.0, -3.0, 3.0);
@@ -879,7 +846,7 @@ fn test_continue_henon_orbits_tracks_parameter_shift() {
 }
 
 #[test]
-fn test_continue_henon_orbits_tracks_epsilon_shift() {
+fn test_simple_continuation_tracks_small_epsilon_shift() {
     let old_system = HenonSystem::new(0.4, 0.3, 0.08);
     let old_db =
         find_all_boundary_periodic_orbits_generic(&old_system, 1, 10, 8, -3.0, 3.0, -3.0, 3.0);
