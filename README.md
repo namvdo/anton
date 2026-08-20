@@ -4,8 +4,9 @@
 
 ANTON is an interactive, web-based research tool for exploring invariant objects in set-valued dynamical systems with additive bounded noise. It was developed as part of the Applied Computing Project (ACP2) research course at the University of Oulu.
 
-#### Live at: [https://namvdo.github.io/set-valued-viz](https://namvdo.github.io/set-valued-viz)
-#### Technical report: [https://namvdo.github.io/bist_technical_report_24042026.pdf](https://namvdo.github.io/bist_technical_report_24042026.pdf)
+#### Live at: https://namvdo.github.io/set-valued-viz
+
+#### Technical report: https://namvdo.github.io/bist_technical_report_24042026.pdf
 
 ## Mathematical Background
 
@@ -13,27 +14,9 @@ In classical analysis, a **single-valued function** (or simply a function) $f: X
 
 In contrast, a **set-valued function** (or **multivalued map**) $F: X \to \mathcal{(Y)}$ assigns to each point $x \in X$ a **subset** $F(x) \subseteq Y$ where $\mathcal{P}(Y)$ denotes the power set of $Y$. Rather than producing a single output, set-valued functions produce **a set of possible outputs**:
 
-$F(A) = \bigcup_{x \in A} F(x)$
-In our setting, we model bounded additive noise through set-valued map:
-$F(x) = B_\epsilon(f(x)) = \{f(x) + \xi : \|\xi\| \leq \epsilon\}$ where $f: \mathbb{R}^n \to \mathbb{R}^n$ is the underlying single-valued deterministic map (the Hénon map in our case), and $B_\epsilon(f(x))$ represent all possible perturbed states within distance $\epsilon$ of the deterministic image.
+$F(A) = \bigcup_{x \in A} F(x)$ In our setting, we model bounded additive noise through set-valued map: $F(x) = B_\epsilon(f(x)) = \{f(x) + \xi : \|\xi\| \leq \epsilon\}$ where $f: \mathbb{R}^n \to \mathbb{R}^n$ is the underlying single-valued deterministic map (the Hénon map in our case), and $B_\epsilon(f(x))$ represent all possible perturbed states within distance $\epsilon$ of the deterministic image.
 
 Rather than tracking every possible point within the noise ball $B_\epsilon(f(x))$ which would be computationally expensive to compute as the noise balls grow, we instead track the boundary evolution through an extended boundary map $F(x,y,nx,ny)=\bigl(f(x,y)+\varepsilon\,\mathbf{nx}',\mathbf{ny}'\bigr)$. Since the maximum uncertainty occurs at the boundary $\partial B_\epsilon(f(x))$ (points at distance exactly $\epsilon$ from the deterministic image), we focus exclusively on tracking how these boundary points evolve.
-
-<<<<<<< HEAD
-=======
-The viewport renders every computed unstable-manifold branch in its native traversal
-order without inferring a closing edge. It shows the noisy manifold samples, reconstructs
-their deterministic images from $f(x_i)=p_i-\epsilon n_i$, and optionally overlays
-one circle $\partial B_\epsilon(f(x_i))$ for every deterministic sample. These system-noise layers use
-the applied noise radius and remain separate from the geometric-offset analysis
-distance configured in the Geometric offsets panel. Branches are curves by default;
-**Show points** replaces them with all computed, color-matched samples. The **Maximum
-state spacing** control applies the Euclidean extended-state metric
-$\sqrt{\|\Delta x\|_2^2+\|\Delta n\|_2^2}$ and recomputes the manifold rather than
-interpolating display points. Geometric offsets are pointwise: every available extended-state sample is mapped by
-$q_i=p_i+\epsilon_g n_i$ and displayed as a point. Direct projection does not require
-or infer a closed curve.
->>>>>>> 5ca2c86 (feat(frontend): map geometric offsets directly and streamline viewport toolbar)
 
 ### Unstable manifold visualization for boundary map evolution with a=0.4, b=0.3 and epsilon=0.0625
 
@@ -54,10 +37,6 @@ or infer a closed curve.
 ### Parameter sweeping for finding fixed and periodic orbits for boundary map of the discrete dynamical systems
 
 ![Parameter sweeping for finding fixed and periodic orbits for boundary map of the discrete dynamical systems](./images/parameter_sweep.png)
-
-### Parameter animation and video recording
-
-The **Parameter animation** panel advances one parameter value at a time. Before starting, it applies the parameter values and periodic-search controls currently shown in the sidebar, including grid sizes, residual threshold, and **Use continuation**, then holds that search configuration fixed for the run. Every generated value updates both the computation and the visible system parameter control, so a run starting at \(a=0.4\) with range \(+0.1\) ends with the upper control at \(a=0.5\). Each step waits for the periodic-orbit search, the dependent manifold computation, and an explicit canvas-render acknowledgement before the next step starts. The previous valid orbit objects remain visible while the replacement is computed; they are swapped only after the complete new periodic result is ready. When recording is enabled, ANTON captures the initial state and then exactly one frame from each fully computed and painted step, so the video does not contain transient frames in which periodic orbits have been cleared or manifold data belongs to a different parameter value.
 
 ## **Getting Started**
 
