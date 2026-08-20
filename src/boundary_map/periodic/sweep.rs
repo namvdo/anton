@@ -494,16 +494,50 @@ fn correct_henon_seed_at_params(
     )
 }
 
-/// Correct cached Hénon periodic orbits directly at the target parameters.
-///
-/// The old parameter arguments remain in the public interface for compatibility
-/// with the existing Rust/Wasm worker protocol. Simple continuation does not use
-/// them because it does not interpolate a parameter path.
+fn continue_henon_seed_stepped(
+    seed: ExtendedPoint,
+    period: usize,
+    old_params: HenonContinuationParams,
+    new_params: HenonContinuationParams,
+    residual_threshold: f64,
+) -> Option<ExtendedPoint> {
+    if let Some(fp) = correct_henon_seed_at_params(seed, period, new_params, residual_threshold) {
+        return Some(fp);
+    }
+
+    let da = new_params.a - old_params.a;
+    let db = new_params.b - old_params.b;
+    let de = new_params.epsilon - old_params.epsilon;
+
+    let dist = da.abs().max(db.abs()).max(de.abs());
+    if dist < 1e-8 {
+        return None;
+    }
+
+    let step_size = 0.002;
+    let num_steps = ((dist / step_size).ceil() as usize).clamp(2, 100);
+
+    let mut current_seed = seed;
+    for step in 1..=num_steps {
+        let t = step as f64 / num_steps as f64;
+        let interim_params = HenonContinuationParams {
+            a: old_params.a + t * da,
+            b: old_params.b + t * db,
+            epsilon: old_params.epsilon + t * de,
+        };
+        current_seed =
+            correct_henon_seed_at_params(current_seed, period, interim_params, residual_threshold)?;
+    }
+    Some(current_seed)
+}
+
+/// Correct cached Hénon periodic orbits at the target parameters, stepping along
+/// the parameter path if direct correction fails.
 pub fn continue_henon_orbits_from_previous(
     previous_orbits: &[FoundPeriodicOrbit],
-    _old_a: f64,
-    _old_b: f64,
-    _old_epsilon: f64,
+    old_a: f64,
+    old_b: f64,
+    old_epsilon: f64,
     new_a: f64,
     new_b: f64,
     new_epsilon: f64,
@@ -511,6 +545,11 @@ pub fn continue_henon_orbits_from_previous(
     residual_threshold: f64,
 ) -> PeriodicOrbitDatabase {
     let residual_threshold = sanitize_residual_threshold(residual_threshold);
+    let old_params = HenonContinuationParams {
+        a: old_a,
+        b: old_b,
+        epsilon: old_epsilon,
+    };
     let new_params = HenonContinuationParams {
         a: new_a,
         b: new_b,
@@ -527,8 +566,13 @@ pub fn continue_henon_orbits_from_previous(
             continue;
         };
 
-        let corrected =
-            correct_henon_seed_at_params(seed, orbit.period, new_params, residual_threshold);
+        let corrected = continue_henon_seed_stepped(
+            seed,
+            orbit.period,
+            old_params,
+            new_params,
+            residual_threshold,
+        );
 
         if let Some(fp) = corrected {
             try_add_orbit_generic(
