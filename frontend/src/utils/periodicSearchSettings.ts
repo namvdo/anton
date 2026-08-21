@@ -1,8 +1,8 @@
 import type { PeriodicSearchSettings } from '../types/domain';
 
 export const DEFAULT_PERIODIC_SEARCH_SETTINGS: PeriodicSearchSettings = {
-  gridSize: 10,
-  thetaGridSize: 10,
+  gridSize: 18,
+  thetaGridSize: 16,
   residualThreshold: 1e-10,
   useContinuation: false
 };
@@ -19,38 +19,38 @@ export const PERIODIC_SEARCH_LIMITS = {
 };
 
 export interface PeriodicSearchPreset {
-  id: 'quick' | 'balanced' | 'thorough';
+  id: 'standard' | 'deep' | 'ultra';
   label: string;
-  description: string;
+  description?: string;
   maxPeriod: number;
   settings: PeriodicSearchSettings;
 }
 
 export const PERIODIC_SEARCH_PRESETS: readonly PeriodicSearchPreset[] = Object.freeze([
   {
-    id: 'quick',
-    label: 'Quick',
-    description: '864 seeds',
-    maxPeriod: 3,
-    settings: { gridSize: 6, thetaGridSize: 8, residualThreshold: 1e-8, useContinuation: false },
-  },
-  {
-    id: 'balanced',
-    label: 'Balanced',
-    description: '5,000 seeds',
-    maxPeriod: 5,
+    id: 'standard',
+    label: 'Standard',
+    description: '41,472 seeds',
+    maxPeriod: 8,
     settings: { ...DEFAULT_PERIODIC_SEARCH_SETTINGS },
   },
   {
-    id: 'thorough',
-    label: 'Thorough',
-    description: '41,472 seeds',
-    maxPeriod: 8,
-    settings: { gridSize: 18, thetaGridSize: 16, residualThreshold: 1e-10, useContinuation: false },
+    id: 'deep',
+    label: 'Deep',
+    description: '138,240 seeds',
+    maxPeriod: 10,
+    settings: { gridSize: 24, thetaGridSize: 24, residualThreshold: 1e-10, useContinuation: false },
+  },
+  {
+    id: 'ultra',
+    label: 'Ultra',
+    description: '393,216 seeds',
+    maxPeriod: 12,
+    settings: { gridSize: 32, thetaGridSize: 32, residualThreshold: 1e-10, useContinuation: false },
   },
 ]);
 
-export const normalizePeriodicMaxPeriod = (value: number, fallback = 5): number => {
+export const normalizePeriodicMaxPeriod = (value: number, fallback = 8): number => {
   const parsed = Number.parseInt(`${value}`, 10);
   const parsedFallback = Number.parseInt(`${fallback}`, 10);
   const safeFallback = Number.isFinite(parsedFallback)
@@ -58,7 +58,7 @@ export const normalizePeriodicMaxPeriod = (value: number, fallback = 5): number 
       PERIODIC_SEARCH_LIMITS.maxPeriodMax,
       Math.max(PERIODIC_SEARCH_LIMITS.maxPeriodMin, parsedFallback),
     )
-    : 5;
+    : 8;
   return Number.isFinite(parsed)
     ? Math.min(PERIODIC_SEARCH_LIMITS.maxPeriodMax, Math.max(PERIODIC_SEARCH_LIMITS.maxPeriodMin, parsed))
     : safeFallback;

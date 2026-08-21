@@ -65,7 +65,7 @@ export const INITIAL_PARAMS: BistParameters = Object.freeze({
   startX: 0.1,
   startY: 0.1,
   maxIterations: 1000,
-  maxPeriod: 5,
+  maxPeriod: 8,
 });
 
 export const systemTypeFor = (systemId: SystemId): SystemType => (

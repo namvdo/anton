@@ -48,7 +48,7 @@ describe('normalizePeriodicSearchSettings', () => {
         preset.settings.gridSize,
         preset.settings.thetaGridSize,
       ).toLocaleString('en-US')
-    ))).toEqual(['864', '5,000', '41,472']);
+    ))).toEqual(['41,472', '138,240', '393,216']);
   });
 
   it('forces the direct search action to bypass continuation', () => {

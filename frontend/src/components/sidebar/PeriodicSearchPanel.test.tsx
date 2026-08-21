@@ -73,12 +73,12 @@ describe('PeriodicSearchPanel', () => {
       updatePeriodicSearchSettings={onUpdate}
       updateMaxPeriod={onMaxPeriod} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Quick 864 seeds' }));
-    expect(onMaxPeriod).toHaveBeenCalledWith(3);
+    fireEvent.click(screen.getByRole('button', { name: 'Deep 138,240 seeds' }));
+    expect(onMaxPeriod).toHaveBeenCalledWith(10);
     expect(onUpdate).toHaveBeenCalledWith({
-      gridSize: 6,
-      thetaGridSize: 8,
-      residualThreshold: 1e-8,
+      gridSize: 24,
+      thetaGridSize: 24,
+      residualThreshold: 1e-10,
       useContinuation: false,
     });
   });
