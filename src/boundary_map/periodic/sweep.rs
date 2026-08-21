@@ -319,7 +319,7 @@ impl BoundaryUserDefinedSystemWasm {
         let residual_threshold = sanitize_residual_threshold(
             residual_threshold.unwrap_or(DEFAULT_PERIODIC_RESIDUAL_THRESHOLD),
         );
-        let orbit_database = davidchack_lai_boundary_map_generic(
+        let orbit_database = find_all_boundary_periodic_orbits_generic_with_threshold(
             &system,
             max_period,
             grid_size,

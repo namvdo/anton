@@ -218,6 +218,29 @@ fn test_generic_verify_minimal_period() {
 }
 
 #[test]
+fn test_orbit_acceptance_rejects_lower_period_alias_without_prior_discovery() {
+    let sys = make_henon_system(1.4, 0.3, 0.01);
+    let found = find_all_boundary_periodic_orbits_generic(&sys, 1, 10, 8, -3.0, 3.0, -3.0, 3.0);
+    let fixed_point = found
+        .orbits
+        .iter()
+        .find(|orbit| orbit.period == 1)
+        .and_then(|orbit| orbit.extended_points.first())
+        .copied()
+        .expect("reference search should find a period-one orbit");
+    let mut empty_database = PeriodicOrbitDatabase::new();
+
+    assert!(!try_add_orbit_generic(
+        &sys,
+        &mut empty_database,
+        fixed_point,
+        2,
+        DEFAULT_PERIODIC_RESIDUAL_THRESHOLD,
+    ));
+    assert!(empty_database.orbits.is_empty());
+}
+
+#[test]
 fn test_classify_stability_4d_diagonal() {
     let stable_jac = Jacobian4x4 {
         data: [

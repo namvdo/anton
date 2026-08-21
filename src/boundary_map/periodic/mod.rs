@@ -31,8 +31,7 @@ pub use types::*;
 use henon::periodic_orbit_js;
 use search::{
     boundary_map_generic, compose_boundary_map_n_times_generic,
-    davidchack_lai_boundary_map_generic, find_boundary_periodic_point_davidchack_lai_generic,
-    try_add_orbit_generic,
+    find_boundary_periodic_point_davidchack_lai_generic, try_add_orbit_generic,
 };
 
 #[cfg(test)]
