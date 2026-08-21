@@ -274,4 +274,32 @@ describe('experiment bundle schema v2', () => {
     expect(bundle.results.periodic.orbits).toEqual([]);
     expect(bundle.results.parameterSweep).toBeNull();
   });
+
+  it('exports cleanly when manifold branches contain undefined optional fields from WASM', () => {
+    const bundle = buildReferenceBundle({
+      results: {
+        manifolds: [{
+          plus: {
+            points: [[0.1, 0.2]],
+            extended_points: [[0.1, 0.2, 1.0, 0.0]],
+            stop_reason: 'MaxIter',
+            reached_target_id: undefined,
+          },
+          minus: {
+            points: [[-0.1, -0.2]],
+            extended_points: [[-0.1, -0.2, -1.0, 0.0]],
+            stop_reason: 'MaxIter',
+            reached_target_id: undefined,
+          },
+          saddle_point: [0.0, 0.0],
+          eigenvalue: 1.5,
+          source_topology_id: undefined,
+        }],
+      },
+    });
+
+    expect(bundle.results.manifolds.unstable).toHaveLength(1);
+    const parsed = parseExperimentBundle(JSON.stringify(bundle));
+    expect(parsed.results.manifolds.unstable).toHaveLength(1);
+  });
 });

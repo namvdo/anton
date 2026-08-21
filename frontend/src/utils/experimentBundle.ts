@@ -207,9 +207,11 @@ const assertJsonCompatible = (
   if (Array.isArray(value)) {
     value.forEach((entry, index) => assertJsonCompatible(entry, `${path}[${index}]`, ancestors));
   } else {
-    Object.entries(value).forEach(([name, entry]) => (
-      assertJsonCompatible(entry, `${path}.${name}`, ancestors)
-    ));
+    Object.entries(value).forEach(([name, entry]) => {
+      if (entry !== undefined) {
+        assertJsonCompatible(entry, `${path}.${name}`, ancestors);
+      }
+    });
   }
   ancestors.delete(value);
 };
