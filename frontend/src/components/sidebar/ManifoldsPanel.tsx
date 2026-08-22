@@ -1,7 +1,7 @@
 import { Collapsible } from '../ui/Collapsible';
 import { Toggle } from '../ui/Toggle';
 import { Slider } from '../ui/Slider';
-import type { ManifoldState, StateSetter } from '../../types/domain';
+import type { ManifoldState, PeriodicOrbit, StateSetter } from '../../types/domain';
 import {
   BOUNDARY_LAYER_COLORS,
   type BoundarySamplingSummary,
@@ -23,8 +23,10 @@ interface ManifoldsPanelProps {
     | 'showStableManifold'
     | 'intersectionThreshold'
     | 'intersections'
+    | 'selectedOrbitPeriod'
   >;
   setManifoldState: StateSetter<ManifoldState>;
+  periodicOrbits?: PeriodicOrbit[];
   ORBIT_COLORS: OrbitColors;
   hasBoundarySamples?: boolean;
   boundaryLayerError?: string | null;
@@ -38,6 +40,7 @@ interface ManifoldsPanelProps {
 export const ManifoldsPanel = ({
   manifoldState,
   setManifoldState,
+  periodicOrbits = [],
   ORBIT_COLORS,
   hasBoundarySamples = false,
   boundaryLayerError = null,
@@ -48,8 +51,47 @@ export const ManifoldsPanel = ({
     && hasBoundarySamples
     && !boundaryLayerError;
 
+  const saddleOrbits = (periodicOrbits || []).filter(
+    o => (o.stability || '').toLowerCase() === 'saddle'
+  );
+  const candidateOrbits = saddleOrbits.length > 0 ? saddleOrbits : (periodicOrbits || []);
+  const availablePeriods = Array.from(
+    new Set(candidateOrbits.map(o => o.period))
+  ).sort((a, b) => a - b);
+
   return (
     <Collapsible title="Manifolds" defaultOpen={true}>
+      {candidateOrbits.length > 0 && (
+        <div className="start-field" style={{ marginBottom: '12px' }}>
+          <label htmlFor="manifold-orbit-source">Saddle orbit source</label>
+          <select
+            id="manifold-orbit-source"
+            className="param-select"
+            value={manifoldState.selectedOrbitPeriod ?? 'all'}
+            onChange={(e) => {
+              const val = e.target.value === 'all' ? 'all' : Number(e.target.value);
+              setManifoldState(prev => ({ ...prev, selectedOrbitPeriod: val }));
+            }}
+          >
+            <option value="all">
+              All saddle periods ({candidateOrbits.length} orbit{candidateOrbits.length === 1 ? '' : 's'})
+            </option>
+            {availablePeriods.map(period => {
+              const count = candidateOrbits.filter(o => o.period === period).length;
+              const totalPoints = candidateOrbits
+                .filter(o => o.period === period)
+                .reduce((sum, o) => sum + (o.points?.length || period), 0);
+              return (
+                <option key={period} value={period}>
+                  Period {period} saddles ({count} orbit{count === 1 ? '' : 's'}, {totalPoints} pt{totalPoints === 1 ? '' : 's'})
+                </option>
+              );
+            })}
+          </select>
+          <small>Compute manifolds for all saddle orbits of the selected period</small>
+        </div>
+      )}
+
       <Toggle
         label="Unstable manifold"
         colorLine={BOUNDARY_LAYER_COLORS.invariant}

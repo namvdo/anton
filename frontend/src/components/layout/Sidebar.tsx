@@ -194,6 +194,7 @@ export const Sidebar = (props: SidebarProps) => {
             <ManifoldsPanel
               manifoldState={props.manifoldState}
               setManifoldState={props.setManifoldState}
+              periodicOrbits={props.periodicState.orbits}
               ORBIT_COLORS={ORBIT_COLORS}
               hasBoundarySamples={props.hasBoundarySamples}
               boundaryLayerError={props.boundaryLayerError}

@@ -149,4 +149,29 @@ describe('ManifoldsPanel', () => {
 
     expect(screen.getByText(/No heteroclinic connections/)).toBeInTheDocument();
   });
+
+  it('renders saddle orbit source selector and only shows saddle periods', () => {
+    const setManifoldState = vi.fn();
+    const periodicOrbits = [
+      { period: 1, stability: 'saddle' as const, points: [[0.5, 0.15] as [number, number]] },
+      { period: 2, stability: 'saddle' as const, points: [[0.14, 0.42] as [number, number], [1.42, 0.04] as [number, number]] },
+      { period: 2, stability: 'stable' as const, points: [[0.2, 0.4] as [number, number], [1.4, 0.1] as [number, number]] }, // non-saddle attractor
+    ];
+
+    render(
+      <ManifoldsPanel
+        manifoldState={{ ...defaultManifoldState, selectedOrbitPeriod: 'all' }}
+        setManifoldState={setManifoldState}
+        periodicOrbits={periodicOrbits}
+        ORBIT_COLORS={ORBIT_COLORS}
+      />
+    );
+
+    expect(screen.getByLabelText('Saddle orbit source')).toBeInTheDocument();
+    expect(screen.getByText('All saddle periods (2 orbits)')).toBeInTheDocument();
+    expect(screen.getByText('Period 1 saddles (1 orbit, 1 pt)')).toBeInTheDocument();
+    expect(screen.getByText('Period 2 saddles (1 orbit, 2 pts)')).toBeInTheDocument();
+    // Non-saddle attractor should not create extra options
+    expect(screen.queryByText(/Period 2 stable/)).not.toBeInTheDocument();
+  });
 });

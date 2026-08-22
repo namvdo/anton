@@ -464,7 +464,8 @@ const SetValuedViz = () => {
         isRunning: false,
         hasStarted: false,
         showTrail: true,
-        startPoint: { x: 0.1, y: 0.1, nx: 1.0, ny: 0.0 }
+        startPoint: { x: 0.1, y: 0.1, nx: 1.0, ny: 0.0 },
+        selectedOrbitPeriod: 'all',
     });
 
     const [geometricOffsetState, setGeometricOffsetState] = useState<GeometricOffsetState>(() => {
@@ -1706,7 +1707,20 @@ const SetValuedViz = () => {
                     yMin: viewRange.yMin,
                     yMax: viewRange.yMax
                 },
-                periodicOrbits: periodicState.orbits || [],
+                periodicOrbits: (() => {
+                    const allSaddles = (periodicState.orbits || []).filter(
+                        o => (o.stability || '').toLowerCase() === 'saddle'
+                    );
+                    const candidateOrbits = allSaddles.length > 0 ? allSaddles : (periodicState.orbits || []);
+                    if (manifoldState.selectedOrbitPeriod === undefined || manifoldState.selectedOrbitPeriod === 'all') {
+                        return candidateOrbits;
+                    }
+                    const periodNum = typeof manifoldState.selectedOrbitPeriod === 'string'
+                        ? Number(manifoldState.selectedOrbitPeriod)
+                        : manifoldState.selectedOrbitPeriod;
+                    const periodMatched = candidateOrbits.filter(o => o.period === periodNum);
+                    return periodMatched.length > 0 ? periodMatched : candidateOrbits;
+                })(),
                 customEquations: activeAppliedCustomEquations,
                 customParams: appliedParamValidation.normalized,
                 showStableManifold: manifoldState.showStableManifold,
@@ -1746,7 +1760,7 @@ const SetValuedViz = () => {
                 clearTimeout(manifoldDebounceRef.current);
             }
         };
-    }, [dynamicSystem, params.a, params.b, params.delta, params.h, params.epsilon, periodicState.orbits, periodicState.resultRevision, wasmModule, manifoldState.showStableManifold, manifoldState.showUnstableManifold, manifoldState.intersectionThreshold, manifoldState.maximumManifoldPointSpacing, activeAppliedCustomEquations, appliedParamValidation, manifoldState.startPoint.x, manifoldState.startPoint.y, viewRange, computeRequestId, runComputeTask]);
+    }, [dynamicSystem, params.a, params.b, params.delta, params.h, params.epsilon, periodicState.orbits, periodicState.resultRevision, wasmModule, manifoldState.showStableManifold, manifoldState.showUnstableManifold, manifoldState.intersectionThreshold, manifoldState.maximumManifoldPointSpacing, manifoldState.selectedOrbitPeriod, activeAppliedCustomEquations, appliedParamValidation, manifoldState.startPoint.x, manifoldState.startPoint.y, viewRange, computeRequestId, runComputeTask]);
 
     useEffect(() => {
         if (!animationState.isAnimating || animationState.awaitingResult) {

@@ -159,6 +159,7 @@ export interface ManifoldState {
   hasStarted: boolean;
   showTrail: boolean;
   startPoint: ExtendedState;
+  selectedOrbitPeriod?: number | 'all';
 }
 
 export interface BoundaryComponent extends UnknownRecord {
