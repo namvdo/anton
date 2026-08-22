@@ -262,10 +262,13 @@ const computePeriodic = async (payload: PeriodicComputePayload): Promise<Periodi
     let support = null;
 
     if (dynamicSystem === 'henon') {
+      const supportSubdivisions = periodicSearchSettings.supportFilterSubdivisions ?? MIS_FILTER_SUBDIVISIONS;
+      const supportThreshold = periodicSearchSettings.supportThreshold ?? MIS_SUPPORT_THRESHOLD;
+
       supportComputer = new wasm.UlamComputer(
         params.a,
         params.b,
-        MIS_FILTER_SUBDIVISIONS,
+        supportSubdivisions,
         MIS_FILTER_POINTS_PER_BOX,
         params.epsilon,
         viewRange.xMin,
@@ -276,12 +279,12 @@ const computePeriodic = async (payload: PeriodicComputePayload): Promise<Periodi
 
       support = {
         invariantMeasure: supportComputer.get_invariant_measure() as number[],
-        subdivisions: MIS_FILTER_SUBDIVISIONS,
+        subdivisions: supportSubdivisions,
         xMin: viewRange.xMin,
         xMax: viewRange.xMax,
         yMin: viewRange.yMin,
         yMax: viewRange.yMax,
-        threshold: MIS_SUPPORT_THRESHOLD
+        threshold: supportThreshold
       };
 
       orbits = filterOrbitsBySupport(orbits, support);

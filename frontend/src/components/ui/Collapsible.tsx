@@ -4,14 +4,20 @@ interface CollapsibleProps {
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;
+  className?: string;
 }
 
-export const Collapsible = ({ title, children, defaultOpen = true }: CollapsibleProps) => {
+export const Collapsible = ({
+  title,
+  children,
+  defaultOpen = true,
+  className = '',
+}: CollapsibleProps) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const panelId = `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
   return (
-    <div className={`section ${isOpen ? 'open' : ''}`}>
+    <div className={`section ${isOpen ? 'open' : ''} ${className}`.trim()}>
       <button
         type="button"
         className="sec-head"

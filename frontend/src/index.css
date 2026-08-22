@@ -296,12 +296,32 @@ select:disabled { cursor: not-allowed; }
   transition: transform .18s;
   color: var(--text-3);
 }
-.section.open .sec-caret { transform: rotate(90deg); }
+.section.open > .sec-head .sec-caret { transform: rotate(90deg); }
 .sec-body {
   padding: 2px 14px 14px;
   display: none;
 }
-.section.open .sec-body { display: block; }
+.section.open > .sec-body { display: block; }
+
+/* Sub-collapsible inside sections */
+.section .section {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin: 10px 0;
+  background: rgba(255, 255, 255, 0.015);
+}
+.section .section .sec-head {
+  min-height: 36px;
+  padding: 8px 12px;
+}
+.section .section .sec-title {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.section .section .sec-body {
+  padding: 8px 12px 12px;
+}
 
 /* ─── Param row ─────────────────────────────────────── */
 .p-row { margin-bottom: 13px; }

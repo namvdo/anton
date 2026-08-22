@@ -67,6 +67,25 @@ export const PeriodicSearchPanel = ({
     updatePeriodicSearchSettings?.({ useContinuation: value });
   };
 
+  const updateMaxNewtonIterations = (e: ChangeEvent<HTMLInputElement>): void => {
+    const val = parseInt(e.target.value, 10);
+    updatePeriodicSearchSettings?.({ maxNewtonIterations: Number.isFinite(val) ? val : 100 });
+  };
+
+  const updateNewtonBeta = (e: ChangeEvent<HTMLInputElement>): void => {
+    const raw = e.target.value.trim();
+    if (raw === '' || raw.toLowerCase() === 'auto') {
+      updatePeriodicSearchSettings?.({ newtonBeta: null });
+    } else {
+      const val = parseFloat(raw);
+      updatePeriodicSearchSettings?.({ newtonBeta: Number.isFinite(val) ? val : null });
+    }
+  };
+
+  const updateDeduplicationTolerance = (e: ChangeEvent<HTMLInputElement>): void => {
+    updatePeriodicSearchSettings?.({ deduplicationTolerance: Number(e.target.value) });
+  };
+
   const seedCount = estimatePeriodicGridSeedCount(
     maxPeriod,
     periodicSearchSettings.gridSize,
@@ -176,6 +195,51 @@ export const PeriodicSearchPanel = ({
         <div><span>Search domain</span><strong>x [{viewRange.xMin}, {viewRange.xMax}], y [{viewRange.yMin}, {viewRange.yMax}]</strong></div>
         <div><span>Newton starts</span><strong>{seedCount.toLocaleString()}</strong></div>
       </div>
+
+      <Collapsible title="Advanced solver settings" defaultOpen={false}>
+        <div className="periodic-search-grid">
+          <div className="start-field">
+            <label htmlFor="periodic-max-iterations">Max Newton iterations</label>
+            <input
+              id="periodic-max-iterations"
+              type="number"
+              min="10"
+              max="1000"
+              step="10"
+              value={periodicSearchSettings?.maxNewtonIterations ?? 100}
+              onChange={updateMaxNewtonIterations}
+              disabled={disabled}
+            />
+            <small>Steps per seed before giving up</small>
+          </div>
+          <div className="start-field">
+            <label htmlFor="periodic-newton-beta">Damping β (Davidchack-Lai)</label>
+            <input
+              id="periodic-newton-beta"
+              type="text"
+              placeholder="Auto (15·1.3^p)"
+              value={periodicSearchSettings?.newtonBeta !== null && periodicSearchSettings?.newtonBeta !== undefined ? periodicSearchSettings.newtonBeta : ''}
+              onChange={updateNewtonBeta}
+              disabled={disabled}
+            />
+            <small>0 for pure Newton; leave blank for Auto</small>
+          </div>
+          <div className="start-field">
+            <label htmlFor="periodic-dedup-tolerance">Deduplication tolerance</label>
+            <input
+              id="periodic-dedup-tolerance"
+              type="number"
+              min="1e-6"
+              max="1e-1"
+              step="any"
+              value={periodicSearchSettings?.deduplicationTolerance ?? 1e-3}
+              onChange={updateDeduplicationTolerance}
+              disabled={disabled}
+            />
+            <small>Cluster radius to merge duplicate orbits</small>
+          </div>
+        </div>
+      </Collapsible>
 
       <Toggle
         label="Use cached-orbit continuation on ordinary compute"

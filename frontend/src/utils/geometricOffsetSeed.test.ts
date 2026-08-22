@@ -93,6 +93,25 @@ describe('verified geometric-offset seed', () => {
     expect(buildVerifiedBoundaryCycle(manifolds)).toEqual([]);
   });
 
+  it('preserves two independent invariant lobes as separate verified cycles', () => {
+    const leftLower = [point(0, 0), point(0.5, -0.1), point(1, 0)];
+    const leftUpper = [point(1, 0.4), point(0.5, 0.5), point(0, 0.4)];
+    const rightLower = [point(2, 0), point(2.5, -0.1), point(3, 0)];
+    const rightUpper = [point(3, 0.4), point(2.5, 0.5), point(2, 0.4)];
+
+    const cycles = buildVerifiedBoundaryCycles([
+      arc(10, 11, leftLower),
+      arc(11, 10, leftUpper),
+      arc(20, 21, rightLower),
+      arc(21, 20, rightUpper),
+    ]);
+
+    expect(cycles).toEqual([
+      [...leftLower, ...leftUpper],
+      [...rightLower, ...rightUpper],
+    ]);
+  });
+
   it('keeps every calculated point without seed downsampling', () => {
     const upper = Array.from({ length: 2050 }, (_, index) => point(index / 2049, 0));
     const lower = Array.from({ length: 2050 }, (_, index) => point(1 - index / 2049, 1));

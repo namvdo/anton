@@ -27,6 +27,7 @@ import {
     shouldRecordTrajectoryHistoryPoint
 } from './utils/trajectoryState';
 import {
+    buildVerifiedBoundaryCycles,
     collectGeometricOffsetBoundaryPoints,
     collectExtendedManifoldBranches,
 } from './utils/geometricOffsetSeed';
@@ -497,10 +498,19 @@ const SetValuedViz = () => {
         [boundarySourceManifolds]
     );
 
-    const calculatedBoundaryBranches = useMemo(
-        () => collectExtendedManifoldBranches(boundarySourceManifolds),
+    const verifiedBoundaryCycles = useMemo(
+        () => buildVerifiedBoundaryCycles(boundarySourceManifolds),
         [boundarySourceManifolds]
     );
+
+    const calculatedBoundaryBranches = useMemo(
+        () => verifiedBoundaryCycles.length > 0
+            ? verifiedBoundaryCycles
+            : collectExtendedManifoldBranches(boundarySourceManifolds),
+        [boundarySourceManifolds, verifiedBoundaryCycles]
+    );
+
+    const hasVerifiedBoundaryCycles = verifiedBoundaryCycles.length > 0;
 
     const boundaryLayers = useMemo(() => {
         if (calculatedBoundaryBranches.length === 0) {
@@ -2478,6 +2488,7 @@ const SetValuedViz = () => {
                         3.4,
                         0.24,
                         'unstable-manifold',
+                        hasVerifiedBoundaryCycles,
                     );
                 }
             });
@@ -2498,6 +2509,7 @@ const SetValuedViz = () => {
                             2.6,
                             0.23,
                             'deterministic-image',
+                            hasVerifiedBoundaryCycles,
                         );
                     }
                 });
@@ -2806,7 +2818,7 @@ const SetValuedViz = () => {
             scene.add(sphere);
         }
 
-    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, readViewportSize, geometricOffsetBoundaryPoints, boundaryLayers, hasBoundarySamples, params.epsilon]);
+    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, readViewportSize, geometricOffsetBoundaryPoints, boundaryLayers, hasBoundarySamples, hasVerifiedBoundaryCycles, params.epsilon]);
 
     useEffect(() => {
         if (!sceneRef.current) return;

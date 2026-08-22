@@ -57,11 +57,37 @@ describe('normalizePeriodicSearchSettings', () => {
       thetaGridSize: 12,
       residualThreshold: 1e-9,
       useContinuation: true,
+      maxNewtonIterations: 200,
+      newtonBeta: 2.5,
+      deduplicationTolerance: 5e-4,
+      supportFilterSubdivisions: 32,
+      supportThreshold: 1e-8,
     })).toEqual({
       gridSize: 16,
       thetaGridSize: 12,
       residualThreshold: 1e-9,
       useContinuation: false,
+      maxNewtonIterations: 200,
+      newtonBeta: 2.5,
+      deduplicationTolerance: 5e-4,
+      supportFilterSubdivisions: 32,
+      supportThreshold: 1e-8,
     });
+  });
+
+  it('normalizes advanced solver parameters within valid bounds', () => {
+    const normalized = normalizePeriodicSearchSettings({
+      maxNewtonIterations: 5,
+      newtonBeta: -10,
+      deduplicationTolerance: 1e-8,
+      supportFilterSubdivisions: 512,
+      supportThreshold: 0,
+    });
+
+    expect(normalized.maxNewtonIterations).toBe(10);
+    expect(normalized.newtonBeta).toBe(0);
+    expect(normalized.deduplicationTolerance).toBe(1e-6);
+    expect(normalized.supportFilterSubdivisions).toBe(256);
+    expect(normalized.supportThreshold).toBe(1e-10);
   });
 });

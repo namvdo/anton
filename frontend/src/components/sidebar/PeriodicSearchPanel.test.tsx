@@ -80,6 +80,11 @@ describe('PeriodicSearchPanel', () => {
       thetaGridSize: 24,
       residualThreshold: 1e-10,
       useContinuation: false,
+      maxNewtonIterations: 100,
+      newtonBeta: null,
+      deduplicationTolerance: 1e-3,
+      supportFilterSubdivisions: 64,
+      supportThreshold: 1e-10,
     });
   });
 
@@ -112,5 +117,22 @@ describe('PeriodicSearchPanel', () => {
     expect(screen.getByLabelText('Maximum period')).toBeInTheDocument();
     const result = screen.getByLabelText('Current periodic orbit result configuration');
     expect(result).toHaveTextContent('ε = 0.0625; P ≤ 4, 8 × 8 positions, 12 angles, tolerance 1e-9');
+  });
+
+  it('allows configuring advanced solver settings', () => {
+    const onUpdate = vi.fn();
+    render(<PeriodicSearchPanel {...baseProps} updatePeriodicSearchSettings={onUpdate} />);
+
+    fireEvent.change(screen.getByLabelText('Max Newton iterations'), { target: { value: '250' } });
+    expect(onUpdate).toHaveBeenCalledWith({ maxNewtonIterations: 250 });
+
+    fireEvent.change(screen.getByLabelText('Damping β (Davidchack-Lai)'), { target: { value: '1.5' } });
+    expect(onUpdate).toHaveBeenCalledWith({ newtonBeta: 1.5 });
+
+    fireEvent.change(screen.getByLabelText('Damping β (Davidchack-Lai)'), { target: { value: 'auto' } });
+    expect(onUpdate).toHaveBeenCalledWith({ newtonBeta: null });
+
+    fireEvent.change(screen.getByLabelText('Deduplication tolerance'), { target: { value: '1e-4' } });
+    expect(onUpdate).toHaveBeenCalledWith({ deduplicationTolerance: 1e-4 });
   });
 });

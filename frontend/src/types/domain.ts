@@ -69,6 +69,11 @@ export interface PeriodicSearchSettings {
   thetaGridSize: number;
   residualThreshold: number;
   useContinuation: boolean;
+  maxNewtonIterations?: number;
+  newtonBeta?: number | null;
+  deduplicationTolerance?: number;
+  supportFilterSubdivisions?: number;
+  supportThreshold?: number;
 }
 
 export interface PeriodicOrbit extends UnknownRecord {
