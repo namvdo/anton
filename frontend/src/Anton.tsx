@@ -571,7 +571,7 @@ const SetValuedViz = () => {
 
     const [filters, setFilters] = useState<OrbitFilters>({
         period1: true, period2: true, period3: true,
-        period4: true, period5: true, period6plus: false
+        period4: true, period5: true, period6plus: true
     });
 
     const isCustomSystem = isCustomSystemId(dynamicSystem);
@@ -2790,59 +2790,79 @@ const SetValuedViz = () => {
         const pxPerUnit = vpHeight / frustumH;
         const radius = Math.max(1e-6, 6.0 / pxPerUnit);
 
-        manifoldState.fixedPoints.forEach(fp => {
-            const stabLower = (fp.stability || '').toLowerCase();
-            const isAttractor = stabLower === 'attractor' || stabLower === 'stable';
-            const isDualRepeller = stabLower === 'dualrepeller' || stabLower === 'dual_repeller' || stabLower === 'dual repeller';
-            const isRepeller = !isDualRepeller && (stabLower === 'repeller' || stabLower === 'unstable');
-            const isSaddle = stabLower === 'saddle';
-            const color = isAttractor ? ORBIT_COLORS.attractor :
-                isDualRepeller ? ORBIT_COLORS.dualRepeller :
-                isRepeller ? ORBIT_COLORS.repeller :
-                isSaddle ? ORBIT_COLORS.saddlePoint : ORBIT_COLORS.periodicBlue;
-
-            const fpRadius = radius * (isAttractor ? 1.15 : (isRepeller || isDualRepeller) ? 1.1 : 1.0);
-
-            // Dark high-contrast outer ring so fixed point is clearly separated from manifold lines
-            const ringGeom = new THREE.RingGeometry(fpRadius * 0.9, fpRadius * 1.35, 32);
-            const ringMat = new THREE.MeshBasicMaterial({
-                color: new THREE.Color('#000000'),
-                transparent: true,
-                opacity: 0.95,
-                depthTest: false,
-                depthWrite: false,
-                side: THREE.DoubleSide
-            });
-            const ring = new THREE.Mesh(ringGeom, ringMat);
-            ring.position.set(fp.x, fp.y, 0.49);
-            ring.renderOrder = 99;
-            ring.userData = { type: 'fixedPoint' };
-            scene.add(ring);
-
-            const geom = new THREE.CircleGeometry(fpRadius, 32);
-            const mat = new THREE.MeshBasicMaterial({
-                color: new THREE.Color(color),
-                transparent: true,
-                opacity: 1.0,
-                depthTest: false,
-                depthWrite: false,
-                side: THREE.DoubleSide
-            });
-            const sphere = new THREE.Mesh(geom, mat);
-            sphere.position.set(fp.x, fp.y, 0.5);
-            sphere.renderOrder = 100;
-            sphere.userData = {
-                type: 'fixedPoint',
-                period: 1,
-                stability: fp.stability,
-                pos: { x: fp.x, y: fp.y },
-                normal: Number.isFinite(fp.nx) && Number.isFinite(fp.ny)
-                    ? { x: fp.nx, y: fp.ny }
-                    : null,
-                eigenvalues: fp.eigenvalues || null
+        if (manifoldState.showOrbits) {
+            const isFpVisible = (fp: { period?: number; x: number; y: number }): boolean => {
+                const p = fp.period ?? 1;
+                if (p === 1) return filters.period1;
+                if (p === 2) return filters.period2;
+                if (p === 3) return filters.period3;
+                if (p === 4) return filters.period4;
+                if (p === 5) return filters.period5;
+                return filters.period6plus;
             };
-            scene.add(sphere);
-        });
+
+            manifoldState.fixedPoints.filter(isFpVisible).forEach(fp => {
+                const isRenderedByOrbit = periodicState.isReady
+                    && manifoldState.showOrbits
+                    && (periodicState.orbits || []).some(orbit =>
+                        isFpVisible({ ...fp, period: orbit.period }) &&
+                        (orbit.points || []).some(([ox, oy]) => Math.hypot(ox - fp.x, oy - fp.y) < 1e-5)
+                    );
+                if (isRenderedByOrbit) return;
+
+                const stabLower = (fp.stability || '').toLowerCase();
+                const isAttractor = stabLower === 'attractor' || stabLower === 'stable';
+                const isDualRepeller = stabLower === 'dualrepeller' || stabLower === 'dual_repeller' || stabLower === 'dual repeller';
+                const isRepeller = !isDualRepeller && (stabLower === 'repeller' || stabLower === 'unstable');
+                const isSaddle = stabLower === 'saddle';
+                const color = isAttractor ? ORBIT_COLORS.attractor :
+                    isDualRepeller ? ORBIT_COLORS.dualRepeller :
+                    isRepeller ? ORBIT_COLORS.repeller :
+                    isSaddle ? ORBIT_COLORS.saddlePoint : ORBIT_COLORS.periodicBlue;
+
+                const fpRadius = radius * (isAttractor ? 1.15 : (isRepeller || isDualRepeller) ? 1.1 : 1.0);
+
+                // Dark high-contrast outer ring so fixed point is clearly separated from manifold lines
+                const ringGeom = new THREE.RingGeometry(fpRadius * 0.9, fpRadius * 1.35, 32);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: new THREE.Color('#000000'),
+                    transparent: true,
+                    opacity: 0.95,
+                    depthTest: false,
+                    depthWrite: false,
+                    side: THREE.DoubleSide
+                });
+                const ring = new THREE.Mesh(ringGeom, ringMat);
+                ring.position.set(fp.x, fp.y, 0.49);
+                ring.renderOrder = 99;
+                ring.userData = { type: 'fixedPoint' };
+                scene.add(ring);
+
+                const geom = new THREE.CircleGeometry(fpRadius, 32);
+                const mat = new THREE.MeshBasicMaterial({
+                    color: new THREE.Color(color),
+                    transparent: true,
+                    opacity: 1.0,
+                    depthTest: false,
+                    depthWrite: false,
+                    side: THREE.DoubleSide
+                });
+                const sphere = new THREE.Mesh(geom, mat);
+                sphere.position.set(fp.x, fp.y, 0.5);
+                sphere.renderOrder = 100;
+                sphere.userData = {
+                    type: 'fixedPoint',
+                    period: fp.period || 1,
+                    stability: fp.stability,
+                    pos: { x: fp.x, y: fp.y },
+                    normal: Number.isFinite(fp.nx) && Number.isFinite(fp.ny)
+                        ? { x: fp.nx, y: fp.ny }
+                        : null,
+                    eigenvalues: fp.eigenvalues || null
+                };
+                scene.add(sphere);
+            });
+        }
 
         if (manifoldState.showTrail && manifoldState.trajectoryPoints.length > 0) {
             if (dynamicSystem === 'duffing_ode') {
@@ -2908,7 +2928,7 @@ const SetValuedViz = () => {
             scene.add(sphere);
         }
 
-    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, viewportRange, readViewportSize, geometricOffsetBoundaryPoints, boundaryLayers, hasBoundarySamples, hasVerifiedBoundaryCycles, params.epsilon]);
+    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, viewportRange, readViewportSize, geometricOffsetBoundaryPoints, boundaryLayers, hasBoundarySamples, hasVerifiedBoundaryCycles, params.epsilon, filters, periodicState.isReady, periodicState.orbits]);
 
     useEffect(() => {
         if (!sceneRef.current) return;
