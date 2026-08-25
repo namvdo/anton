@@ -32,7 +32,7 @@ describe('extended periodic-orbit state', () => {
     expect(enrichSolutionPointsWithOrbitNormals([
       { x: 3, y: 4, stability: 'saddle' }
     ], [orbit])).toEqual([
-      { x: 3, y: 4, nx: -0.8, ny: 0.6, period: 2, stability: 'saddle' }
+      { x: 3, y: 4, nx: -0.8, ny: 0.6, period: 2, stability: 'saddle', eigenvalues: [2, 0.5] }
     ]);
   });
 });

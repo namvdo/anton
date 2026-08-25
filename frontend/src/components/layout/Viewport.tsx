@@ -191,16 +191,16 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
             <span className="tt-v" style={{ color: tooltipData.stability === 'stable' ? 'var(--green)' : tooltipData.stability === 'saddle' ? 'var(--amber)' : tooltipData.stability === 'dualrepeller' ? '#a855f7' : 'var(--red)' }}>
               {tooltipData.stability === 'dualrepeller' ? 'Dual repeller' : tooltipData.stability?.charAt(0).toUpperCase() + tooltipData.stability?.slice(1)}
             </span>
-            {tooltipData.eigenvalues && (
+            {tooltipData.eigenvalues && tooltipData.eigenvalues.length > 0 && (
               <>
-                <span className="tt-k">Eigenvalues</span>
+                <span className="tt-k">{tooltipData.eigenvalues.length === 3 ? 'Multipliers (3D)' : 'Eigenvalues'}</span>
                 <span className="tt-v">{tooltipData.eigenvalues.map(v => v.toFixed(3)).join(', ')}</span>
               </>
             )}
             {tooltipData.jacobian && (
               <>
-                <span className="tt-k">det(J)</span><span className="tt-v">{tooltipData.jacobian.det.toFixed(3)}</span>
-                <span className="tt-k">tr(J)</span><span className="tt-v">{tooltipData.jacobian.trace.toFixed(3)}</span>
+                <span className="tt-k">det(J_2d)</span><span className="tt-v">{tooltipData.jacobian.det.toFixed(3)}</span>
+                <span className="tt-k">tr(J_2d)</span><span className="tt-v">{tooltipData.jacobian.trace.toFixed(3)}</span>
               </>
             )}
           </div>

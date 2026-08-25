@@ -980,7 +980,7 @@ pub struct ManifoldResult {
 pub struct FixedPointResult {
     pub x: f64,
     pub y: f64,
-    pub eigenvalues: (f64, f64),
+    pub eigenvalues: Vec<f64>,
     pub stability: String, // "Attractor", "Repeller", "Saddle"
 }
 
@@ -1182,7 +1182,7 @@ pub fn compute_manifold_simple(
         fixed_points_result.push(FixedPointResult {
             x: state.pos.x,
             y: state.pos.y,
-            eigenvalues: (l1, l2),
+            eigenvalues: vec![l1, l2],
             stability: stability.to_string(),
         });
 
@@ -1250,8 +1250,8 @@ pub fn compute_manifold_simple(
             SaddleType::Regular
         };
 
-        let l1 = fp_info.eigenvalues.0;
-        let l2 = fp_info.eigenvalues.1;
+        let l1 = fp_info.eigenvalues.get(0).copied().unwrap_or(0.0);
+        let l2 = fp_info.eigenvalues.get(1).copied().unwrap_or(0.0);
 
         // Compute unstable eigenvector from scratch
         let unstable_lambda = if l1.abs() > l2.abs() { l1 } else { l2 };
@@ -1570,7 +1570,7 @@ pub fn compute_user_defined_manifold(
         fixed_points_result.push(FixedPointResult {
             x: fp_pos.x,
             y: fp_pos.y,
-            eigenvalues: (l1, l2),
+            eigenvalues: vec![l1, l2],
             stability: stability.to_string(),
         });
 
@@ -1680,6 +1680,8 @@ pub fn compute_manifold_from_orbits(
         extended_points: Option<Vec<(f64, f64, f64, f64)>>,
         period: usize,
         stability: String,
+        #[serde(default)]
+        eigenvalues: Vec<f64>,
     }
 
     let orbits: Vec<OrbitInput> = match serde_wasm_bindgen::from_value(orbits_js) {
@@ -1725,7 +1727,7 @@ pub fn compute_manifold_from_orbits(
             fixed_points_result.push(FixedPointResult {
                 x: *x,
                 y: *y,
-                eigenvalues: (0.0, 0.0), // Will be computed below
+                eigenvalues: orbit.eigenvalues.clone(),
                 stability: orbit.stability.clone(),
             });
         }
@@ -1757,23 +1759,25 @@ pub fn compute_manifold_from_orbits(
         saddle_orbits.len()
     );
 
-    // Compute eigenvalues for display and eigenvectors for saddle manifolds
+    // Compute fallback 2D eigenvalues only if not provided from boundary orbit
     for fp in &mut fixed_points_result {
-        let jac = params.jacobian(Vector2::new(fp.x, fp.y));
-        let trace = jac.trace();
-        let det = jac.determinant();
-        let disc = trace * trace - 4.0 * det;
+        if fp.eigenvalues.is_empty() {
+            let jac = params.jacobian(Vector2::new(fp.x, fp.y));
+            let trace = jac.trace();
+            let det = jac.determinant();
+            let disc = trace * trace - 4.0 * det;
 
-        let (l1, l2) = if disc >= 0.0 {
-            let sqrt_disc = disc.sqrt();
-            ((trace + sqrt_disc) / 2.0, (trace - sqrt_disc) / 2.0)
-        } else {
-            let real = trace / 2.0;
-            let imag = (-disc).sqrt() / 2.0;
-            let mag = (real * real + imag * imag).sqrt();
-            (mag, mag)
-        };
-        fp.eigenvalues = (l1, l2);
+            let (l1, l2) = if disc >= 0.0 {
+                let sqrt_disc = disc.sqrt();
+                ((trace + sqrt_disc) / 2.0, (trace - sqrt_disc) / 2.0)
+            } else {
+                let real = trace / 2.0;
+                let imag = (-disc).sqrt() / 2.0;
+                let mag = (real * real + imag * imag).sqrt();
+                (mag, mag)
+            };
+            fp.eigenvalues = vec![l1, l2];
+        }
     }
 
     // Compute manifolds for each saddle orbit
@@ -2166,7 +2170,7 @@ pub fn compute_stable_and_unstable_manifolds(
             fixed_points_result.push(FixedPointResult {
                 x: *x,
                 y: *y,
-                eigenvalues: (0.0, 0.0),
+                eigenvalues: orbit.eigenvalues.clone(),
                 stability: orbit.stability.clone(),
             });
         }
@@ -2191,22 +2195,24 @@ pub fn compute_stable_and_unstable_manifolds(
         all_points.len()
     );
 
-    // compute eigenvalues for fixed points
+    // compute fallback eigenvalues for fixed points only if missing
     for fp in &mut fixed_points_result {
-        let jac = params.jacobian(Vector2::new(fp.x, fp.y));
-        let trace = jac.trace();
-        let det = jac.determinant();
-        let disc = trace * trace - 4.0 * det;
-        let (l1, l2) = if disc >= 0.0 {
-            let sqrt_disc = disc.sqrt();
-            ((trace + sqrt_disc) / 2.0, (trace - sqrt_disc) / 2.0)
-        } else {
-            let real = trace / 2.0;
-            let imag = (-disc).sqrt() / 2.0;
-            let mag = (real * real + imag * imag).sqrt();
-            (mag, mag)
-        };
-        fp.eigenvalues = (l1, l2);
+        if fp.eigenvalues.is_empty() {
+            let jac = params.jacobian(Vector2::new(fp.x, fp.y));
+            let trace = jac.trace();
+            let det = jac.determinant();
+            let disc = trace * trace - 4.0 * det;
+            let (l1, l2) = if disc >= 0.0 {
+                let sqrt_disc = disc.sqrt();
+                ((trace + sqrt_disc) / 2.0, (trace - sqrt_disc) / 2.0)
+            } else {
+                let real = trace / 2.0;
+                let imag = (-disc).sqrt() / 2.0;
+                let mag = (real * real + imag * imag).sqrt();
+                (mag, mag)
+            };
+            fp.eigenvalues = vec![l1, l2];
+        }
     }
 
     let mut unstable_manifolds: Vec<ManifoldResult> = Vec::new();
@@ -2641,6 +2647,8 @@ pub fn compute_manifold_from_orbits_user_defined(
         extended_points: Option<Vec<(f64, f64, f64, f64)>>,
         period: usize,
         stability: String,
+        #[serde(default)]
+        eigenvalues: Vec<f64>,
     }
 
     let orbits: Vec<OrbitInput> = match serde_wasm_bindgen::from_value(orbits_js) {
@@ -2668,7 +2676,7 @@ pub fn compute_manifold_from_orbits_user_defined(
             fixed_points_result.push(FixedPointResult {
                 x: *x,
                 y: *y,
-                eigenvalues: (0.0, 0.0),
+                eigenvalues: orbit.eigenvalues.clone(),
                 stability: orbit.stability.clone(),
             });
         }
@@ -2682,11 +2690,13 @@ pub fn compute_manifold_from_orbits_user_defined(
         }
     }
 
-    // Compute eigenvalues for display
+    // Compute fallback eigenvalues only if missing
     for fp in &mut fixed_points_result {
-        let jac = system.jacobian(Vector2::new(fp.x, fp.y));
-        let (l1, l2, _, _) = eigen_analysis_2x2(&jac);
-        fp.eigenvalues = (l1, l2);
+        if fp.eigenvalues.is_empty() {
+            let jac = system.jacobian(Vector2::new(fp.x, fp.y));
+            let (l1, l2, _, _) = eigen_analysis_2x2(&jac);
+            fp.eigenvalues = vec![l1, l2];
+        }
     }
 
     let mut manifolds_result: Vec<ManifoldResult> = Vec::new();
@@ -2869,7 +2879,7 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
             fixed_points_result.push(FixedPointResult {
                 x: *x,
                 y: *y,
-                eigenvalues: (0.0, 0.0),
+                eigenvalues: orbit.eigenvalues.clone(),
                 stability: orbit.stability.clone(),
             });
         }
@@ -2884,9 +2894,11 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
     }
 
     for fp in &mut fixed_points_result {
-        let jac = system.jacobian(Vector2::new(fp.x, fp.y));
-        let (l1, l2, _, _) = eigen_analysis_2x2(&jac);
-        fp.eigenvalues = (l1, l2);
+        if fp.eigenvalues.is_empty() {
+            let jac = system.jacobian(Vector2::new(fp.x, fp.y));
+            let (l1, l2, _, _) = eigen_analysis_2x2(&jac);
+            fp.eigenvalues = vec![l1, l2];
+        }
     }
 
     let mut unstable_manifolds: Vec<ManifoldResult> = Vec::new();

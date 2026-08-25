@@ -279,6 +279,7 @@ const createCoordinateSystem = (
     const xSpan = Math.abs(range.xMax - range.xMin);
     const ySpan = Math.abs(range.yMax - range.yMin);
 
+    const viewSpan = Math.min(xSpan, ySpan);
     const xTickStep = calculateNiceStep(xSpan);
     const yTickStep = calculateNiceStep(ySpan);
 
@@ -352,30 +353,38 @@ const createCoordinateSystem = (
         const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
         const sprite = new THREE.Sprite(material);
         sprite.position.copy(position);
-        sprite.scale.set(fontSize * 2, fontSize, 1);
+        sprite.scale.set(fontSize * 2.2, fontSize, 1);
         sprite.userData.isGrid = true;
         return sprite;
     };
 
-    const numXTicks = Math.ceil(limit / xTickStep);
-    for (let i = -numXTicks; i <= numXTicks; i++) {
+    const labelFontSize = Math.min(0.12, Math.max(0.004, viewSpan * 0.028));
+    const xLabelOffsetY = -Math.min(0.14, Math.max(0.005, ySpan * 0.035));
+    const yLabelOffsetX = -Math.min(0.14, Math.max(0.005, xSpan * 0.035));
+
+    // Only place tick labels in the active visible view
+    const minXTick = Math.floor((range.xMin - xTickStep) / xTickStep);
+    const maxXTick = Math.ceil((range.xMax + xTickStep) / xTickStep);
+    for (let i = minXTick; i <= maxXTick; i++) {
         const x = Number((i * xTickStep).toFixed(6));
-        if (Math.abs(x) > 0.001 && Math.abs(x) <= limit) {
-            gridGroup.add(createTextSprite(formatTickNumber(x), new THREE.Vector3(x, -0.14, 0), 0.12));
+        if (Math.abs(x) > 0.0001 && Math.abs(x) <= limit) {
+            gridGroup.add(createTextSprite(formatTickNumber(x), new THREE.Vector3(x, xLabelOffsetY, 0), labelFontSize));
         }
     }
 
-    const numYTicks = Math.ceil(limit / yTickStep);
-    for (let i = -numYTicks; i <= numYTicks; i++) {
+    const minYTick = Math.floor((range.yMin - yTickStep) / yTickStep);
+    const maxYTick = Math.ceil((range.yMax + yTickStep) / yTickStep);
+    for (let i = minYTick; i <= maxYTick; i++) {
         const y = Number((i * yTickStep).toFixed(6));
-        if (Math.abs(y) > 0.001 && Math.abs(y) <= limit) {
-            gridGroup.add(createTextSprite(formatTickNumber(y), new THREE.Vector3(-0.14, y, 0), 0.12));
+        if (Math.abs(y) > 0.0001 && Math.abs(y) <= limit) {
+            gridGroup.add(createTextSprite(formatTickNumber(y), new THREE.Vector3(yLabelOffsetX, y, 0), labelFontSize));
         }
     }
 
-    gridGroup.add(createTextSprite('x', new THREE.Vector3(range.xMax - 0.18, 0.12, 0), 0.18));
-    gridGroup.add(createTextSprite('y', new THREE.Vector3(0.12, range.yMax - 0.14, 0), 0.18));
-    gridGroup.add(createTextSprite('0', new THREE.Vector3(-0.12, -0.12, 0), 0.1));
+    const axisLabelSize = labelFontSize * 1.3;
+    gridGroup.add(createTextSprite('x', new THREE.Vector3(range.xMax - xSpan * 0.04, ySpan * 0.03, 0), axisLabelSize));
+    gridGroup.add(createTextSprite('y', new THREE.Vector3(xSpan * 0.03, range.yMax - ySpan * 0.04, 0), axisLabelSize));
+    gridGroup.add(createTextSprite('0', new THREE.Vector3(yLabelOffsetX, xLabelOffsetY, 0), labelFontSize * 0.9));
 
     scene.add(gridGroup);
     return gridGroup;
@@ -2775,6 +2784,12 @@ const SetValuedViz = () => {
             scene.add(line);
         }
 
+        const ySpan = Math.abs(viewportRange.yMax - viewportRange.yMin);
+        const { height: vpHeight } = readViewportSize();
+        const frustumH = Math.max(1e-6, ySpan + 0.24);
+        const pxPerUnit = vpHeight / frustumH;
+        const radius = Math.max(1e-6, 6.0 / pxPerUnit);
+
         manifoldState.fixedPoints.forEach(fp => {
             const stabLower = (fp.stability || '').toLowerCase();
             const isAttractor = stabLower === 'attractor' || stabLower === 'stable';
@@ -2785,11 +2800,37 @@ const SetValuedViz = () => {
                 isDualRepeller ? ORBIT_COLORS.dualRepeller :
                 isRepeller ? ORBIT_COLORS.repeller :
                 isSaddle ? ORBIT_COLORS.saddlePoint : ORBIT_COLORS.periodicBlue;
-            const radius = isAttractor ? 0.03 : (isRepeller || isDualRepeller) ? 0.028 : 0.025;
-            const geom = new THREE.SphereGeometry(radius, 12, 12);
-            const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color) });
+
+            const fpRadius = radius * (isAttractor ? 1.15 : (isRepeller || isDualRepeller) ? 1.1 : 1.0);
+
+            // Dark high-contrast outer ring so fixed point is clearly separated from manifold lines
+            const ringGeom = new THREE.RingGeometry(fpRadius * 0.9, fpRadius * 1.35, 32);
+            const ringMat = new THREE.MeshBasicMaterial({
+                color: new THREE.Color('#000000'),
+                transparent: true,
+                opacity: 0.95,
+                depthTest: false,
+                depthWrite: false,
+                side: THREE.DoubleSide
+            });
+            const ring = new THREE.Mesh(ringGeom, ringMat);
+            ring.position.set(fp.x, fp.y, 0.49);
+            ring.renderOrder = 99;
+            ring.userData = { type: 'fixedPoint' };
+            scene.add(ring);
+
+            const geom = new THREE.CircleGeometry(fpRadius, 32);
+            const mat = new THREE.MeshBasicMaterial({
+                color: new THREE.Color(color),
+                transparent: true,
+                opacity: 1.0,
+                depthTest: false,
+                depthWrite: false,
+                side: THREE.DoubleSide
+            });
             const sphere = new THREE.Mesh(geom, mat);
-            sphere.position.set(fp.x, fp.y, 0.2);
+            sphere.position.set(fp.x, fp.y, 0.5);
+            sphere.renderOrder = 100;
             sphere.userData = {
                 type: 'fixedPoint',
                 period: 1,
@@ -2814,11 +2855,19 @@ const SetValuedViz = () => {
             } else {
                 manifoldState.trajectoryPoints.forEach((point, idx) => {
                     const normalizedIdx = idx / manifoldState.trajectoryPoints.length;
-                    const size = 0.022 * (0.4 + 0.6 * normalizedIdx);
-                    const geom = new THREE.SphereGeometry(size, 8, 8);
-                    const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(ORBIT_COLORS.trajectory), opacity: 0.4 + 0.6 * normalizedIdx, transparent: true });
+                    const size = Math.max(1e-6, (4.5 * (0.4 + 0.6 * normalizedIdx)) / pxPerUnit);
+                    const geom = new THREE.CircleGeometry(size, 16);
+                    const mat = new THREE.MeshBasicMaterial({
+                        color: new THREE.Color(ORBIT_COLORS.trajectory),
+                        opacity: 0.4 + 0.6 * normalizedIdx,
+                        transparent: true,
+                        depthTest: false,
+                        depthWrite: false,
+                        side: THREE.DoubleSide
+                    });
                     const sphere = new THREE.Mesh(geom, mat);
-                    sphere.position.set(point.x, point.y, 0.25);
+                    sphere.position.set(point.x, point.y, 0.45);
+                    sphere.renderOrder = 40;
                     sphere.userData.type = 'trajectory';
                     scene.add(sphere);
                 });
@@ -2826,23 +2875,40 @@ const SetValuedViz = () => {
         }
 
         if (manifoldState.hasStarted && manifoldState.currentPoint) {
-            const glowGeom = new THREE.RingGeometry(0.05, 0.05, 20);
+            const glowRadius = Math.max(1e-6, 7.5 / pxPerUnit);
+            const glowGeom = new THREE.RingGeometry(glowRadius * 0.8, glowRadius * 1.2, 32);
             const currentColor = dynamicSystem === 'duffing_ode' ? ORBIT_COLORS.manifold : ORBIT_COLORS.trajectory;
-            const glowMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(currentColor), opacity: 0.6, transparent: true, side: THREE.DoubleSide });
+            const glowMat = new THREE.MeshBasicMaterial({
+                color: new THREE.Color(currentColor),
+                opacity: 0.6,
+                transparent: true,
+                side: THREE.DoubleSide,
+                depthTest: false,
+                depthWrite: false
+            });
             const glowRing = new THREE.Mesh(glowGeom, glowMat);
-            glowRing.position.set(manifoldState.currentPoint.x, manifoldState.currentPoint.y, 0.3);
+            glowRing.position.set(manifoldState.currentPoint.x, manifoldState.currentPoint.y, 0.51);
+            glowRing.renderOrder = 101;
             glowRing.userData.type = 'trajectory';
             scene.add(glowRing);
 
-            const geom = new THREE.SphereGeometry(0.02, 16, 16);
-            const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffffff') });
+            const geom = new THREE.CircleGeometry(Math.max(1e-6, 5.0 / pxPerUnit), 32);
+            const mat = new THREE.MeshBasicMaterial({
+                color: new THREE.Color('#ffffff'),
+                transparent: true,
+                opacity: 1.0,
+                depthTest: false,
+                depthWrite: false,
+                side: THREE.DoubleSide
+            });
             const sphere = new THREE.Mesh(geom, mat);
-            sphere.position.set(manifoldState.currentPoint.x, manifoldState.currentPoint.y, 0.3);
+            sphere.position.set(manifoldState.currentPoint.x, manifoldState.currentPoint.y, 0.52);
+            sphere.renderOrder = 102;
             sphere.userData.type = 'trajectory';
             scene.add(sphere);
         }
 
-    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, readViewportSize, geometricOffsetBoundaryPoints, boundaryLayers, hasBoundarySamples, hasVerifiedBoundaryCycles, params.epsilon]);
+    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, viewportRange, readViewportSize, geometricOffsetBoundaryPoints, boundaryLayers, hasBoundarySamples, hasVerifiedBoundaryCycles, params.epsilon]);
 
     useEffect(() => {
         if (!sceneRef.current) return;
@@ -2890,17 +2956,45 @@ const SetValuedViz = () => {
             return ORBIT_COLORS.periodicBlue;
         };
 
+        const ySpan = Math.abs(viewportRange.yMax - viewportRange.yMin);
+        const { height: vpHeight } = readViewportSize();
+        const frustumH = Math.max(1e-6, ySpan + 0.24);
+        const pxPerUnit = vpHeight / frustumH;
+        const orbitSphereRadius = Math.max(1e-6, 5.5 / pxPerUnit);
+
         if (manifoldState.showOrbits) {
             periodicState.orbits.filter(isVisible).forEach((orbit, orbitIndex) => {
                 const orbitId = `orbit-${orbit.period}-${orbitIndex}`;
                 const pointColor = colorForOrbit(orbit);
                 orbitExtendedStates(orbit).forEach((extendedPoint, pointIndex) => {
-                    const geometry = new THREE.SphereGeometry(0.02, 10, 10);
+                    // Dark high-contrast outer ring so orbit point is clearly visible on top of manifold lines
+                    const ringGeom = new THREE.RingGeometry(orbitSphereRadius * 0.9, orbitSphereRadius * 1.35, 32);
+                    const ringMat = new THREE.MeshBasicMaterial({
+                        color: new THREE.Color('#000000'),
+                        transparent: true,
+                        opacity: 0.95,
+                        depthTest: false,
+                        depthWrite: false,
+                        side: THREE.DoubleSide
+                    });
+                    const ring = new THREE.Mesh(ringGeom, ringMat);
+                    ring.position.set(extendedPoint.x, extendedPoint.y, 0.49);
+                    ring.renderOrder = 99;
+                    ring.userData = { type: 'orbit' };
+                    scene.add(ring);
+
+                    const geometry = new THREE.CircleGeometry(orbitSphereRadius, 32);
                     const material = new THREE.MeshBasicMaterial({
-                        color: new THREE.Color(pointColor)
+                        color: new THREE.Color(pointColor),
+                        transparent: true,
+                        opacity: 1.0,
+                        depthTest: false,
+                        depthWrite: false,
+                        side: THREE.DoubleSide
                     });
                     const sphere = new THREE.Mesh(geometry, material);
-                    sphere.position.set(extendedPoint.x, extendedPoint.y, 0.05);
+                    sphere.position.set(extendedPoint.x, extendedPoint.y, 0.5);
+                    sphere.renderOrder = 100;
                     sphere.userData = {
                         type: 'orbit',
                         resultRevision,
@@ -2961,7 +3055,9 @@ const SetValuedViz = () => {
         manifoldState.showOrbits,
         periodicState.isReady,
         periodicState.orbits,
-        periodicState.resultRevision
+        periodicState.resultRevision,
+        readViewportSize,
+        viewportRange
     ]);
 
     const stepForwardManifold = useCallback(() => {

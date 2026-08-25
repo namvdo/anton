@@ -50,17 +50,26 @@ export const enrichSolutionPointsWithOrbitNormals = (
 ): SolutionPoint[] => {
   const candidates = (orbits || []).flatMap(orbit => orbitExtendedStates(orbit).map(state => ({
     ...state,
-    period: orbit.period
+    period: orbit.period,
+    stability: orbit.stability,
+    eigenvalues: Array.isArray(orbit.eigenvalues) ? orbit.eigenvalues : []
   })));
   return (solutionPoints || []).map(point => {
-    if (Number.isFinite(point?.nx) && Number.isFinite(point?.ny)) return point;
     const match = candidates.find(candidate => (
       Math.hypot(candidate.x - point.x, candidate.y - point.y) <= positionTolerance
-      && Number.isFinite(candidate.nx)
-      && Number.isFinite(candidate.ny)
     ));
-    return match
-      ? { ...point, nx: match.nx, ny: match.ny, period: point.period || match.period }
-      : point;
+    if (match) {
+      return {
+        ...point,
+        nx: Number.isFinite(match.nx) ? match.nx : point.nx,
+        ny: Number.isFinite(match.ny) ? match.ny : point.ny,
+        period: point.period || match.period,
+        stability: match.stability || point.stability,
+        eigenvalues: (match.eigenvalues && match.eigenvalues.length > 0)
+          ? match.eigenvalues
+          : point.eigenvalues
+      };
+    }
+    return point;
   });
 };
