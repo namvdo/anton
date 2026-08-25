@@ -6,10 +6,10 @@ export const ZOOM_IN_FACTOR = 0.8;
 export const ZOOM_OUT_FACTOR = 1.25;
 
 export const DEFAULT_VIEW_RANGE: ViewRange = {
-  xMin: -2,
-  xMax: 2,
-  yMin: -1.5,
-  yMax: 1.5
+  xMin: -3,
+  xMax: 3,
+  yMin: -3,
+  yMax: 3
 };
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));

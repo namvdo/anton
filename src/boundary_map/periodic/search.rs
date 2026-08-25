@@ -118,7 +118,7 @@ pub(super) fn find_boundary_periodic_point_davidchack_lai_generic(
     let mut nx = nx_0;
     let mut ny = ny_0;
 
-    let beta_val = beta.unwrap_or_else(|| 15.0 * 1.3_f64.powi(period as i32));
+    let beta_val = beta.unwrap_or(0.0);
 
     for _ in 0..max_iter {
         if !x.is_finite()

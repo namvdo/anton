@@ -125,7 +125,7 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
             Noise balls
           </div>
         )}
-        {manifoldState.showStableManifold && <div className="lg-item"><div className="lg-line" style={{ background: '#b8904a' }}></div>Stable manifold</div>}
+        {manifoldState.showStableManifold && <div className="lg-item"><div className="lg-line" style={{ background: '#ffa500' }}></div>Stable manifold</div>}
         {contours.map((contour, contourIndex) => contour.visible && contour.result ? (
           <div className="lg-item" key={`geometric-offset-${contour.id}`}
             aria-label={`Geometric contour epsilon ${formatContourEpsilon(contour.epsilon)}${contour.id === geometricOffsetState.selectedContourId ? ' selected' : ''}`}>
@@ -176,7 +176,7 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
       {tooltip.visible && tooltipData && !ulamState.showUlamOverlay && tooltipData.type !== 'Ulam Box' && (
         <div className="vp-tooltip" style={{ top: Math.min(tooltipY, window.innerHeight - 150), left: Math.min(tooltipX + 15, window.innerWidth - 200) }}>
           <div className="vp-tt-head">
-            <div className="t-swatch" style={{ background: tooltipData.stability === 'stable' ? '#5a9668' : tooltipData.stability === 'saddle' ? '#b8904a' : '#a85252', width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0 }}></div>
+            <div className="t-swatch" style={{ background: tooltipData.stability === 'stable' ? '#5a9668' : tooltipData.stability === 'saddle' ? '#b8904a' : tooltipData.stability === 'dualrepeller' ? '#800080' : '#a85252', width: '8px', height: '8px', borderRadius: '50%', flexShrink: 0 }}></div>
             {tooltipData.type === 'Fixed Point' ? 'Fixed point' : `Period-${tooltipData.period} orbit`}
           </div>
           <div className="vp-tt-grid">
@@ -188,8 +188,8 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
               </>
             )}
             <span className="tt-k">Stability</span>
-            <span className="tt-v" style={{ color: tooltipData.stability === 'stable' ? 'var(--green)' : tooltipData.stability === 'saddle' ? 'var(--amber)' : 'var(--red)' }}>
-              {tooltipData.stability?.charAt(0).toUpperCase() + tooltipData.stability?.slice(1)}
+            <span className="tt-v" style={{ color: tooltipData.stability === 'stable' ? 'var(--green)' : tooltipData.stability === 'saddle' ? 'var(--amber)' : tooltipData.stability === 'dualrepeller' ? '#a855f7' : 'var(--red)' }}>
+              {tooltipData.stability === 'dualrepeller' ? 'Dual repeller' : tooltipData.stability?.charAt(0).toUpperCase() + tooltipData.stability?.slice(1)}
             </span>
             {tooltipData.eigenvalues && (
               <>

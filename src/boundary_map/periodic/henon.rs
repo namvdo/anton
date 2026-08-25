@@ -275,6 +275,7 @@ impl From<&StabilityType> for String {
             StabilityType::Stable => "stable".to_string(),
             StabilityType::Unstable => "unstable".to_string(),
             StabilityType::Saddle => "saddle".to_string(),
+            StabilityType::DualRepeller => "dualrepeller".to_string(),
         }
     }
 }

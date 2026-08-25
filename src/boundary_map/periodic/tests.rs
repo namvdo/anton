@@ -170,7 +170,10 @@ fn test_generic_stability_assigned() {
 
     for orbit in &db.orbits {
         match orbit.stability {
-            StabilityType::Stable | StabilityType::Unstable | StabilityType::Saddle => {}
+            StabilityType::Stable
+            | StabilityType::Unstable
+            | StabilityType::Saddle
+            | StabilityType::DualRepeller => {}
         }
         for ev in &orbit.eigenvalues {
             assert!(ev.is_finite(), "Eigenvalue not finite: {}", ev);
@@ -998,4 +1001,25 @@ fn test_looser_residual_threshold_finds_at_least_as_many_orbits() {
         loose.total_count() > 0,
         "Expected at least one orbit with loose threshold"
     );
+}
+
+#[test]
+fn test_wei_henon_045_dual_repeller() {
+    let system = HenonSystem::new(0.45, 0.3, 0.0133);
+    let db = find_all_boundary_periodic_orbits_generic(&system, 1, 18, 16, -3.0, 3.0, -3.0, 3.0);
+    println!("Found {} orbits", db.orbits.len());
+    for (i, orbit) in db.orbits.iter().enumerate() {
+        println!(
+            "Orbit {}: period={}, stability={:?}, pts={:?}, eigvals={:?}",
+            i, orbit.period, orbit.stability, orbit.points, orbit.eigenvalues
+        );
+    }
+
+    assert_eq!(db.orbits.len(), 4, "Should find all 4 fixed points");
+    let dual_repellers: Vec<_> = db
+        .orbits
+        .iter()
+        .filter(|o| o.stability == StabilityType::DualRepeller)
+        .collect();
+    assert_eq!(dual_repellers.len(), 2, "Should find 2 dual repellers");
 }

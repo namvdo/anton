@@ -242,7 +242,7 @@ export const PeriodicSearchPanel = ({
       </Collapsible>
 
       <Toggle
-        label="Use cached-orbit continuation on ordinary compute"
+        label="Use cached-orbit continuation"
         checked={Boolean(periodicSearchSettings?.useContinuation)}
         onChange={updateUseContinuation}
         disabled={disabled}

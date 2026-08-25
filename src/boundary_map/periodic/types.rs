@@ -3,11 +3,12 @@
 use super::*;
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy, Serialize, Deserialize)]
 pub enum StabilityType {
     Stable,
     Unstable,
     Saddle,
+    DualRepeller,
 }
 
 pub(super) fn log_message(s: &str) {
@@ -521,13 +522,15 @@ pub fn classify_stability_4d(jac: &Jacobian4x4) -> (StabilityType, Vec<f64>) {
         return (StabilityType::Stable, vec![]);
     }
 
-    let all_stable = nonzero_eigenvalues.iter().all(|&e| e < 0.999);
-    let all_unstable = nonzero_eigenvalues.iter().all(|&e| e > 1.001);
+    let num_unstable = nonzero_eigenvalues.iter().filter(|&&e| e > 1.001).count();
+    let num_stable = nonzero_eigenvalues.iter().filter(|&&e| e < 0.999).count();
 
-    let stability = if all_stable {
+    let stability = if num_unstable == 0 {
         StabilityType::Stable
-    } else if all_unstable {
+    } else if num_stable == 0 {
         StabilityType::Unstable
+    } else if num_unstable > 1 {
+        StabilityType::DualRepeller
     } else {
         StabilityType::Saddle
     };
@@ -548,12 +551,15 @@ pub fn classify_stability_reduced(
     }
     eigenvalues.sort_by(f64::total_cmp);
 
-    let all_stable = eigenvalues.iter().all(|&value| value < 0.999);
-    let all_unstable = eigenvalues.iter().all(|&value| value > 1.001);
-    let stability = if all_stable {
+    let num_unstable = eigenvalues.iter().filter(|&&value| value > 1.001).count();
+    let num_stable = eigenvalues.iter().filter(|&&value| value < 0.999).count();
+
+    let stability = if num_unstable == 0 {
         StabilityType::Stable
-    } else if all_unstable {
+    } else if num_stable == 0 {
         StabilityType::Unstable
+    } else if num_unstable > 1 {
+        StabilityType::DualRepeller
     } else {
         StabilityType::Saddle
     };

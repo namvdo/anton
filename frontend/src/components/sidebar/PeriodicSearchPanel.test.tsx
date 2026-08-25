@@ -41,7 +41,7 @@ describe('PeriodicSearchPanel', () => {
     expect(screen.getByLabelText('Position grid')).toBeInTheDocument();
     expect(screen.getByLabelText('Normal-angle grid')).toBeInTheDocument();
     expect(screen.getByLabelText('Residual tolerance')).toBeInTheDocument();
-    expect(screen.getByText('Use cached-orbit continuation on ordinary compute')).toBeInTheDocument();
+    expect(screen.getByText('Use cached-orbit continuation')).toBeInTheDocument();
     expect(screen.getByLabelText('Periodic grid search summary')).toHaveTextContent('x [-2, 2], y [-1.5, 1.5]');
     expect(screen.getByLabelText('Periodic grid search summary')).toHaveTextContent('5,000');
   });
@@ -57,7 +57,7 @@ describe('PeriodicSearchPanel', () => {
     fireEvent.change(screen.getByLabelText('Position grid'), { target: { value: '24' } });
     fireEvent.change(screen.getByLabelText('Normal-angle grid'), { target: { value: '32' } });
     fireEvent.change(screen.getByLabelText('Residual tolerance'), { target: { value: '1e-8' } });
-    fireEvent.click(screen.getByText('Use cached-orbit continuation on ordinary compute'));
+    fireEvent.click(screen.getByText('Use cached-orbit continuation'));
 
     expect(onMaxPeriod).toHaveBeenCalledWith(7);
     expect(onUpdate).toHaveBeenCalledWith({ gridSize: 24 });

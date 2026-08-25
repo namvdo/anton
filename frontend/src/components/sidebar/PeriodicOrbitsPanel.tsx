@@ -126,13 +126,15 @@ export const PeriodicOrbitsPanel = ({
           <div className="fp-list">
             {displayedFixedPoints.map((fp, i) => {
               const stability = (fp.stability || '').toLowerCase();
-              const bg = stability === 'stable' ? '#5a9668' : stability === 'saddle' ? '#b8904a' : '#a85252';
+              const isDual = stability === 'dualrepeller' || stability === 'dual_repeller';
+              const bg = stability === 'stable' ? '#5a9668' : stability === 'saddle' ? '#b8904a' : isDual ? '#800080' : '#a85252';
+              const label = isDual ? 'Dual repeller' : stability ? stability.charAt(0).toUpperCase() + stability.slice(1) : 'Unknown';
               return (
                 <div key={i} className="fp-row">
                   <div className="fp-dot" style={{ background: bg }}></div>
                   <ExtendedCoordinates state={fp} />
                   <span className="fp-stab">
-                    {stability.charAt(0).toUpperCase() + stability.slice(1)}
+                    {label}
                     {fp.eigenvalues && fp.eigenvalues.length > 0 && ` · λ=${Math.max(...fp.eigenvalues).toFixed(2)}`}
                   </span>
                 </div>

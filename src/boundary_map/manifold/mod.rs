@@ -133,6 +133,8 @@ use crate::dynamical_systems::{DynamicalSystem, ExtendedState, UserDefinedDynami
 #[derive(Clone, Debug)]
 pub struct ManifoldConfig {
     pub perturb_tol: f64,
+    pub min_perturb_tol: f64,
+    pub local_seed_samples: usize,
     pub spacing_tol: f64,
     pub spacing_upper: f64,
     pub conv_tol: f64,
@@ -149,11 +151,10 @@ impl Default for ManifoldConfig {
     fn default() -> Self {
         Self {
             perturb_tol: 1e-5,
+            min_perturb_tol: 1e-7,
+            local_seed_samples: 8,
             spacing_tol: 5e-3,
             spacing_upper: 10.0,
-            // Wei's reference implementation uses these separately: the
-            // branch-to-target tolerance is 1e-14 and the iteration
-            // convergence tolerance is 1e-19.
             conv_tol: 1e-19,
             stable_tol: 1e-14,
             max_iter: 8000,
@@ -364,7 +365,7 @@ impl HenonParams {
         if !normal.x.is_finite() || !normal.y.is_finite() {
             return Err("Invalid normal in transform_normal_inverse".to_string());
         }
-        let coeff = -2.0 * self.a * pos.y / self.b;
+        let coeff = -2.0 * self.a * pos.x;
         let jac_inv_inv_t = Matrix2::new(coeff, self.b, 1.0, 0.0);
 
         let transformed = jac_inv_inv_t * normal;
@@ -427,6 +428,104 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
         Self { params, config }
     }
 
+    fn make_seed_state(saddle: &SaddlePoint, direction_sign: f64, distance: f64) -> ExtendedState {
+        ExtendedState {
+            pos: saddle.position + direction_sign * distance * saddle.tangent_2d,
+            normal: saddle.normal,
+        }
+    }
+
+    fn local_seed_states(
+        &self,
+        saddle: &SaddlePoint,
+        direction_sign: f64,
+        perturb_distance: f64,
+    ) -> Vec<ExtendedState> {
+        let mut states = Vec::with_capacity(self.config.local_seed_samples + 1);
+        states.push(ExtendedState {
+            pos: saddle.position,
+            normal: saddle.normal,
+        });
+
+        for index in 1..=self.config.local_seed_samples {
+            let fraction = index as f64 / (self.config.local_seed_samples + 1) as f64;
+            states.push(Self::make_seed_state(
+                saddle,
+                direction_sign,
+                fraction * perturb_distance,
+            ));
+        }
+
+        states
+    }
+
+    fn select_initial_states(
+        &self,
+        saddle: &SaddlePoint,
+        direction_sign: f64,
+        n_period: usize,
+        map_fn: &dyn Fn(ExtendedState, usize) -> Result<ExtendedState, String>,
+        spacing_tol: f64,
+    ) -> Result<(f64, ExtendedState, ExtendedState), String> {
+        if !self.config.perturb_tol.is_finite() || self.config.perturb_tol <= 0.0 {
+            return Err("Maximum perturbation distance must be finite and positive".to_string());
+        }
+
+        let max_distance = self.config.perturb_tol;
+        let min_distance =
+            if self.config.min_perturb_tol.is_finite() && self.config.min_perturb_tol > 0.0 {
+                self.config.min_perturb_tol.min(max_distance)
+            } else {
+                max_distance
+            };
+        let target_initial_step = (0.5 * spacing_tol).max(min_distance);
+        let saddle_state = ExtendedState {
+            pos: saddle.position,
+            normal: saddle.normal,
+        };
+        let mapped_saddle = map_fn(saddle_state, n_period)
+            .map_err(|error| format!("Could not map the unperturbed manifold saddle: {error}"))?;
+        let mut distance = min_distance;
+        let mut best_valid: Option<(f64, ExtendedState, ExtendedState)> = None;
+        let mut last_error: Option<String> = None;
+
+        loop {
+            let state_0 = Self::make_seed_state(saddle, direction_sign, distance);
+            match map_fn(state_0, n_period) {
+                Ok(state_1) => {
+                    // remove any common periodic-point residual before judging
+                    // whether the signed perturbation has grown enough. Without
+                    // this, both branches can be accepted because of the same
+                    // drift and subsequently leave the saddle on one side.
+                    let seed_offset = state_0.pos - saddle.position;
+                    let mapped_seed_offset = state_1.pos - mapped_saddle.pos;
+                    let initial_step = (mapped_seed_offset - seed_offset).norm();
+
+                    if initial_step.is_finite() {
+                        best_valid = Some((distance, state_0, state_1));
+                        if initial_step >= target_initial_step || distance >= max_distance {
+                            return Ok((distance, state_0, state_1));
+                        }
+                    }
+                }
+                Err(error) => {
+                    last_error = Some(error);
+                }
+            }
+
+            if distance >= max_distance {
+                break;
+            }
+
+            distance = (distance * 10.0).min(max_distance);
+        }
+
+        best_valid.ok_or_else(|| {
+            last_error
+                .unwrap_or_else(|| "Could not construct a valid initial manifold seed".to_string())
+        })
+    }
+
     pub fn compute_direction(
         &self,
         saddle: &SaddlePoint,
@@ -456,38 +555,6 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
             n_period *= 2;
         }
 
-        // initial perturbation along the eigenvector direction
-        let perturb_distance = self.config.perturb_tol;
-        let eigenvector = saddle.tangent_2d; // The unstable eigenvector
-        let perturbed_pos = saddle.position + direction_sign * perturb_distance * eigenvector;
-
-        console_log!(
-            "Perturbed along eigenvector ({:.6}, {:.6})",
-            eigenvector.x,
-            eigenvector.y
-        );
-        console_log!(
-            "Perturbed position: ({:.6}, {:.6}), distance: {:.6}",
-            perturbed_pos.x,
-            perturbed_pos.y,
-            perturb_distance
-        );
-
-        // use normal from saddle
-        let initial_normal = saddle.normal;
-
-        console_log!(
-            "Initial normal: ({:.6}, {:.6})",
-            initial_normal.x,
-            initial_normal.y
-        );
-
-        // create initial 4D state: (perturbed_x, perturbed_y, nx, ny)
-        let state_0 = ExtendedState {
-            pos: perturbed_pos,
-            normal: initial_normal,
-        };
-
         // choose map direction based on saddle type
         let map_fn: Box<dyn Fn(ExtendedState, usize) -> Result<ExtendedState, String>> =
             if saddle.saddle_type == SaddleType::DualRepeller {
@@ -498,14 +565,43 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
                 Box::new(|state, n| self.params.extended_map(state, n))
             };
 
-        // apply boundary map n_period times to get state_1
-        let state_1 = match map_fn(state_0, n_period) {
-            Ok(s) => s,
+        let spacing_tol = if saddle.saddle_type == SaddleType::DualRepeller {
+            5e-3
+        } else {
+            self.config.spacing_tol
+        };
+
+        let (perturb_distance, state_0, state_1) = match self.select_initial_states(
+            saddle,
+            direction_sign,
+            n_period,
+            &map_fn,
+            spacing_tol,
+        ) {
+            Ok(seed) => seed,
             Err(e) => {
                 console_error!("Initial map application failed: {}", e);
                 return Err(format!("Initial iteration failed: {}", e));
             }
         };
+
+        let eigenvector = saddle.tangent_2d;
+        console_log!(
+            "Perturbed along eigenvector ({:.6}, {:.6})",
+            eigenvector.x,
+            eigenvector.y
+        );
+        console_log!(
+            "Adaptive perturbed position: ({:.6}, {:.6}), distance: {:.6}",
+            state_0.pos.x,
+            state_0.pos.y,
+            perturb_distance
+        );
+        console_log!(
+            "Initial normal: ({:.6}, {:.6})",
+            state_0.normal.x,
+            state_0.normal.y
+        );
 
         console_log!(
             "After first iteration: ({:.6}, {:.6})",
@@ -527,16 +623,12 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
 
         // main iteration loop
         // trajectory stores all points on the manifold
-        let mut trajectory = vec![state_0];
+        let mut trajectory = self.local_seed_states(saddle, direction_sign, perturb_distance);
+        trajectory.push(state_0);
         let mut current_state = state_1;
         let mut iteration = 1;
 
         let start_time = get_time_secs();
-        let spacing_tol = if saddle.saddle_type == SaddleType::DualRepeller {
-            2e-4
-        } else {
-            self.config.spacing_tol
-        };
 
         // track when we've moved far enough from saddle for self-crossing check
         let mut self_cross_trigger = false;
@@ -561,15 +653,15 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
                 });
             }
 
-            // Check time limit
-            if get_time_secs() - start_time > self.config.time_limit {
-                console_log!("Time limit exceeded");
-                return Ok(Trajectory {
-                    points: trajectory,
-                    stop_reason: StopReason::TimeExceeded,
-                    reached_target_id: None,
-                });
-            }
+            // // Check time limit
+            // if get_time_secs() - start_time > self.config.time_limit {
+            //     console_log!("Time limit exceeded");
+            //     return Ok(Trajectory {
+            //         points: trajectory,
+            //         stop_reason: StopReason::TimeExceeded,
+            //         reached_target_id: None,
+            //     });
+            // }
 
             // Compute next iteration: F^n(current_state)
             let next_state = match map_fn(current_state, n_period) {
@@ -1606,24 +1698,23 @@ pub fn compute_manifold_from_orbits(
     let mut fixed_points_result: Vec<FixedPointResult> = Vec::new();
 
     for orbit in &orbits {
-        let in_range = orbit
-            .points
-            .iter()
-            .all(|(x, y)| in_display_range(*x, *y, x_min, x_max, y_min, y_max));
-        if !in_range {
+        let is_valid = orbit.points.iter().all(|(x, y)| {
+            x.is_finite() && y.is_finite() && x.abs() < RANGE_LIMIT && y.abs() < RANGE_LIMIT
+        });
+        if !is_valid {
             console_log!(
-                "Skipping orbit period {} - outside display range",
+                "Skipping orbit period {} - points out of bounds",
                 orbit.period
             );
             continue;
         }
 
         console_log!(
-            "Orbit period {}: {} points, stability='{}', in_range={}",
+            "Orbit period {}: {} points, stability='{}', is_valid={}",
             orbit.period,
             orbit.points.len(),
             orbit.stability,
-            in_range
+            is_valid
         );
 
         // Add all points as potential termination targets
@@ -1640,7 +1731,11 @@ pub fn compute_manifold_from_orbits(
         }
 
         // include saddle and unstable (dual repeller) orbits for manifold computation
-        if orbit.stability == "saddle" || orbit.stability == "unstable" {
+        if orbit.stability == "saddle"
+            || orbit.stability == "unstable"
+            || orbit.stability == "dualrepeller"
+            || orbit.stability == "dual_repeller"
+        {
             console_log!(
                 "  -> Adding period-{} {} orbit for manifold computation",
                 orbit.period,
@@ -1799,12 +1894,17 @@ pub fn compute_manifold_from_orbits(
                 // Find unstable eigenvector
                 let unstable_lambda = if l1.abs() > l2.abs() { l1 } else { l2 };
 
-                // For accumulated Jacobian, eigenvector is more complex
-                // Use (J - λI)v = 0, from first row: (j11 - λ)v1 + j12*v2 = 0
                 let j11 = jac_accum[(0, 0)];
                 let j12 = jac_accum[(0, 1)];
-                let v1 = 1.0;
-                let v2 = -(j11 - unstable_lambda) / j12.max(1e-10);
+                let j21 = jac_accum[(1, 0)];
+                let j22 = jac_accum[(1, 1)];
+                let (v1, v2) = if j12.abs() > 1e-10 {
+                    (j12, unstable_lambda - j11)
+                } else if j21.abs() > 1e-10 {
+                    (unstable_lambda - j22, j21)
+                } else {
+                    (1.0, 0.0)
+                };
                 let norm = (v1 * v1 + v2 * v2).sqrt();
                 let eigenvector = if norm > 1e-10 {
                     Vector2::new(v1 / norm, v2 / norm)
@@ -1823,7 +1923,10 @@ pub fn compute_manifold_from_orbits(
                 (eigenvector, unstable_lambda, None)
             };
 
-            let saddle_type = if orbit.stability == "unstable" {
+            let saddle_type = if orbit.stability == "unstable"
+                || orbit.stability == "dualrepeller"
+                || orbit.stability == "dual_repeller"
+            {
                 SaddleType::DualRepeller
             } else {
                 SaddleType::Regular
@@ -2032,11 +2135,10 @@ pub fn compute_stable_and_unstable_manifolds(
 
     // Collect saddle orbits and all points
     for orbit in &orbits {
-        let in_range = orbit
-            .points
-            .iter()
-            .all(|(x, y)| in_display_range(*x, *y, x_min, x_max, y_min, y_max));
-        if !in_range {
+        let is_valid = orbit.points.iter().all(|(x, y)| {
+            x.is_finite() && y.is_finite() && x.abs() < RANGE_LIMIT && y.abs() < RANGE_LIMIT
+        });
+        if !is_valid {
             continue;
         }
 
@@ -2069,10 +2171,15 @@ pub fn compute_stable_and_unstable_manifolds(
             });
         }
 
-        if orbit.stability == "saddle" {
+        if orbit.stability == "saddle"
+            || orbit.stability == "unstable"
+            || orbit.stability == "dualrepeller"
+            || orbit.stability == "dual_repeller"
+        {
             console_log!(
-                "Adding period-{} saddle orbit for stable/unstable manifold computation",
-                orbit.period
+                "Adding period-{} {} orbit for stable/unstable manifold computation",
+                orbit.period,
+                orbit.stability
             );
             saddle_orbits.push(orbit);
         }
@@ -2159,10 +2266,17 @@ pub fn compute_stable_and_unstable_manifolds(
 
             let j11 = jac_accum[(0, 0)];
             let j12 = jac_accum[(0, 1)];
+            let j21 = jac_accum[(1, 0)];
+            let j22 = jac_accum[(1, 1)];
 
             let compute_eigenvector = |lambda: f64| -> Vector2<f64> {
-                let v1 = 1.0;
-                let v2 = -(j11 - lambda) / j12.max(1e-10);
+                let (v1, v2) = if j12.abs() > 1e-10 {
+                    (j12, lambda - j11)
+                } else if j21.abs() > 1e-10 {
+                    (lambda - j22, j21)
+                } else {
+                    (1.0, 0.0)
+                };
                 let norm = (v1 * v1 + v2 * v2).sqrt();
                 if norm > 1e-10 {
                     Vector2::new(v1 / norm, v2 / norm)
@@ -2238,91 +2352,103 @@ pub fn compute_stable_and_unstable_manifolds(
                     .map(|target| target.id)
             });
 
-            let unstable_result = if let Ok((traj_plus, traj_minus)) =
-                computer.compute_manifold(&saddle_unstable, &manifold_targets)
-            {
-                let plus_points: Vec<(f64, f64)> = traj_plus
-                    .points
-                    .iter()
-                    .filter(|s| s.pos.x.is_finite() && s.pos.y.is_finite())
-                    .map(|s| (s.pos.x, s.pos.y))
-                    .collect();
+            let is_dual_repeller = orbit.stability == "dualrepeller"
+                || orbit.stability == "dual_repeller"
+                || orbit.stability == "unstable";
 
-                let minus_points: Vec<(f64, f64)> = traj_minus
-                    .points
-                    .iter()
-                    .filter(|s| s.pos.x.is_finite() && s.pos.y.is_finite())
-                    .map(|s| (s.pos.x, s.pos.y))
-                    .collect();
+            let unstable_result = if !is_dual_repeller {
+                if let Ok((traj_plus, traj_minus)) =
+                    computer.compute_manifold(&saddle_unstable, &manifold_targets)
+                {
+                    let plus_points: Vec<(f64, f64)> = traj_plus
+                        .points
+                        .iter()
+                        .filter(|s| s.pos.x.is_finite() && s.pos.y.is_finite())
+                        .map(|s| (s.pos.x, s.pos.y))
+                        .collect();
 
-                console_log!(
-                    "Unstable manifold: +{} pts, -{} pts",
-                    plus_points.len(),
-                    minus_points.len()
-                );
+                    let minus_points: Vec<(f64, f64)> = traj_minus
+                        .points
+                        .iter()
+                        .filter(|s| s.pos.x.is_finite() && s.pos.y.is_finite())
+                        .map(|s| (s.pos.x, s.pos.y))
+                        .collect();
 
-                Some(ManifoldResult {
-                    plus: trajectory_ret(&traj_plus),
-                    minus: trajectory_ret(&traj_minus),
-                    saddle_point: (px, py),
-                    eigenvalue: unstable_lambda,
-                    source_topology_id,
-                })
+                    console_log!(
+                        "Unstable manifold: +{} pts, -{} pts",
+                        plus_points.len(),
+                        minus_points.len()
+                    );
+
+                    Some(ManifoldResult {
+                        plus: trajectory_ret(&traj_plus),
+                        minus: trajectory_ret(&traj_minus),
+                        saddle_point: (px, py),
+                        eigenvalue: unstable_lambda,
+                        source_topology_id,
+                    })
+                } else {
+                    None
+                }
             } else {
                 None
             };
 
-            let saddle_stable = if let Some(normal) = normal_opt {
-                SaddlePoint {
-                    position: pos,
-                    period: orbit.period,
-                    tangent_2d: stable_eigenvec,
-                    eigenvalue: stable_lambda,
-                    tangent_4d: None,
-                    saddle_type: SaddleType::DualRepeller,
-                    normal,
+            let stable_result = if is_dual_repeller {
+                let saddle_stable = if let Some(normal) = normal_opt {
+                    SaddlePoint {
+                        position: pos,
+                        period: orbit.period,
+                        tangent_2d: stable_eigenvec,
+                        eigenvalue: stable_lambda,
+                        tangent_4d: None,
+                        saddle_type: SaddleType::DualRepeller,
+                        normal,
+                    }
+                } else {
+                    SaddlePoint::from_2d_eigenvector(
+                        pos,
+                        stable_eigenvec,
+                        orbit.period,
+                        stable_lambda,
+                        SaddleType::DualRepeller,
+                        None,
+                    )
+                };
+
+                if let Ok((traj_plus, traj_minus)) =
+                    computer.compute_manifold(&saddle_stable, &manifold_targets)
+                {
+                    let plus_points: Vec<(f64, f64)> = traj_plus
+                        .points
+                        .iter()
+                        .filter(|s| s.pos.x.is_finite() && s.pos.y.is_finite())
+                        .map(|s| (s.pos.x, s.pos.y))
+                        .collect();
+
+                    let minus_points: Vec<(f64, f64)> = traj_minus
+                        .points
+                        .iter()
+                        .filter(|s| s.pos.x.is_finite() && s.pos.y.is_finite())
+                        .map(|s| (s.pos.x, s.pos.y))
+                        .collect();
+
+                    console_log!(
+                        "Stable manifold: +{} pts, -{} pts",
+                        plus_points.len(),
+                        minus_points.len()
+                    );
+
+                    Some(ManifoldResult {
+                        plus: trajectory_ret(&traj_plus),
+                        minus: trajectory_ret(&traj_minus),
+                        saddle_point: (px, py),
+                        eigenvalue: stable_lambda,
+                        source_topology_id,
+                    })
+                } else {
+                    None
                 }
-            } else {
-                SaddlePoint::from_2d_eigenvector(
-                    pos,
-                    stable_eigenvec,
-                    orbit.period,
-                    stable_lambda,
-                    SaddleType::DualRepeller,
-                    None,
-                )
-            };
-
-            let stable_result = if let Ok((traj_plus, traj_minus)) =
-                computer.compute_manifold(&saddle_stable, &manifold_targets)
-            {
-                let plus_points: Vec<(f64, f64)> = traj_plus
-                    .points
-                    .iter()
-                    .filter(|s| s.pos.x.is_finite() && s.pos.y.is_finite())
-                    .map(|s| (s.pos.x, s.pos.y))
-                    .collect();
-
-                let minus_points: Vec<(f64, f64)> = traj_minus
-                    .points
-                    .iter()
-                    .filter(|s| s.pos.x.is_finite() && s.pos.y.is_finite())
-                    .map(|s| (s.pos.x, s.pos.y))
-                    .collect();
-
-                console_log!(
-                    "Stable manifold: +{} pts, -{} pts",
-                    plus_points.len(),
-                    minus_points.len()
-                );
-
-                Some(ManifoldResult {
-                    plus: trajectory_ret(&traj_plus),
-                    minus: trajectory_ret(&traj_minus),
-                    saddle_point: (px, py),
-                    eigenvalue: stable_lambda,
-                    source_topology_id,
-                })
             } else {
                 None
             };
@@ -2530,11 +2656,10 @@ pub fn compute_manifold_from_orbits_user_defined(
     let mut fixed_points_result: Vec<FixedPointResult> = Vec::new();
 
     for orbit in &orbits {
-        let in_range = orbit
-            .points
-            .iter()
-            .all(|(x, y)| in_display_range(*x, *y, x_min, x_max, y_min, y_max));
-        if !in_range {
+        let is_valid = orbit.points.iter().all(|(x, y)| {
+            x.is_finite() && y.is_finite() && x.abs() < RANGE_LIMIT && y.abs() < RANGE_LIMIT
+        });
+        if !is_valid {
             continue;
         }
 
@@ -2548,7 +2673,11 @@ pub fn compute_manifold_from_orbits_user_defined(
             });
         }
 
-        if orbit.stability == "saddle" || orbit.stability == "unstable" {
+        if orbit.stability == "saddle"
+            || orbit.stability == "unstable"
+            || orbit.stability == "dualrepeller"
+            || orbit.stability == "dual_repeller"
+        {
             saddle_orbits.push(orbit);
         }
     }
@@ -2599,7 +2728,10 @@ pub fn compute_manifold_from_orbits_user_defined(
                     (eigenvector, unstable_lambda, None)
                 };
 
-            let saddle_type = if orbit.stability == "unstable" {
+            let saddle_type = if orbit.stability == "unstable"
+                || orbit.stability == "dualrepeller"
+                || orbit.stability == "dual_repeller"
+            {
                 SaddleType::DualRepeller
             } else {
                 SaddleType::Regular
@@ -2706,11 +2838,10 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
     let mut fixed_points_result: Vec<FixedPointResult> = Vec::new();
 
     for orbit in &orbits {
-        let in_range = orbit
-            .points
-            .iter()
-            .all(|(x, y)| in_display_range(*x, *y, x_min, x_max, y_min, y_max));
-        if !in_range {
+        let is_valid = orbit.points.iter().all(|(x, y)| {
+            x.is_finite() && y.is_finite() && x.abs() < RANGE_LIMIT && y.abs() < RANGE_LIMIT
+        });
+        if !is_valid {
             continue;
         }
 
@@ -2743,7 +2874,11 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
             });
         }
 
-        if orbit.stability == "saddle" {
+        if orbit.stability == "saddle"
+            || orbit.stability == "unstable"
+            || orbit.stability == "dualrepeller"
+            || orbit.stability == "dual_repeller"
+        {
             saddle_orbits.push(orbit);
         }
     }
@@ -2787,11 +2922,19 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
                 (l2, l1)
             };
 
+            let j11 = jac_accum[(0, 0)];
+            let j12 = jac_accum[(0, 1)];
+            let j21 = jac_accum[(1, 0)];
+            let j22 = jac_accum[(1, 1)];
+
             let compute_eigenvector = |lambda: f64| -> Vector2<f64> {
-                let j11 = jac_accum[(0, 0)];
-                let j12 = jac_accum[(0, 1)];
-                let v1 = 1.0;
-                let v2 = -(j11 - lambda) / j12.max(1e-10);
+                let (v1, v2) = if j12.abs() > 1e-10 {
+                    (j12, lambda - j11)
+                } else if j21.abs() > 1e-10 {
+                    (lambda - j22, j21)
+                } else {
+                    (1.0, 0.0)
+                };
                 let norm = (v1 * v1 + v2 * v2).sqrt();
                 if norm > 1e-10 {
                     Vector2::new(v1 / norm, v2 / norm)
@@ -2854,24 +2997,31 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
                     .map(|target| target.id)
             });
 
-            if let Ok((tp, tm)) = computer.compute_manifold(&saddle_unstable, &manifold_targets) {
-                unstable_manifolds.push(ManifoldResult {
-                    plus: trajectory_ret(&tp),
-                    minus: trajectory_ret(&tm),
-                    saddle_point: (px, py),
-                    eigenvalue: unstable_lambda,
-                    source_topology_id,
-                });
-            }
+            let is_dual_repeller = orbit.stability == "dualrepeller"
+                || orbit.stability == "dual_repeller"
+                || orbit.stability == "unstable";
 
-            if let Ok((tp, tm)) = computer.compute_manifold(&saddle_stable, &manifold_targets) {
-                stable_manifolds.push(ManifoldResult {
-                    plus: trajectory_ret(&tp),
-                    minus: trajectory_ret(&tm),
-                    saddle_point: (px, py),
-                    eigenvalue: stable_lambda,
-                    source_topology_id,
-                });
+            if !is_dual_repeller {
+                if let Ok((tp, tm)) = computer.compute_manifold(&saddle_unstable, &manifold_targets)
+                {
+                    unstable_manifolds.push(ManifoldResult {
+                        plus: trajectory_ret(&tp),
+                        minus: trajectory_ret(&tm),
+                        saddle_point: (px, py),
+                        eigenvalue: unstable_lambda,
+                        source_topology_id,
+                    });
+                }
+            } else {
+                if let Ok((tp, tm)) = computer.compute_manifold(&saddle_stable, &manifold_targets) {
+                    stable_manifolds.push(ManifoldResult {
+                        plus: trajectory_ret(&tp),
+                        minus: trajectory_ret(&tm),
+                        saddle_point: (px, py),
+                        eigenvalue: stable_lambda,
+                        source_topology_id,
+                    });
+                }
             }
         }
     }
@@ -2939,7 +3089,11 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
 
 #[cfg(test)]
 mod tests {
+    use std::println;
+
     use super::*;
+    use crate::boundary_map::periodic::*;
+    use crate::HenonSystem;
 
     #[test]
     fn manifold_point_spacing_is_validated_before_computation() {
@@ -2962,6 +3116,23 @@ mod tests {
         };
 
         assert!((extended_state_distance(&left, &right) - 2.0_f64.sqrt()).abs() < 1e-15);
+    }
+
+    #[test]
+    fn henon_params_extended_map_round_trips() {
+        let params = HenonParams::new(0.45, 0.3, 0.0133).unwrap();
+        let state = ExtendedState {
+            pos: Vector2::new(0.7, 0.3),
+            normal: Vector2::new(0.6, 0.8),
+        };
+
+        let image = params.extended_map(state, 2).unwrap();
+        let recovered = params.extended_map_inverse(image, 2).unwrap();
+
+        assert!(
+            extended_state_distance(&state, &recovered) < 1e-12,
+            "forward and inverse extended Henon maps must round-trip: {state:?} -> {recovered:?}"
+        );
     }
 
     #[derive(Clone, Copy)]
@@ -3052,8 +3223,127 @@ mod tests {
     }
 
     #[test]
+    fn manifold_branch_is_locally_anchored_at_saddle() {
+        let config = ManifoldConfig {
+            perturb_tol: 1e-2,
+            min_perturb_tol: 1e-2,
+            local_seed_samples: 4,
+            max_iter: 0,
+            max_points: 100,
+            time_limit: 1.0,
+            ..ManifoldConfig::default()
+        };
+        let computer = UnstableManifoldComputer::new(LinearExpandingSystem, config);
+        let saddle = SaddlePoint::from_2d_eigenvector(
+            Vector2::new(0.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            1,
+            2.0,
+            SaddleType::Regular,
+            None,
+        );
+
+        let trajectory = computer.compute_direction(&saddle, 1.0, &[]).unwrap();
+        let x_positions = trajectory
+            .points
+            .iter()
+            .map(|state| state.pos.x)
+            .collect::<Vec<_>>();
+
+        assert_eq!(x_positions.first().copied(), Some(0.0));
+        assert!(
+            (x_positions.last().copied().unwrap_or_default() - 1e-2).abs() < 1e-14,
+            "the selected computational seed should remain present"
+        );
+        assert!(
+            x_positions.windows(2).all(|pair| pair[1] > pair[0]),
+            "local seed samples should preserve branch order: {x_positions:?}"
+        );
+        assert!(
+            x_positions
+                .windows(2)
+                .all(|pair| pair[1] - pair[0] <= 2.1e-3),
+            "local seed samples should remove the visible saddle-to-seed gap: {x_positions:?}"
+        );
+    }
+
+    #[test]
+    fn adaptive_seed_uses_smallest_distance_with_enough_first_step() {
+        let perturb_cap = 1e-2;
+        let spacing_tol = 1.5e-5;
+        let config = ManifoldConfig {
+            perturb_tol: perturb_cap,
+            min_perturb_tol: 1e-7,
+            spacing_tol,
+            max_iter: 2,
+            max_points: 100,
+            time_limit: 1.0,
+            ..ManifoldConfig::default()
+        };
+        let computer = UnstableManifoldComputer::new(LinearExpandingSystem, config);
+        let saddle = SaddlePoint::from_2d_eigenvector(
+            Vector2::new(0.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            1,
+            2.0,
+            SaddleType::Regular,
+            None,
+        );
+        let system = LinearExpandingSystem;
+        let map_fn = |state, n| system.extended_map(state, n);
+
+        let (distance, state_0, state_1) = computer
+            .select_initial_states(&saddle, 1.0, 1, &map_fn, spacing_tol)
+            .unwrap();
+
+        assert!(
+            (distance - 1e-5).abs() < 1e-15,
+            "expected logarithmic seed search to stop at 1e-5, got {distance}"
+        );
+        assert!(distance < perturb_cap);
+        assert!((state_1.pos - state_0.pos).norm() >= 0.5 * spacing_tol);
+    }
+
+    #[test]
+    fn adaptive_seed_ignores_common_fixed_point_residual() {
+        let spacing_tol = 1.5e-5;
+        let config = ManifoldConfig {
+            perturb_tol: 1e-2,
+            min_perturb_tol: 1e-7,
+            spacing_tol,
+            ..ManifoldConfig::default()
+        };
+        let computer = UnstableManifoldComputer::new(LinearExpandingSystem, config);
+        let saddle = SaddlePoint::from_2d_eigenvector(
+            Vector2::new(0.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            1,
+            2.0,
+            SaddleType::Regular,
+            None,
+        );
+        let common_residual = Vector2::new(1e-2, -2e-2);
+        let map_fn = |state: ExtendedState, _| {
+            Ok(ExtendedState {
+                pos: 2.0 * state.pos + common_residual,
+                normal: state.normal,
+            })
+        };
+
+        let (distance, _, _) = computer
+            .select_initial_states(&saddle, 1.0, 1, &map_fn, spacing_tol)
+            .unwrap();
+
+        assert!(
+            (distance - 1e-5).abs() < 1e-15,
+            "common map drift must not make an undersized seed appear to grow: {distance}"
+        );
+    }
+
+    #[test]
     fn target_termination_records_the_explicit_topology_id() {
         let config = ManifoldConfig {
+            perturb_tol: 1e-5,
             stable_tol: 1e-12,
             max_iter: 4,
             max_points: 100,
@@ -3384,7 +3674,6 @@ mod tests {
                 continue;
             }
 
-            // Perturb slightly from the repeller
             let perturb = Vector2::new(fx + 1e-6, fy + 1e-6);
             let mut pos = perturb;
             let fp = Vector2::new(*fx, *fy);
@@ -4021,5 +4310,232 @@ mod tests {
 
         let result2 = crate::hausdorff::compute_hausdorff_distance(&non_empty, &empty, 1);
         assert!(result2.is_err(), "Should error on empty set B");
+    }
+
+    #[test]
+    fn test_henon_a_045_all_orbits_manifolds() {
+        let a = 0.45;
+        let b = 0.3;
+        let eps = 0.0133;
+        let system = HenonParams::new(a, b, eps).unwrap();
+
+        let db =
+            find_all_boundary_periodic_orbits_generic(&system, 2, 18, 16, -3.0, 3.0, -3.0, 3.0);
+        println!("Total found orbits: {}", db.orbits.len());
+        for (i, orbit) in db.orbits.iter().enumerate() {
+            println!(
+                "Orbit: {}: period={}, stability={:?}, pts={:?}",
+                i, orbit.period, orbit.stability, orbit.points
+            );
+        }
+
+        let params = HenonParams::new(a, b, eps).unwrap();
+        let config = ManifoldConfig {
+            max_iter: 100,
+            max_points: 50000,
+            spacing_tol: 5e-3,
+            time_limit: 10.0,
+            ..ManifoldConfig::default()
+        };
+
+        let computer = UnstableManifoldComputer::new(params, config);
+
+        for (i, orbit) in db.orbits.iter().enumerate() {
+            if orbit.stability == StabilityType::DualRepeller {
+                for (pt_idx, ep) in orbit.extended_points.iter().enumerate() {
+                    let pos = Vector2::new(ep.x, ep.y);
+                    let normal = Vector2::new(ep.nx, ep.ny);
+
+                    let jac = params.jacobian(pos);
+                    let mut jac_accum = jac;
+                    let mut current_pos = pos;
+
+                    for _ in 1..orbit.period {
+                        current_pos = Vector2::new(
+                            1.0 - a * current_pos.x * current_pos.x + current_pos.y,
+                            b * current_pos.x,
+                        );
+
+                        let next_jac = params.jacobian(current_pos);
+                        jac_accum = next_jac * jac_accum;
+                    }
+                    let trace = jac_accum.trace();
+                    let det = jac_accum.determinant();
+                    let disc = trace * trace - 4.0 * det;
+
+                    let (l1, l2) = if disc >= 0.0 {
+                        let sqrt_disc = disc.sqrt();
+                        ((trace + sqrt_disc) / 2.0, (trace - sqrt_disc) / 2.0)
+                    } else {
+                        (trace / 2.0, trace / 2.0)
+                    };
+
+                    let stable_lambda = if l1.abs() < l2.abs() { l1 } else { l2 };
+                    let j11 = jac_accum[(0, 0)];
+                    let j12 = jac_accum[(0, 1)];
+                    let j21 = jac_accum[(1, 0)];
+                    let j22 = jac_accum[(1, 1)];
+
+                    let (v1, v2) = if j12.abs() > 1e-10 {
+                        (j12, stable_lambda - j11)
+                    } else if j21.abs() > 1e-10 {
+                        (stable_lambda - j22, j21)
+                    } else {
+                        (1.0, 0.0)
+                    };
+                    let norm = (v1 * v1 + v2 * v2).sqrt();
+                    let stable_eigenvec = Vector2::new(v1 / norm, v2 / norm);
+
+                    let saddle_stable = SaddlePoint {
+                        position: pos,
+                        period: orbit.period,
+                        tangent_2d: stable_eigenvec,
+                        eigenvalue: stable_lambda,
+                        tangent_4d: None,
+                        saddle_type: SaddleType::DualRepeller,
+                        normal,
+                    };
+
+                    match computer.compute_manifold(&saddle_stable, &[]) {
+                        Ok((plus, minus)) => {
+                            let saddle_state = ExtendedState { pos, normal };
+                            let mapped_saddle = params
+                                .extended_map_inverse(saddle_state, orbit.period)
+                                .unwrap();
+                            let first_mapped_index = computer.config.local_seed_samples + 2;
+                            let plus_first_mapped = plus.points[first_mapped_index];
+                            let minus_first_mapped = minus.points[first_mapped_index];
+                            let p_start = plus.points.first().map(|p| p.pos).unwrap();
+                            let p_stop = plus.points.last().map(|p| p.pos).unwrap();
+                            let m_start = minus.points.first().map(|p| p.pos).unwrap();
+                            let m_stop = minus.points.last().map(|p| p.pos).unwrap();
+                            println!(
+                                "Orbit {} pt {} ({:.4}, {:.4}) STABLE MANIFOLD:\n  plus: {} pts, start=({:.4}, {:.4}), end=({:.4}, {:.4})\n  minus: {} pts, start=({:.4}, {:.4}), end=({:.4}, {:.4})",
+                                i, pt_idx, pos.x, pos.y, plus.points.len(), p_start.x, p_start.y, p_stop.x, p_stop.y, minus.points.len(), m_start.x, m_start.y, m_stop.x, m_stop.y
+                            );
+                            let plus_offset = plus_first_mapped.pos - mapped_saddle.pos;
+                            let minus_offset = minus_first_mapped.pos - mapped_saddle.pos;
+                            assert!(
+                                (mapped_saddle.pos - pos).norm() < 1e-8,
+                                "the inverse map must preserve the periodic saddle"
+                            );
+                            assert!(
+                                plus_offset.dot(&minus_offset) < 0.0,
+                                "stable branches must launch on opposite sides: plus={plus_offset:?}, minus={minus_offset:?}",
+                            );
+                        }
+                        Err(e) => {
+                            println!(
+                                "Orbit {}, pt: {} ({:.4}, {:.4}) FAILED: {}",
+                                i, pt_idx, pos.x, pos.y, e
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_henon_045_all_orbits_manifolds() {
+        let a = 0.45;
+        let b = 0.3;
+        let eps = 0.0133;
+        let system = HenonSystem::new(a, b, eps);
+        let db =
+            find_all_boundary_periodic_orbits_generic(&system, 2, 18, 16, -3.0, 3.0, -3.0, 3.0);
+        println!("Total found orbits: {}", db.orbits.len());
+        for (i, orbit) in db.orbits.iter().enumerate() {
+            println!(
+                "Orbit {}: period={}, stability={:?}, pts={:?}",
+                i, orbit.period, orbit.stability, orbit.points
+            );
+        }
+
+        // Test computing manifolds for all orbits
+        let params = HenonParams::new(a, b, eps).unwrap();
+        let config = ManifoldConfig {
+            max_iter: 100,
+            max_points: 50000,
+            spacing_tol: 5e-3,
+            time_limit: 10.0,
+            ..ManifoldConfig::default()
+        };
+        let computer = UnstableManifoldComputer::new(params, config);
+
+        for (i, orbit) in db.orbits.iter().enumerate() {
+            if orbit.stability == StabilityType::DualRepeller {
+                for (pt_idx, ep) in orbit.extended_points.iter().enumerate() {
+                    let pos = Vector2::new(ep.x, ep.y);
+                    let normal = Vector2::new(ep.nx, ep.ny);
+
+                    // Compute accumulated Jacobian for period-n map
+                    let jac = params.jacobian(pos);
+                    let mut jac_accum = jac;
+                    let mut current_pos = pos;
+                    for _ in 1..orbit.period {
+                        current_pos = Vector2::new(
+                            1.0 - a * current_pos.x * current_pos.x + current_pos.y,
+                            b * current_pos.x,
+                        );
+                        let next_jac = params.jacobian(current_pos);
+                        jac_accum = next_jac * jac_accum;
+                    }
+
+                    let trace = jac_accum.trace();
+                    let det = jac_accum.determinant();
+                    let disc = trace * trace - 4.0 * det;
+                    let (l1, l2) = if disc >= 0.0 {
+                        let sqrt_disc = disc.sqrt();
+                        ((trace + sqrt_disc) / 2.0, (trace - sqrt_disc) / 2.0)
+                    } else {
+                        (trace / 2.0, trace / 2.0)
+                    };
+                    let stable_lambda = if l1.abs() < l2.abs() { l1 } else { l2 };
+                    let j11 = jac_accum[(0, 0)];
+                    let j12 = jac_accum[(0, 1)];
+                    let j21 = jac_accum[(1, 0)];
+                    let j22 = jac_accum[(1, 1)];
+                    let (v1, v2) = if j12.abs() > 1e-10 {
+                        (j12, stable_lambda - j11)
+                    } else if j21.abs() > 1e-10 {
+                        (stable_lambda - j22, j21)
+                    } else {
+                        (1.0, 0.0)
+                    };
+                    let norm = (v1 * v1 + v2 * v2).sqrt();
+                    let stable_eigenvec = Vector2::new(v1 / norm, v2 / norm);
+
+                    let saddle_stable = SaddlePoint {
+                        position: pos,
+                        period: orbit.period,
+                        tangent_2d: stable_eigenvec,
+                        eigenvalue: stable_lambda,
+                        tangent_4d: None,
+                        saddle_type: SaddleType::DualRepeller,
+                        normal,
+                    };
+
+                    match computer.compute_manifold(&saddle_stable, &[]) {
+                        Ok((plus, minus)) => {
+                            let p_start = plus.points.first().map(|s| s.pos).unwrap();
+                            let p_end = plus.points.last().map(|s| s.pos).unwrap();
+                            let m_start = minus.points.first().map(|s| s.pos).unwrap();
+                            let m_end = minus.points.last().map(|s| s.pos).unwrap();
+                            println!(
+                                "Orbit {} pt {} ({:.4}, {:.4}) STABLE MANIFOLD:\n  plus: {} pts, start=({:.4}, {:.4}), end=({:.4}, {:.4})\n  minus: {} pts, start=({:.4}, {:.4}), end=({:.4}, {:.4})",
+                                i, pt_idx, pos.x, pos.y, plus.points.len(), p_start.x, p_start.y, p_end.x, p_end.y, minus.points.len(), m_start.x, m_start.y, m_end.x, m_end.y
+                            );
+                        }
+                        Err(e) => {
+                            println!(
+                                "Orbit {} pt {} ({:.4}, {:.4}) FAILED: {}",
+                                i, pt_idx, pos.x, pos.y, e
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 }

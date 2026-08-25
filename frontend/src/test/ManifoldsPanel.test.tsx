@@ -167,11 +167,11 @@ describe('ManifoldsPanel', () => {
       />
     );
 
-    expect(screen.getByLabelText('Saddle orbit source')).toBeInTheDocument();
-    expect(screen.getByText('All saddle periods (2 orbits)')).toBeInTheDocument();
-    expect(screen.getByText('Period 1 saddles (1 orbit, 1 pt)')).toBeInTheDocument();
-    expect(screen.getByText('Period 2 saddles (1 orbit, 2 pts)')).toBeInTheDocument();
-    // Non-saddle attractor should not create extra options
+    expect(screen.getByLabelText(/Orbit source/)).toBeInTheDocument();
+    expect(screen.getByText('All periods (2 orbits)')).toBeInTheDocument();
+    expect(screen.getByText('Period 1 (1 orbit, 1 pt)')).toBeInTheDocument();
+    expect(screen.getByText('Period 2 (1 orbit, 2 pts)')).toBeInTheDocument();
+    // Non-saddle/non-repeller attractor should not create extra options
     expect(screen.queryByText(/Period 2 stable/)).not.toBeInTheDocument();
   });
 });

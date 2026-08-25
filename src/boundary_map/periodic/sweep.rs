@@ -86,7 +86,10 @@ pub fn parameter_sweep_henon_fast(
 
         let orbits = database_to_found_orbits_generic(&db);
         let stable_count = orbits.iter().filter(|o| o.stability == "stable").count();
-        let unstable_count = orbits.iter().filter(|o| o.stability == "unstable").count();
+        let unstable_count = orbits
+            .iter()
+            .filter(|o| o.stability == "unstable" || o.stability == "dualrepeller")
+            .count();
         let saddle_count = orbits.iter().filter(|o| o.stability == "saddle").count();
 
         results.push(SweepResult {
@@ -195,7 +198,10 @@ pub fn parameter_sweep_generic(
 
         let orbits = database_to_found_orbits_generic(&db);
         let stable_count = orbits.iter().filter(|o| o.stability == "stable").count();
-        let unstable_count = orbits.iter().filter(|o| o.stability == "unstable").count();
+        let unstable_count = orbits
+            .iter()
+            .filter(|o| o.stability == "unstable" || o.stability == "dualrepeller")
+            .count();
         let saddle_count = orbits.iter().filter(|o| o.stability == "saddle").count();
 
         results.push(SweepResult {

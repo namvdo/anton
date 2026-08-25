@@ -393,6 +393,7 @@ const ORBIT_COLORS = {
     stableManifold: '#ffa500', // Orange for stable manifold
     attractor: '#27ae60',
     repeller: '#e74c3c',
+    dualRepeller: '#800080', // Purple for dual repellers
     saddlePoint: '#eedf32',
     periodicBlue: '#3498db'
 };
@@ -451,12 +452,12 @@ const SetValuedViz = () => {
         isReady: false,
         sourcePeriodicRevision: 0,
         showOrbits: true,
-        showUnstableManifold: false,
+        showUnstableManifold: true,
         showDeterministicImageBoundary: false,
         showNoiseBalls: false,
         showBoundarySamplePoints: true,
         maximumManifoldPointSpacing: DEFAULT_MANIFOLD_SETTINGS.maximumPointSpacing,
-        showStableManifold: false,
+        showStableManifold: true,
         intersectionThreshold: DEFAULT_MANIFOLD_SETTINGS.intersectionThreshold,
         currentPoint: { x: 0.1, y: 0.1, nx: 1.0, ny: 0.0 }, // 4D point for boundary map
         trajectoryPoints: [],
@@ -1708,10 +1709,11 @@ const SetValuedViz = () => {
                     yMax: viewRange.yMax
                 },
                 periodicOrbits: (() => {
-                    const allSaddles = (periodicState.orbits || []).filter(
-                        o => (o.stability || '').toLowerCase() === 'saddle'
-                    );
-                    const candidateOrbits = allSaddles.length > 0 ? allSaddles : (periodicState.orbits || []);
+                    const allSaddlesAndRepellers = (periodicState.orbits || []).filter(o => {
+                        const stab = (o.stability || '').toLowerCase();
+                        return stab === 'saddle' || stab === 'unstable' || stab === 'dualrepeller' || stab === 'dual_repeller';
+                    });
+                    const candidateOrbits = allSaddlesAndRepellers.length > 0 ? allSaddlesAndRepellers : (periodicState.orbits || []);
                     if (manifoldState.selectedOrbitPeriod === undefined || manifoldState.selectedOrbitPeriod === 'all') {
                         return candidateOrbits;
                     }
@@ -1733,7 +1735,7 @@ const SetValuedViz = () => {
                     ...prev,
                     manifolds: clipManifoldsBySupport(result?.manifolds || [], support),
                     rawManifolds: result?.manifolds || [],
-                    stableManifolds: clipManifoldsBySupport(result?.stableManifolds || [], support),
+                    stableManifolds: result?.stableManifolds || [],
                     fixedPoints: enrichSolutionPointsWithOrbitNormals(
                         result?.fixedPoints || [],
                         periodicState.orbits || []
@@ -2608,19 +2610,25 @@ const SetValuedViz = () => {
         }
 
         if (manifoldState.showStableManifold && manifoldState.stableManifolds.length > 0) {
-            manifoldState.stableManifolds.forEach(m => {
-                [m.plus, m.minus].forEach(traj => {
-                    if (traj && traj.points && traj.points.length > 0) {
-                        traj.points.forEach(([x, y]) => {
-                            const geom = new THREE.SphereGeometry(0.008, 6, 6);
-                            const mat = new THREE.MeshBasicMaterial({
-                                color: new THREE.Color(ORBIT_COLORS.stableManifold)
-                            });
-                            const sphere = new THREE.Mesh(geom, mat);
-                            sphere.position.set(x, y, 0.08);
-                            sphere.userData.type = 'manifold';
-                            scene.add(sphere);
-                        });
+            manifoldState.stableManifolds.forEach(manifold => {
+                [manifold.plus, manifold.minus].forEach(trajectory => {
+                    if (!trajectory?.points || trajectory.points.length <= 1) return;
+                    const points = trajectory.points.map(([x, y]) => ({ x, y }));
+                    if (manifoldState.showBoundarySamplePoints) {
+                        addBoundarySamplePoints(
+                            points,
+                            ORBIT_COLORS.stableManifold,
+                            0.25,
+                            'stable-manifold',
+                        );
+                    } else {
+                        addBoundaryLine(
+                            points,
+                            ORBIT_COLORS.stableManifold,
+                            2.6,
+                            0.23,
+                            'stable-manifold',
+                        );
                     }
                 });
             });
@@ -2770,12 +2778,14 @@ const SetValuedViz = () => {
         manifoldState.fixedPoints.forEach(fp => {
             const stabLower = (fp.stability || '').toLowerCase();
             const isAttractor = stabLower === 'attractor' || stabLower === 'stable';
-            const isRepeller = stabLower === 'repeller' || stabLower === 'unstable';
+            const isDualRepeller = stabLower === 'dualrepeller' || stabLower === 'dual_repeller' || stabLower === 'dual repeller';
+            const isRepeller = !isDualRepeller && (stabLower === 'repeller' || stabLower === 'unstable');
             const isSaddle = stabLower === 'saddle';
             const color = isAttractor ? ORBIT_COLORS.attractor :
+                isDualRepeller ? ORBIT_COLORS.dualRepeller :
                 isRepeller ? ORBIT_COLORS.repeller :
                 isSaddle ? ORBIT_COLORS.saddlePoint : ORBIT_COLORS.periodicBlue;
-            const radius = isAttractor ? 0.03 : isRepeller ? 0.028 : 0.025;
+            const radius = isAttractor ? 0.03 : (isRepeller || isDualRepeller) ? 0.028 : 0.025;
             const geom = new THREE.SphereGeometry(radius, 12, 12);
             const mat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color) });
             const sphere = new THREE.Mesh(geom, mat);
@@ -2872,10 +2882,11 @@ const SetValuedViz = () => {
             return filters.period6plus;
         };
         const colorForOrbit = (orbit: PeriodicOrbit): string => {
-            const stability = orbit.stability.toLowerCase();
-            if (stability === 'stable') return ORBIT_COLORS.attractor;
+            const stability = (orbit.stability || '').toLowerCase();
+            if (stability === 'stable' || stability === 'attractor') return ORBIT_COLORS.attractor;
+            if (stability === 'dualrepeller' || stability === 'dual_repeller' || stability === 'dual repeller') return ORBIT_COLORS.dualRepeller;
             if (stability === 'saddle') return ORBIT_COLORS.saddlePoint;
-            if (stability === 'unstable') return ORBIT_COLORS.repeller;
+            if (stability === 'unstable' || stability === 'repeller') return ORBIT_COLORS.repeller;
             return ORBIT_COLORS.periodicBlue;
         };
 

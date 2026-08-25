@@ -51,10 +51,11 @@ export const ManifoldsPanel = ({
     && hasBoundarySamples
     && !boundaryLayerError;
 
-  const saddleOrbits = (periodicOrbits || []).filter(
-    o => (o.stability || '').toLowerCase() === 'saddle'
-  );
-  const candidateOrbits = saddleOrbits.length > 0 ? saddleOrbits : (periodicOrbits || []);
+  const relevantOrbits = (periodicOrbits || []).filter(o => {
+    const stab = (o.stability || '').toLowerCase();
+    return stab === 'saddle' || stab === 'unstable' || stab === 'dualrepeller' || stab === 'dual_repeller';
+  });
+  const candidateOrbits = relevantOrbits.length > 0 ? relevantOrbits : (periodicOrbits || []);
   const availablePeriods = Array.from(
     new Set(candidateOrbits.map(o => o.period))
   ).sort((a, b) => a - b);
@@ -63,7 +64,7 @@ export const ManifoldsPanel = ({
     <Collapsible title="Manifolds" defaultOpen={true}>
       {candidateOrbits.length > 0 && (
         <div className="start-field" style={{ marginBottom: '12px' }}>
-          <label htmlFor="manifold-orbit-source">Saddle orbit source</label>
+          <label htmlFor="manifold-orbit-source">Orbit source (saddles & dual repellers)</label>
           <select
             id="manifold-orbit-source"
             className="param-select"
@@ -74,7 +75,7 @@ export const ManifoldsPanel = ({
             }}
           >
             <option value="all">
-              All saddle periods ({candidateOrbits.length} orbit{candidateOrbits.length === 1 ? '' : 's'})
+              All periods ({candidateOrbits.length} orbit{candidateOrbits.length === 1 ? '' : 's'})
             </option>
             {availablePeriods.map(period => {
               const count = candidateOrbits.filter(o => o.period === period).length;
@@ -83,12 +84,12 @@ export const ManifoldsPanel = ({
                 .reduce((sum, o) => sum + (o.points?.length || period), 0);
               return (
                 <option key={period} value={period}>
-                  Period {period} saddles ({count} orbit{count === 1 ? '' : 's'}, {totalPoints} pt{totalPoints === 1 ? '' : 's'})
+                  Period {period} ({count} orbit{count === 1 ? '' : 's'}, {totalPoints} pt{totalPoints === 1 ? '' : 's'})
                 </option>
               );
             })}
           </select>
-          <small>Compute manifolds for all saddle orbits of the selected period</small>
+          <small>Compute manifolds for all saddle & dual repeller orbits of the selected period</small>
         </div>
       )}
 
@@ -187,35 +188,6 @@ export const ManifoldsPanel = ({
         checked={manifoldState.showStableManifold}
         onChange={(v) => setManifoldState(prev => ({ ...prev, showStableManifold: v }))}
       />
-
-      {manifoldState.showStableManifold && (
-        <div id="intersect-panel" style={{ marginTop: '8px' }}>
-          <Slider
-            label="Detection threshold ε"
-            min={0.001} max={0.2} step={0.001}
-            value={manifoldState.intersectionThreshold}
-            onChange={v => setManifoldState(prev => ({ ...prev, intersectionThreshold: v }))}
-          />
-          {(() => {
-            const heteroClinic = manifoldState.intersections.filter(i => i.has_intersection);
-            if (heteroClinic.length > 0) {
-              const minDist = Math.min(...heteroClinic.map(i => i.min_distance));
-              return (
-                <div className="intersect-warn">
-                  <div>⚠ Heteroclinic connection!</div>
-                  <div style={{ fontSize: '9px', opacity: 0.8, marginTop: '2px' }}>
-                    {heteroClinic.length} connection{heteroClinic.length > 1 ? 's' : ''} found (min d = {minDist.toFixed(4)})
-                  </div>
-                </div>
-              );
-            } else if (manifoldState.intersections.length > 0) {
-              return <div className="intersect-ok">✓ No heteroclinic connections</div>;
-            } else {
-              return <div style={{ fontSize: '10px', color: 'var(--text-3)' }}>Need ≥2 saddles for detection</div>;
-            }
-          })()}
-        </div>
-      )}
     </Collapsible>
   );
 };
