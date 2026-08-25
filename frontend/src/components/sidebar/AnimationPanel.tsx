@@ -62,7 +62,7 @@ export const AnimationPanel = ({ animationState, setAnimationState, manifoldStat
       </div>
 
       <Slider 
-        label="Range" min={0.01} max={0.5} step={0.01} 
+        label="Range" min={0.005} max={0.5} step={0.01} 
         value={animationState.rangeValue} 
         onChange={v => setAnimationState(prev => ({ ...prev, rangeValue: v }))} 
         disabled={controlsLocked}
