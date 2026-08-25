@@ -61,7 +61,7 @@ export const ManifoldsPanel = ({
   ).sort((a, b) => a - b);
 
   return (
-    <Collapsible title="Manifolds" defaultOpen={true}>
+    <Collapsible title="Manifolds" defaultOpen={false}>
       {candidateOrbits.length > 0 && (
         <div className="start-field" style={{ marginBottom: '12px' }}>
           <label htmlFor="manifold-orbit-source">Orbit source (saddles & dual repellers)</label>

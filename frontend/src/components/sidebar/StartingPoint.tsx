@@ -61,7 +61,7 @@ export const StartingPoint = ({ type, startPoint, updateStartPoint, disabled = f
   };
 
   return (
-    <Collapsible title="Extended start state" defaultOpen={true}>
+    <Collapsible title="Extended start state" defaultOpen={false}>
       <div className="start-group-label">Position</div>
       <div className="start-grid">
         <div className="start-field">

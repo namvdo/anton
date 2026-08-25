@@ -11,7 +11,7 @@ interface VisualizationPanelProps {
 export const VisualizationPanel = ({ viewRange, setViewRange, rangeLimit, resetViewRange }: VisualizationPanelProps) => {
   const limitLabel = rangeLimit ?? 10;
   return (
-    <Collapsible title="Axis range" defaultOpen={true}>
+    <Collapsible title="Axis range" defaultOpen={false}>
       <div className="axis-range-grid">
         <div className="axis-range-row">
           <span className="axis-range-label">x</span>

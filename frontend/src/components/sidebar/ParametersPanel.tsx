@@ -39,7 +39,7 @@ export const ParametersPanel = ({
   const isContinuous = systemId === 'duffing_ode' || systemId === 'custom_ode';
 
   return (
-    <Collapsible title="Parameters" defaultOpen={true}>
+    <Collapsible title="Parameters" defaultOpen={false}>
       {presets.length > 0 && (
         <div className="presets">
           {presets.map(p => (

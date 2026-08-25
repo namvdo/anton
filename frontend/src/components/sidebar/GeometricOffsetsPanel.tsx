@@ -104,7 +104,7 @@ export const GeometricOffsetsPanel = ({
   };
 
   return (
-    <Collapsible title="Geometric offsets" defaultOpen={true}>
+    <Collapsible title="Geometric offsets" defaultOpen={false}>
       <div className="geometric-offset-context">
         <span>Geometric distance ε<sub>g</sub></span>
         {Number.isFinite(systemEpsilon) && (

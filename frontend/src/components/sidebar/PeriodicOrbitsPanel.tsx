@@ -83,7 +83,7 @@ export const PeriodicOrbitsPanel = ({
   const higherPeriodSolutions = periodicOrbits.filter(orbit => orbit.period > 1);
 
   return (
-    <Collapsible title="Periodic orbits" defaultOpen={true}>
+    <Collapsible title="Periodic orbits" defaultOpen={false}>
       <Toggle
         label="Orbit markers"
         checked={manifoldState.showOrbits}

@@ -105,7 +105,7 @@ export const PeriodicSearchPanel = ({
   ))?.id ?? null;
 
   return (
-    <Collapsible title="Periodic search" defaultOpen={true}>
+    <Collapsible title="Periodic search" defaultOpen={false}>
       <p className="periodic-search-intro">
         Find boundary-map periodic orbits with Newton solves seeded across position and unit-normal angle.
       </p>
