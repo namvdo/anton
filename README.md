@@ -22,6 +22,10 @@ Rather than tracking every possible point within the noise ball $B_\epsilon(f(x)
 
 ![Set-valued dynamical system with additive bounded noise Visualization](./images/unstable_manifold_for_boundary_map.png)
 
+### Bifurcation of the Hénon boundary map with $a \in [0.594, 0.600]$, $b=0.3$, and $\epsilon=0.0625$
+
+![Bifurcation of the Hénon boundary map](./images/henon_boundary_map_bifurcation_a0594_a0600.gif)
+
 ### An example of a 4-periodic point found for the boundary map with A = 1.4 and B = 0.3, epsilon=0.0625
 
 ![4-periodic point](./images/periodic_orbit_visualization.png)
