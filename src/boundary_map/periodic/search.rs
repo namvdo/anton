@@ -370,13 +370,18 @@ pub fn find_all_boundary_periodic_orbits_generic_with_threshold(
                         1e-12,
                         residual_threshold,
                     ) {
-                        if try_add_orbit_generic(
-                            system,
-                            &mut database,
-                            fp,
-                            period,
-                            residual_threshold,
-                        ) {
+                        if fp.x >= x_min
+                            && fp.x <= x_max
+                            && fp.y >= y_min
+                            && fp.y <= y_max
+                            && try_add_orbit_generic(
+                                system,
+                                &mut database,
+                                fp,
+                                period,
+                                residual_threshold,
+                            )
+                        {
                             found_count += 1;
                         }
                     }
@@ -406,13 +411,18 @@ pub fn find_all_boundary_periodic_orbits_generic_with_threshold(
                         1e-12,
                         residual_threshold,
                     ) {
-                        if try_add_orbit_generic(
-                            system,
-                            &mut database,
-                            fp,
-                            period,
-                            residual_threshold,
-                        ) {
+                        if fp.x >= x_min
+                            && fp.x <= x_max
+                            && fp.y >= y_min
+                            && fp.y <= y_max
+                            && try_add_orbit_generic(
+                                system,
+                                &mut database,
+                                fp,
+                                period,
+                                residual_threshold,
+                            )
+                        {
                             found_count += 1;
                         }
                     }

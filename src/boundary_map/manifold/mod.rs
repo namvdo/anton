@@ -1250,7 +1250,7 @@ pub fn compute_manifold_simple(
             SaddleType::Regular
         };
 
-        let l1 = fp_info.eigenvalues.get(0).copied().unwrap_or(0.0);
+        let l1 = fp_info.eigenvalues.first().copied().unwrap_or(0.0);
         let l2 = fp_info.eigenvalues.get(1).copied().unwrap_or(0.0);
 
         // Compute unstable eigenvector from scratch
@@ -1652,7 +1652,7 @@ pub fn compute_manifold_from_orbits(
     y_max: f64,
     orbits_js: JsValue,
 ) -> Result<JsValue, JsValue> {
-    let (x_min, x_max, y_min, y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
+    let (_x_min, _x_max, _y_min, _y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
     console_log!(
         "Computing manifold from {} orbits with a={}, b={}, eps={}",
         if orbits_js.is_array() {
@@ -2091,7 +2091,7 @@ pub fn compute_stable_and_unstable_manifolds(
     maximum_point_spacing: f64,
 ) -> Result<JsValue, JsValue> {
     let config = validated_manifold_config(maximum_point_spacing)?;
-    let (x_min, x_max, y_min, y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
+    let (_x_min, _x_max, _y_min, _y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
     console_log!(
         "Computing stable and unstable manifolds with a={}, b={}, eps={}, threshold={}",
         a,
@@ -2627,7 +2627,7 @@ pub fn compute_manifold_from_orbits_user_defined(
     y_max: f64,
     orbits_js: JsValue,
 ) -> Result<JsValue, JsValue> {
-    let (x_min, x_max, y_min, y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
+    let (_x_min, _x_max, _y_min, _y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
     console_log!(
         "Computing user-defined manifold from orbits: x={}, y={}, eps={}",
         x_eq,
@@ -2810,7 +2810,7 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
     maximum_point_spacing: f64,
 ) -> Result<JsValue, JsValue> {
     let config = validated_manifold_config(maximum_point_spacing)?;
-    let (x_min, x_max, y_min, y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
+    let (_x_min, _x_max, _y_min, _y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
     console_log!(
         "Computing user-defined stable+unstable manifolds: x={}, y={}, eps={}",
         x_eq,
@@ -3024,16 +3024,16 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
                         source_topology_id,
                     });
                 }
-            } else {
-                if let Ok((tp, tm)) = computer.compute_manifold(&saddle_stable, &manifold_targets) {
-                    stable_manifolds.push(ManifoldResult {
-                        plus: trajectory_ret(&tp),
-                        minus: trajectory_ret(&tm),
-                        saddle_point: (px, py),
-                        eigenvalue: stable_lambda,
-                        source_topology_id,
-                    });
-                }
+            } else if let Ok((tp, tm)) =
+                computer.compute_manifold(&saddle_stable, &manifold_targets)
+            {
+                stable_manifolds.push(ManifoldResult {
+                    plus: trajectory_ret(&tp),
+                    minus: trajectory_ret(&tm),
+                    saddle_point: (px, py),
+                    eigenvalue: stable_lambda,
+                    source_topology_id,
+                });
             }
         }
     }

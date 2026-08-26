@@ -1,0 +1,105 @@
+{
+  "generated_at_unix": 1776792773,
+  "records": [
+    {
+      "case_id": "payload_clone_typical",
+      "category": "frontend_runtime_prep",
+      "scenario": "typical",
+      "runs": 12,
+      "avg_ms": 1.1086,
+      "min_ms": 0.8527,
+      "max_ms": 2.0143,
+      "params": {
+        "orbits": 40,
+        "points_per_orbit": 80
+      },
+      "outputs": {
+        "orbits": 40,
+        "points_per_orbit": 80
+      }
+    },
+    {
+      "case_id": "payload_clone_stress",
+      "category": "frontend_runtime_prep",
+      "scenario": "stress",
+      "runs": 8,
+      "avg_ms": 18.1371,
+      "min_ms": 15.9509,
+      "max_ms": 22.2603,
+      "params": {
+        "orbits": 250,
+        "points_per_orbit": 240
+      },
+      "outputs": {
+        "orbits": 250,
+        "points_per_orbit": 240
+      }
+    },
+    {
+      "case_id": "manifold_geometry_typical",
+      "category": "frontend_runtime_prep",
+      "scenario": "typical",
+      "runs": 10,
+      "avg_ms": 2.9299,
+      "min_ms": 1.9182,
+      "max_ms": 5.9764,
+      "params": {
+        "branches": 12,
+        "points_per_branch": 2000
+      },
+      "outputs": {
+        "total_points": 24000,
+        "branches": 12
+      }
+    },
+    {
+      "case_id": "manifold_geometry_stress",
+      "category": "frontend_runtime_prep",
+      "scenario": "stress",
+      "runs": 6,
+      "avg_ms": 11.7699,
+      "min_ms": 10.6583,
+      "max_ms": 16.3369,
+      "params": {
+        "branches": 40,
+        "points_per_branch": 5000
+      },
+      "outputs": {
+        "total_points": 200000,
+        "branches": 40
+      }
+    },
+    {
+      "case_id": "ulam_overlay_typical",
+      "category": "frontend_runtime_prep",
+      "scenario": "typical",
+      "runs": 10,
+      "avg_ms": 0.2918,
+      "min_ms": 0.177,
+      "max_ms": 0.7839,
+      "params": {
+        "subdivisions": 64,
+        "boxes": 4096
+      },
+      "outputs": {
+        "grid_boxes": 4096
+      }
+    },
+    {
+      "case_id": "ulam_overlay_stress",
+      "category": "frontend_runtime_prep",
+      "scenario": "stress",
+      "runs": 6,
+      "avg_ms": 0.5668,
+      "min_ms": 0.3992,
+      "max_ms": 0.7542,
+      "params": {
+        "subdivisions": 128,
+        "boxes": 16384
+      },
+      "outputs": {
+        "grid_boxes": 16384
+      }
+    }
+  ]
+}

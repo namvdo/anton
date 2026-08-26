@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "source": "Wei Hao PhD thesis, Chapter 5, Chapter 6, and Appendix A.6",
+  "model": {
+    "underlyingMap": "H_a,b(x,y)=(1-a*x^2+y,b*x)",
+    "extendedState": "R^2 x S^1",
+    "b": 0.3,
+    "epsilon": 0.0625,
+    "noiseNorm": "L2"
+  },
+  "acceptancePolicy": "A topological claim is reproduced only when the boundary-map event and an independent MIS/dual-repeller computation agree. Finding a periodic point of E is not sufficient evidence that it lies on the relevant normal bundle.",
+  "targets": [
+    {
+      "id": "wedge_birth",
+      "sourcePages": [86, 87, 94],
+      "bracket": [0.45491, 0.45497],
+      "acceptance": "Track image curvature on an ordered MIS boundary. Confirm max(kappa_image)<16 below the bracket and >16 above it; confirm offset denominator 1-epsilon*kappa_image changes sign."
+    },
+    {
+      "id": "mis_split",
+      "sourcePages": [98, 99],
+      "approximateParameter": 0.595,
+      "sourceDiscrepancy": "Page 98 says four saddle periodic points, while the Figure 6.6 colour convention and BIST's reduced spectrum at a=0.6 give four period-two points consisting of two stable and two saddle points.",
+      "evidenceStatus": {
+        "status": "local_event_supported_topological_claim_not_supported",
+        "referenceBundle": "validation/wei_henon_refinement_reference/experiment_bundle.json",
+        "acceptanceTable": "validation/wei_henon_refinement_reference/acceptance_table.csv",
+        "runDate": "2026-08-10",
+        "supportedClaims": [
+          "Continuation gives two stable period-two points and no saddle period-two points at a=0.59, then two stable and two saddle period-two points at a=0.6, with extended-state residuals below 1e-7."
+        ],
+        "notSupportedClaims": [
+          "The reference grids do not support a refinement-stable change from one terminal-class MIS to two: the two finest grids report one class before and one after.",
+          "The reference grids do not support two simultaneous MIS/dual-repeller contacts: both dual-deficit thresholds report zero contact clusters at a=0.595.",
+          "The period-two manifold projection does not pass the bidirectional MIS-boundary comparison on the two finest grids."
+        ],
+        "interpretation": "These finite-grid results do not prove the thesis claim false. They show that the current Euclidean Ulam refinement bundle is insufficient to label the topological split as reproduced."
+      },
+      "acceptance": "Continue both period-two branches through their saddle-node; report the reduced classification explicitly, then show two MIS components after the event and two simultaneous MIS/dual-repeller contacts."
+    },
+    {
+      "id": "period_two_leaves_normal_bundle",
+      "sourcePages": [100, 126],
+      "bracket": [0.60764193, 0.60785],
+      "acceptance": "At 0.60764193 confirm the period-two unstable-manifold projection is not the MIS boundary; at 0.60785 confirm a period-14 orbit satisfies the manifold/MIS boundary test."
+    },
+    {
+      "id": "normal_bundle_period_transitions",
+      "sourcePages": [100, 126],
+      "checkpoints": [
+        {"a": 0.60785, "period": 14, "expected": "success"},
+        {"a": 0.60903, "period": 14, "expected": "fail"},
+        {"a": 0.60903, "period": 12, "expected": "success"},
+        {"a": 0.61525, "period": 12, "expected": "fail"},
+        {"a": 0.61525, "period": 10, "expected": "success"},
+        {"a": 0.6365, "period": 10, "expected": "fail"},
+        {"a": 0.6365, "period": 8, "expected": "success"},
+        {"a": 0.8178, "period": 8, "expected": "fail"},
+        {"a": 0.8178, "period": 10, "expected": "success"},
+        {"a": 0.833, "period": 10, "expected": "fail"}
+      ],
+      "acceptance": "For every checkpoint, verify the projected one-dimensional unstable manifold against an independently refined MIS boundary; do not classify by period search alone."
+    },
+    {
+      "id": "mis_merge",
+      "sourcePages": [102, 103],
+      "approximateParameter": 0.834,
+      "acceptance": "Show the two disjoint minimal components reconnect and the continuously persisting larger invariant set becomes minimal."
+    },
+    {
+      "id": "loss_of_compactness",
+      "sourcePages": [103, 104],
+      "bracket": [1.16, 1.17],
+      "acceptance": "Show bounded unstable-manifold projection at 1.16, unbounded projection at 1.17, and a stable/unstable manifold distance tending to zero inside the bracket. Label the heteroclinic cycle as suspected unless intersection is numerically certified."
+    },
+    {
+      "id": "heteroclinic_global_bifurcation_epsilon_0_6",
+      "sourcePages": [104, 105],
+      "bracket": [0.374, 0.375],
+      "epsilon": 0.6,
+      "acceptance": "Verify the unstable manifold crosses the dual-repeller stable manifold between the two parameter values and the compact MIS becomes non-compact."
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+a,grid_x,grid_y,box_width,box_height,period_two_points,period_two_stable_points,period_two_saddle_points,mis_count,expected_mis_count,mis_count_pass,mis_spatial_components,mis_boxes,dual_contact_clusters,contact_count_threshold_stable,min_dual_separation_box_units,absorption_residual,manifold_points,manifold_to_boundary_p95_box_units,boundary_to_manifold_p95_box_units,two_contact_pass,manifold_comparison_pass,row_signature_pass
+0.59000000,48,24,0.0916666667,0.0916666667,4,2,2,1,1,true,1,134,0,true,4.52769257,5.513e-11,13452,3.80854980,2.51856160,,false,false
+0.59000000,64,32,0.0687500000,0.0687500000,4,2,2,1,1,true,1,192,0,true,7.00000000,6.431e-11,13452,5.29157460,2.65025064,,false,false
+0.59500000,48,24,0.0916666667,0.0916666667,6,2,4,1,2,false,1,135,0,true,4.52769257,6.723e-11,15278,2.42858454,2.58969577,false,false,false
+0.59500000,64,32,0.0687500000,0.0687500000,6,2,4,1,2,false,1,191,0,true,7.00000000,8.849e-11,15278,4.20355127,2.27906713,false,false,false
+0.60000000,48,24,0.0916666667,0.0916666667,6,2,4,1,2,false,1,126,0,true,5.00000000,6.435e-11,16392,1.84095060,1.92609218,,true,false
+0.60000000,64,32,0.0687500000,0.0687500000,6,2,4,1,2,false,1,193,0,true,6.51920241,7.038e-11,16392,2.93955924,2.30340541,,false,false

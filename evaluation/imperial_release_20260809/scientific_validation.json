@@ -1,0 +1,42 @@
+{
+  "software": "Bounded Invariant Set Toolbox",
+  "version": "0.2.0",
+  "passed": true,
+  "cases": [
+    {
+      "id": "henon_analytic_fixed_point",
+      "passed": true,
+      "metric": 1.1102230246251565e-16,
+      "tolerance": 1e-13,
+      "explanation": "Euclidean residual ||f(x*)-x*|| for the closed-form positive Hénon fixed point."
+    },
+    {
+      "id": "extended_boundary_map_roundtrip",
+      "passed": true,
+      "metric": 1.5870376122910316e-16,
+      "tolerance": 1e-10,
+      "explanation": "Maximum 4D error after one forward and one inverse extended Hénon boundary-map step."
+    },
+    {
+      "id": "periodic_orbit_residual",
+      "passed": true,
+      "metric": 6.510299433251607e-10,
+      "tolerance": 1e-7,
+      "explanation": "Maximum 4D period residual across 2 reference orbit(s)."
+    },
+    {
+      "id": "duffing_rk4_refinement",
+      "passed": true,
+      "metric": 14.841839823774654,
+      "tolerance": 8.0,
+      "explanation": "Observed error-reduction ratio when the RK4 step is halved; fourth-order behavior approaches 16."
+    },
+    {
+      "id": "ulam_probability_invariants",
+      "passed": true,
+      "metric": 2.220446049250313e-16,
+      "tolerance": 1e-10,
+      "explanation": "Maximum violation of invariant-mass normalization, row-stochasticity, and non-negativity."
+    }
+  ]
+}

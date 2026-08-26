@@ -1,0 +1,483 @@
+{
+  "schema": "bist-wei-henon-refinement",
+  "schemaVersion": 1,
+  "softwareVersion": "0.2.0",
+  "profile": "reference",
+  "generatedUnixSeconds": 1786356051,
+  "model": "H_a,b(x,y)=(1-a*x^2+y,b*x), b=0.3, epsilon=0.0625",
+  "noiseGeometry": "Euclidean box/ball intersection",
+  "misEstimator": "terminal strongly connected classes of the finite transition graph",
+  "config": {
+    "aValues": [
+      0.59,
+      0.595,
+      0.6
+    ],
+    "gridDimensions": [
+      [
+        96,
+        48
+      ],
+      [
+        128,
+        64
+      ],
+      [
+        160,
+        80
+      ]
+    ],
+    "b": 0.3,
+    "epsilon": 0.0625,
+    "domain": [
+      -2.2,
+      2.2,
+      -1.1,
+      1.1
+    ],
+    "pointsPerBox": 4,
+    "periodicContinuationSourceA": 0.63,
+    "periodicSearchGridSize": 22,
+    "periodicResidualTolerance": 1e-10,
+    "dualDeficitThresholds": [
+      0.1,
+      0.25
+    ],
+    "primaryDualDeficitThreshold": 0.25,
+    "contactDistanceBoxDiagonals": 1.0,
+    "absorptionMaxIterations": 2000,
+    "absorptionTolerance": 1e-10,
+    "manifoldSpacingTolerance": 0.01,
+    "manifoldMaxIterations": 200,
+    "manifoldMaxPoints": 100000,
+    "manifoldTimeLimitSeconds": 30.0,
+    "manifoldDistanceLimitBoxUnits": 2.0
+  },
+  "rows": [
+    {
+      "a": 0.59,
+      "grid": [
+        96,
+        48
+      ],
+      "boxWidth": 0.04583333333333334,
+      "boxHeight": 0.04583333333333334,
+      "periodTwoPoints": 2,
+      "periodTwoStablePoints": 2,
+      "periodTwoSaddlePoints": 0,
+      "maximumPeriodTwoResidual": 1.4320679840504331e-12,
+      "misCount": 1,
+      "expectedMisCount": 1,
+      "misCountMatchesExpected": true,
+      "misSpatialComponents": 1,
+      "misBoxCount": 329,
+      "contactThresholds": [
+        {
+          "deficitThreshold": 0.1,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 10.606601717798215
+        },
+        {
+          "deficitThreshold": 0.25,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 10.606601717798215
+        }
+      ],
+      "dualContactClusters": 0,
+      "dualContactCountStableAcrossThresholds": true,
+      "minimumDualSeparationBoxUnits": 10.606601717798215,
+      "maximumAbsorptionResidual": 8.795392192340046e-11,
+      "manifoldPointCount": 0,
+      "manifoldToMisBoundaryP95": null,
+      "manifoldToMisBoundaryP95BoxUnits": null,
+      "misBoundaryToManifoldP95": null,
+      "misBoundaryToManifoldP95BoxUnits": null,
+      "twoContactSignaturePasses": null,
+      "manifoldComparisonPasses": null,
+      "rowSupportsRequestedSignature": true
+    },
+    {
+      "a": 0.59,
+      "grid": [
+        128,
+        64
+      ],
+      "boxWidth": 0.034375,
+      "boxHeight": 0.034375,
+      "periodTwoPoints": 2,
+      "periodTwoStablePoints": 2,
+      "periodTwoSaddlePoints": 0,
+      "maximumPeriodTwoResidual": 1.4320679840504331e-12,
+      "misCount": 1,
+      "expectedMisCount": 1,
+      "misCountMatchesExpected": true,
+      "misSpatialComponents": 1,
+      "misBoxCount": 541,
+      "contactThresholds": [
+        {
+          "deficitThreshold": 0.1,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 14.142135623730944
+        },
+        {
+          "deficitThreshold": 0.25,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 14.142135623730944
+        }
+      ],
+      "dualContactClusters": 0,
+      "dualContactCountStableAcrossThresholds": true,
+      "minimumDualSeparationBoxUnits": 14.142135623730944,
+      "maximumAbsorptionResidual": 5.706796146753845e-11,
+      "manifoldPointCount": 0,
+      "manifoldToMisBoundaryP95": null,
+      "manifoldToMisBoundaryP95BoxUnits": null,
+      "misBoundaryToManifoldP95": null,
+      "misBoundaryToManifoldP95BoxUnits": null,
+      "twoContactSignaturePasses": null,
+      "manifoldComparisonPasses": null,
+      "rowSupportsRequestedSignature": true
+    },
+    {
+      "a": 0.59,
+      "grid": [
+        160,
+        80
+      ],
+      "boxWidth": 0.027500000000000004,
+      "boxHeight": 0.027500000000000004,
+      "periodTwoPoints": 2,
+      "periodTwoStablePoints": 2,
+      "periodTwoSaddlePoints": 0,
+      "maximumPeriodTwoResidual": 1.4320679840504331e-12,
+      "misCount": 1,
+      "expectedMisCount": 1,
+      "misCountMatchesExpected": true,
+      "misSpatialComponents": 1,
+      "misBoxCount": 772,
+      "contactThresholds": [
+        {
+          "deficitThreshold": 0.1,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 17.846568297574745
+        },
+        {
+          "deficitThreshold": 0.25,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 17.846568297574745
+        }
+      ],
+      "dualContactClusters": 0,
+      "dualContactCountStableAcrossThresholds": true,
+      "minimumDualSeparationBoxUnits": 17.846568297574745,
+      "maximumAbsorptionResidual": 5.1144533053104624e-11,
+      "manifoldPointCount": 0,
+      "manifoldToMisBoundaryP95": null,
+      "manifoldToMisBoundaryP95BoxUnits": null,
+      "misBoundaryToManifoldP95": null,
+      "misBoundaryToManifoldP95BoxUnits": null,
+      "twoContactSignaturePasses": null,
+      "manifoldComparisonPasses": null,
+      "rowSupportsRequestedSignature": true
+    },
+    {
+      "a": 0.595,
+      "grid": [
+        96,
+        48
+      ],
+      "boxWidth": 0.04583333333333334,
+      "boxHeight": 0.04583333333333334,
+      "periodTwoPoints": 4,
+      "periodTwoStablePoints": 2,
+      "periodTwoSaddlePoints": 2,
+      "maximumPeriodTwoResidual": 6.065958158466809e-12,
+      "misCount": 1,
+      "expectedMisCount": 2,
+      "misCountMatchesExpected": false,
+      "misSpatialComponents": 1,
+      "misBoxCount": 328,
+      "contactThresholds": [
+        {
+          "deficitThreshold": 0.1,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 10.198039027185573
+        },
+        {
+          "deficitThreshold": 0.25,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 10.198039027185573
+        }
+      ],
+      "dualContactClusters": 0,
+      "dualContactCountStableAcrossThresholds": true,
+      "minimumDualSeparationBoxUnits": 10.198039027185573,
+      "maximumAbsorptionResidual": 4.4923731401524947e-11,
+      "manifoldPointCount": 803,
+      "manifoldToMisBoundaryP95": 0.11665854912319902,
+      "manifoldToMisBoundaryP95BoxUnits": 1.7997829345832288,
+      "misBoundaryToManifoldP95": 0.40017310273011186,
+      "misBoundaryToManifoldP95BoxUnits": 6.173784318303774,
+      "twoContactSignaturePasses": false,
+      "manifoldComparisonPasses": false,
+      "rowSupportsRequestedSignature": false
+    },
+    {
+      "a": 0.595,
+      "grid": [
+        128,
+        64
+      ],
+      "boxWidth": 0.034375,
+      "boxHeight": 0.034375,
+      "periodTwoPoints": 4,
+      "periodTwoStablePoints": 2,
+      "periodTwoSaddlePoints": 2,
+      "maximumPeriodTwoResidual": 6.065958158466809e-12,
+      "misCount": 1,
+      "expectedMisCount": 2,
+      "misCountMatchesExpected": false,
+      "misSpatialComponents": 1,
+      "misBoxCount": 538,
+      "contactThresholds": [
+        {
+          "deficitThreshold": 0.1,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 13.729530217745975
+        },
+        {
+          "deficitThreshold": 0.25,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 13.729530217745975
+        }
+      ],
+      "dualContactClusters": 0,
+      "dualContactCountStableAcrossThresholds": true,
+      "minimumDualSeparationBoxUnits": 13.729530217745975,
+      "maximumAbsorptionResidual": 9.757711305624639e-11,
+      "manifoldPointCount": 803,
+      "manifoldToMisBoundaryP95": 0.1034478714391743,
+      "manifoldToMisBoundaryP95BoxUnits": 2.127961931460489,
+      "misBoundaryToManifoldP95": 0.393609038161965,
+      "misBoundaryToManifoldP95BoxUnits": 8.096687127873164,
+      "twoContactSignaturePasses": false,
+      "manifoldComparisonPasses": false,
+      "rowSupportsRequestedSignature": false
+    },
+    {
+      "a": 0.595,
+      "grid": [
+        160,
+        80
+      ],
+      "boxWidth": 0.027500000000000004,
+      "boxHeight": 0.027500000000000004,
+      "periodTwoPoints": 4,
+      "periodTwoStablePoints": 2,
+      "periodTwoSaddlePoints": 2,
+      "maximumPeriodTwoResidual": 6.065958158466809e-12,
+      "misCount": 1,
+      "expectedMisCount": 2,
+      "misCountMatchesExpected": false,
+      "misSpatialComponents": 1,
+      "misBoxCount": 776,
+      "contactThresholds": [
+        {
+          "deficitThreshold": 0.1,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 17.464249196572975
+        },
+        {
+          "deficitThreshold": 0.25,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 17.464249196572975
+        }
+      ],
+      "dualContactClusters": 0,
+      "dualContactCountStableAcrossThresholds": true,
+      "minimumDualSeparationBoxUnits": 17.464249196572975,
+      "maximumAbsorptionResidual": 5.797334834412027e-11,
+      "manifoldPointCount": 803,
+      "manifoldToMisBoundaryP95": 0.09233436115923377,
+      "manifoldToMisBoundaryP95BoxUnits": 2.374191014989889,
+      "misBoundaryToManifoldP95": 0.40831220228027454,
+      "misBoundaryToManifoldP95BoxUnits": 10.498920984494378,
+      "twoContactSignaturePasses": false,
+      "manifoldComparisonPasses": false,
+      "rowSupportsRequestedSignature": false
+    },
+    {
+      "a": 0.6,
+      "grid": [
+        96,
+        48
+      ],
+      "boxWidth": 0.04583333333333334,
+      "boxHeight": 0.04583333333333334,
+      "periodTwoPoints": 4,
+      "periodTwoStablePoints": 2,
+      "periodTwoSaddlePoints": 2,
+      "maximumPeriodTwoResidual": 8.736554498907774e-11,
+      "misCount": 1,
+      "expectedMisCount": 2,
+      "misCountMatchesExpected": false,
+      "misSpatialComponents": 1,
+      "misBoxCount": 340,
+      "contactThresholds": [
+        {
+          "deficitThreshold": 0.1,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 10.198039027185573
+        },
+        {
+          "deficitThreshold": 0.25,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 10.198039027185573
+        }
+      ],
+      "dualContactClusters": 0,
+      "dualContactCountStableAcrossThresholds": true,
+      "minimumDualSeparationBoxUnits": 10.198039027185573,
+      "maximumAbsorptionResidual": 9.416112334292848e-11,
+      "manifoldPointCount": 1002,
+      "manifoldToMisBoundaryP95": 0.12315849529056191,
+      "manifoldToMisBoundaryP95BoxUnits": 1.9000627021240974,
+      "misBoundaryToManifoldP95": 0.457321280534425,
+      "misBoundaryToManifoldP95BoxUnits": 7.055454079566705,
+      "twoContactSignaturePasses": null,
+      "manifoldComparisonPasses": false,
+      "rowSupportsRequestedSignature": false
+    },
+    {
+      "a": 0.6,
+      "grid": [
+        128,
+        64
+      ],
+      "boxWidth": 0.034375,
+      "boxHeight": 0.034375,
+      "periodTwoPoints": 4,
+      "periodTwoStablePoints": 2,
+      "periodTwoSaddlePoints": 2,
+      "maximumPeriodTwoResidual": 8.736554498907774e-11,
+      "misCount": 1,
+      "expectedMisCount": 2,
+      "misCountMatchesExpected": false,
+      "misSpatialComponents": 1,
+      "misBoxCount": 543,
+      "contactThresholds": [
+        {
+          "deficitThreshold": 0.1,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 13.729530217745975
+        },
+        {
+          "deficitThreshold": 0.25,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 13.729530217745975
+        }
+      ],
+      "dualContactClusters": 0,
+      "dualContactCountStableAcrossThresholds": true,
+      "minimumDualSeparationBoxUnits": 13.729530217745975,
+      "maximumAbsorptionResidual": 5.712286199610617e-11,
+      "manifoldPointCount": 1002,
+      "manifoldToMisBoundaryP95": 0.1027371132571401,
+      "manifoldToMisBoundaryP95BoxUnits": 2.1133413662153924,
+      "misBoundaryToManifoldP95": 0.45543742466692505,
+      "misBoundaryToManifoldP95BoxUnits": 9.368520476745312,
+      "twoContactSignaturePasses": null,
+      "manifoldComparisonPasses": false,
+      "rowSupportsRequestedSignature": false
+    },
+    {
+      "a": 0.6,
+      "grid": [
+        160,
+        80
+      ],
+      "boxWidth": 0.027500000000000004,
+      "boxHeight": 0.027500000000000004,
+      "periodTwoPoints": 4,
+      "periodTwoStablePoints": 2,
+      "periodTwoSaddlePoints": 2,
+      "maximumPeriodTwoResidual": 8.736554498907774e-11,
+      "misCount": 1,
+      "expectedMisCount": 2,
+      "misCountMatchesExpected": false,
+      "misSpatialComponents": 1,
+      "misBoxCount": 781,
+      "contactThresholds": [
+        {
+          "deficitThreshold": 0.1,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 17.392527130926076
+        },
+        {
+          "deficitThreshold": 0.25,
+          "contactClusters": 0,
+          "contactBoxes": 0,
+          "minimumSeparationBoxUnits": 17.392527130926076
+        }
+      ],
+      "dualContactClusters": 0,
+      "dualContactCountStableAcrossThresholds": true,
+      "minimumDualSeparationBoxUnits": 17.392527130926076,
+      "maximumAbsorptionResidual": 6.726075252316832e-11,
+      "manifoldPointCount": 1002,
+      "manifoldToMisBoundaryP95": 0.09361376036948532,
+      "manifoldToMisBoundaryP95BoxUnits": 2.4070881734412923,
+      "misBoundaryToManifoldP95": 0.4529725345703922,
+      "misBoundaryToManifoldP95BoxUnits": 11.64727094130844,
+      "twoContactSignaturePasses": null,
+      "manifoldComparisonPasses": false,
+      "rowSupportsRequestedSignature": false
+    }
+  ],
+  "assessments": [
+    {
+      "id": "continued_period_two_saddle_node_signature",
+      "status": "supported",
+      "evidence": "At a=0.59, the finest-grid rows report [2, 2] period-two points; at a=0.6, they report [4, 4]."
+    },
+    {
+      "id": "refinement_stable_mis_split",
+      "status": "not_supported",
+      "evidence": "Terminal-class MIS counts on the finest grids are [1, 1] before and [1, 1] after the target."
+    },
+    {
+      "id": "two_dual_repeller_contacts",
+      "status": "not_supported",
+      "evidence": "At a=0.595, primary-threshold contact-cluster counts on the finest grids are [0, 0]; threshold stability is [true, true]."
+    },
+    {
+      "id": "period_two_manifold_matches_mis_boundary",
+      "status": "not_supported",
+      "evidence": "At a=0.6, directed 95th-percentile distances in box-diagonal units are [Some(2.1133413662153924), Some(2.4070881734412923)] (manifold to boundary) and [Some(9.368520476745312), Some(11.64727094130844)] (boundary to manifold)."
+    },
+    {
+      "id": "wei_mis_split_near_a_0_595",
+      "status": "not_supported",
+      "evidence": "Accepted only when the continued local branch, terminal-class change, two dual contacts, and bidirectional manifold comparison all pass on the finest grids."
+    }
+  ],
+  "accepted": false,
+  "scopeNote": "Terminal graph classes, support-seeded dual absorption, and finite projected manifolds are numerical evidence, not a proof. A not_supported assessment means that this refinement bundle does not justify the claim; it does not prove the thesis claim false."
+}

@@ -1,0 +1,56 @@
+{
+  "software": "Bounded Invariant Set Toolbox",
+  "version": "0.2.0",
+  "passed": true,
+  "cases": [
+    {
+      "id": "henon_analytic_fixed_point",
+      "passed": true,
+      "metric": 1.1102230246251565e-16,
+      "tolerance": 1e-13,
+      "explanation": "Euclidean residual ||f(x*)-x*|| for the closed-form positive Hénon fixed point."
+    },
+    {
+      "id": "extended_boundary_map_roundtrip",
+      "passed": true,
+      "metric": 1.5870376122910316e-16,
+      "tolerance": 1e-10,
+      "explanation": "Maximum 4D error after one forward and one inverse extended Hénon boundary-map step."
+    },
+    {
+      "id": "periodic_orbit_residual",
+      "passed": true,
+      "metric": 2.7871905251848776e-15,
+      "tolerance": 1e-7,
+      "explanation": "Maximum 4D period residual across 2 reference orbit(s)."
+    },
+    {
+      "id": "wei_reduced_multiplier_identity",
+      "passed": true,
+      "metric": 8.168465903679589e-11,
+      "tolerance": 0.00002,
+      "explanation": "Maximum residual of lambda_+ lambda_- = lambda_1 across 2 reduced 3D boundary-map monodromies."
+    },
+    {
+      "id": "wei_wedge_curvature_threshold",
+      "passed": true,
+      "metric": 0.0,
+      "tolerance": 2.220446049250313e-16,
+      "explanation": "Absolute error in the thesis wedge threshold 1/epsilon = 16 for epsilon = 0.0625."
+    },
+    {
+      "id": "duffing_rk4_refinement",
+      "passed": true,
+      "metric": 14.841839823774654,
+      "tolerance": 8.0,
+      "explanation": "Observed error-reduction ratio when the RK4 step is halved; fourth-order behavior approaches 16."
+    },
+    {
+      "id": "ulam_probability_invariants",
+      "passed": true,
+      "metric": 3.219646771412954e-15,
+      "tolerance": 1e-10,
+      "explanation": "Maximum violation of stationary-mass normalization, row-stochasticity, non-negativity, the absorption range [0,1], and P alpha = alpha."
+    }
+  ]
+}

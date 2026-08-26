@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use BIST in research, please cite this software and the accompanying technical report."
+title: "Bounded Invariant Set Toolbox (BIST)"
+type: software
+authors:
+  - family-names: "Do"
+    given-names: "Nam"
+version: 0.2.0
+date-released: 2026-08-09
+repository-code: "https://github.com/namvdo/set-valued-viz"
+url: "https://namvdo.github.io/set-valued-viz"
+license: MIT
+keywords:
+  - set-valued dynamical systems
+  - bounded invariant sets
+  - boundary maps
+  - WebAssembly

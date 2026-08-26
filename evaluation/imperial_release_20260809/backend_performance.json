@@ -1,0 +1,327 @@
+{
+  "generated_at_unix": 1786269139,
+  "records": [
+    {
+      "case_id": "periodic_typical_henon",
+      "category": "backend_periodic_orbits",
+      "duration_ms": 2032.1672500000002,
+      "outputs": {
+        "has_period_4": true,
+        "has_period_7": true,
+        "period_histogram": {
+          "p1": 2,
+          "p4": 1,
+          "p5": 1,
+          "p6": 2,
+          "p7": 2
+        },
+        "stability_histogram": {
+          "saddle": 2,
+          "stable": 6
+        },
+        "total_orbits": 8
+      },
+      "params": {
+        "a": 1.4,
+        "b": 0.3,
+        "epsilon": 0.0625,
+        "grid_size": 15,
+        "max_period": 7,
+        "range": {
+          "x_max": 2.0,
+          "x_min": -2.0,
+          "y_max": 1.5,
+          "y_min": -1.5
+        },
+        "residual_threshold": 1e-10,
+        "theta_grid_size": 12
+      },
+      "scenario": "typical"
+    },
+    {
+      "case_id": "periodic_interesting_bifurcation_pre",
+      "category": "backend_periodic_orbits",
+      "duration_ms": 2988.938916,
+      "outputs": {
+        "has_period_4": false,
+        "has_period_7": false,
+        "period_histogram": {
+          "p1": 2,
+          "p2": 1
+        },
+        "stability_histogram": {
+          "saddle": 2,
+          "stable": 1
+        },
+        "total_orbits": 3
+      },
+      "params": {
+        "a": 0.55,
+        "b": 0.3,
+        "epsilon": 0.0625,
+        "grid_size": 15,
+        "max_period": 7,
+        "range": {
+          "x_max": 2.0,
+          "x_min": -2.0,
+          "y_max": 1.5,
+          "y_min": -1.5
+        },
+        "residual_threshold": 1e-10,
+        "theta_grid_size": 12
+      },
+      "scenario": "interesting"
+    },
+    {
+      "case_id": "periodic_interesting_bifurcation_post",
+      "category": "backend_periodic_orbits",
+      "duration_ms": 2953.838875,
+      "outputs": {
+        "has_period_4": false,
+        "has_period_7": false,
+        "period_histogram": {
+          "p1": 2,
+          "p2": 1
+        },
+        "stability_histogram": {
+          "saddle": 2,
+          "stable": 1
+        },
+        "total_orbits": 3
+      },
+      "params": {
+        "a": 0.6,
+        "b": 0.3,
+        "epsilon": 0.0625,
+        "grid_size": 15,
+        "max_period": 7,
+        "range": {
+          "x_max": 2.0,
+          "x_min": -2.0,
+          "y_max": 1.5,
+          "y_min": -1.5
+        },
+        "residual_threshold": 1e-10,
+        "theta_grid_size": 12
+      },
+      "scenario": "interesting"
+    },
+    {
+      "case_id": "periodic_stress_dense_search",
+      "category": "backend_periodic_orbits",
+      "duration_ms": 5740.142083000001,
+      "outputs": {
+        "has_period_4": true,
+        "has_period_7": true,
+        "period_histogram": {
+          "p1": 2,
+          "p4": 1,
+          "p5": 1,
+          "p6": 2,
+          "p7": 2,
+          "p8": 7
+        },
+        "stability_histogram": {
+          "saddle": 2,
+          "stable": 13
+        },
+        "total_orbits": 15
+      },
+      "params": {
+        "a": 1.4,
+        "b": 0.3,
+        "epsilon": 0.0625,
+        "grid_size": 20,
+        "max_period": 8,
+        "range": {
+          "x_max": 2.0,
+          "x_min": -2.0,
+          "y_max": 1.5,
+          "y_min": -1.5
+        },
+        "residual_threshold": 1e-10,
+        "theta_grid_size": 16
+      },
+      "scenario": "stress"
+    },
+    {
+      "case_id": "manifold_typical_henon",
+      "category": "backend_unstable_manifold",
+      "duration_ms": 2.4965,
+      "outputs": {
+        "minus_points": 2259,
+        "minus_stop_reason": "Converged",
+        "plus_points": 2263,
+        "plus_stop_reason": "Converged",
+        "total_points": 4522,
+        "unstable_eigenvalue": -1.9237388581534067
+      },
+      "params": {
+        "a": 1.4,
+        "b": 0.3,
+        "epsilon": 0.0625,
+        "max_iter": 4000,
+        "max_points": 300000,
+        "time_limit_secs": 8.0
+      },
+      "scenario": "typical"
+    },
+    {
+      "case_id": "manifold_interesting_near_bifurcation",
+      "category": "backend_unstable_manifold",
+      "duration_ms": 1.2181250000000001,
+      "outputs": {
+        "minus_points": 783,
+        "minus_stop_reason": "SelfIntersection",
+        "plus_points": 787,
+        "plus_stop_reason": "SelfIntersection",
+        "total_points": 1570,
+        "unstable_eigenvalue": -1.1918347042724222
+      },
+      "params": {
+        "a": 0.55,
+        "b": 0.3,
+        "epsilon": 0.0625,
+        "max_iter": 4000,
+        "max_points": 300000,
+        "time_limit_secs": 8.0
+      },
+      "scenario": "interesting"
+    },
+    {
+      "case_id": "manifold_stress_large_budget",
+      "category": "backend_unstable_manifold",
+      "duration_ms": 2.949667,
+      "outputs": {
+        "minus_points": 2259,
+        "minus_stop_reason": "Converged",
+        "plus_points": 2263,
+        "plus_stop_reason": "Converged",
+        "total_points": 4522,
+        "unstable_eigenvalue": -1.9237388581534067
+      },
+      "params": {
+        "a": 1.4,
+        "b": 0.3,
+        "epsilon": 0.0625,
+        "max_iter": 8000,
+        "max_points": 700000,
+        "time_limit_secs": 12.0
+      },
+      "scenario": "stress"
+    },
+    {
+      "case_id": "ulam_typical_grid48",
+      "category": "backend_ulam",
+      "duration_ms": 24.605959,
+      "outputs": {
+        "samples_per_box": 64,
+        "status": "ok",
+        "total_boxes": 2304,
+        "total_samples": 147456
+      },
+      "params": {
+        "a": 1.4,
+        "b": 0.3,
+        "epsilon": 0.0625,
+        "points_per_box": 64,
+        "range": {
+          "x_max": 2.0,
+          "x_min": -2.0,
+          "y_max": 1.5,
+          "y_min": -1.5
+        },
+        "subdivisions": 48
+      },
+      "scenario": "typical"
+    },
+    {
+      "case_id": "ulam_interesting_grid64",
+      "category": "backend_ulam",
+      "duration_ms": 94.81629199999999,
+      "outputs": {
+        "samples_per_box": 100,
+        "status": "ok",
+        "total_boxes": 4096,
+        "total_samples": 409600
+      },
+      "params": {
+        "a": 1.4,
+        "b": 0.3,
+        "epsilon": 0.0625,
+        "points_per_box": 100,
+        "range": {
+          "x_max": 2.0,
+          "x_min": -2.0,
+          "y_max": 1.5,
+          "y_min": -1.5
+        },
+        "subdivisions": 64
+      },
+      "scenario": "interesting"
+    },
+    {
+      "case_id": "ulam_stress_grid80",
+      "category": "backend_ulam",
+      "duration_ms": 231.14162499999998,
+      "outputs": {
+        "samples_per_box": 144,
+        "status": "ok",
+        "total_boxes": 6400,
+        "total_samples": 921600
+      },
+      "params": {
+        "a": 1.4,
+        "b": 0.3,
+        "epsilon": 0.0625,
+        "points_per_box": 144,
+        "range": {
+          "x_max": 2.0,
+          "x_min": -2.0,
+          "y_max": 1.5,
+          "y_min": -1.5
+        },
+        "subdivisions": 80
+      },
+      "scenario": "stress"
+    },
+    {
+      "case_id": "continuous_rk4_typical",
+      "category": "backend_continuous_discretization",
+      "duration_ms": 1.04575,
+      "outputs": {
+        "final_x": 1.0,
+        "final_y": 1.0588333202104488e-148,
+        "status": "ok",
+        "steps_completed": 50000
+      },
+      "params": {
+        "delta": 0.15,
+        "h": 0.05,
+        "steps": 50000,
+        "x0": 0.1,
+        "y0": 0.1
+      },
+      "scenario": "typical"
+    },
+    {
+      "case_id": "continuous_rk4_stress",
+      "category": "backend_continuous_discretization",
+      "duration_ms": 4.111417,
+      "outputs": {
+        "final_x": 1.0,
+        "final_y": 3.46e-322,
+        "status": "ok",
+        "steps_completed": 200000
+      },
+      "params": {
+        "delta": 0.15,
+        "h": 0.05,
+        "steps": 200000,
+        "x0": 0.1,
+        "y0": 0.1
+      },
+      "scenario": "stress"
+    }
+  ]
+}

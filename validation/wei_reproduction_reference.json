@@ -1,0 +1,119 @@
+{
+  "software_version": "0.2.0",
+  "profile": "reference",
+  "map": "E(x,n)=(H_{a,b}(x)+epsilon*n_1,n_1), n_1=normalize((D H_{a,b}(x)^T)^(-1)n)",
+  "theory_checks": [
+    {
+      "id": "wedge_threshold_epsilon_0_0625",
+      "value": 16.0,
+      "expected": 16.0,
+      "absolute_error": 0.0,
+      "tolerance": 2.220446049250313e-16,
+      "passed": true
+    }
+  ],
+  "orbit_checkpoints": [
+    {
+      "a": 0.4,
+      "b": 0.3,
+      "epsilon": 0.0625,
+      "search_max_period": 2,
+      "orbit_count": 2,
+      "orbit_count_by_period": {
+        "1": 2
+      },
+      "orbit_count_by_period_and_stability": {
+        "period_1_saddle": 1,
+        "period_1_stable": 1
+      },
+      "maximum_period_residual": 2.5571306863716493e-15,
+      "maximum_multiplier_relation_residual": 2.5897228805860095e-11
+    },
+    {
+      "a": 0.59,
+      "b": 0.3,
+      "epsilon": 0.0625,
+      "search_max_period": 2,
+      "orbit_count": 3,
+      "orbit_count_by_period": {
+        "1": 2,
+        "2": 1
+      },
+      "orbit_count_by_period_and_stability": {
+        "period_1_saddle": 2,
+        "period_2_stable": 1
+      },
+      "maximum_period_residual": 1.5074652345949857e-11,
+      "maximum_multiplier_relation_residual": 2.0521734311884643e-10
+    },
+    {
+      "a": 0.6,
+      "b": 0.3,
+      "epsilon": 0.0625,
+      "search_max_period": 2,
+      "orbit_count": 4,
+      "orbit_count_by_period": {
+        "1": 2,
+        "2": 2
+      },
+      "orbit_count_by_period_and_stability": {
+        "period_1_saddle": 2,
+        "period_2_saddle": 1,
+        "period_2_stable": 1
+      },
+      "maximum_period_residual": 6.735269155986103e-12,
+      "maximum_multiplier_relation_residual": 2.568887325082869e-10
+    },
+    {
+      "a": 0.605,
+      "b": 0.3,
+      "epsilon": 0.0625,
+      "search_max_period": 2,
+      "orbit_count": 4,
+      "orbit_count_by_period": {
+        "1": 2,
+        "2": 2
+      },
+      "orbit_count_by_period_and_stability": {
+        "period_1_saddle": 2,
+        "period_2_saddle": 1,
+        "period_2_stable": 1
+      },
+      "maximum_period_residual": 7.896638837728113e-12,
+      "maximum_multiplier_relation_residual": 5.972533578813e-10
+    },
+    {
+      "a": 0.63,
+      "b": 0.3,
+      "epsilon": 0.0625,
+      "search_max_period": 2,
+      "orbit_count": 5,
+      "orbit_count_by_period": {
+        "1": 2,
+        "2": 3
+      },
+      "orbit_count_by_period_and_stability": {
+        "period_1_saddle": 2,
+        "period_2_saddle": 2,
+        "period_2_stable": 1
+      },
+      "maximum_period_residual": 5.757294872077835e-12,
+      "maximum_multiplier_relation_residual": 3.171174820272216e-10
+    }
+  ],
+  "continuation_checks": [
+    {
+      "id": "four_period_two_points_after_splitting",
+      "source_a": 0.63,
+      "target_a": 0.6,
+      "expected_period_two_points": 4,
+      "observed_period_two_points": 4,
+      "observed_saddle_points": 2,
+      "observed_stable_points": 2,
+      "passed": true,
+      "explanation": "Two period-two branches are searched at a=0.63 and continued backward to a=0.6 so the near-saddle-node branch is not lost by a cold grid search. The reduced spectrum gives two saddle points and two stable points; this agrees with the red/green convention in Figure 6.6 but not with the phrase '4 saddle periodic points' on page 98."
+    }
+  ],
+  "passed": true,
+  "scope_note": "This report verifies the extended-map orbit equations and reduced multipliers. Topological conclusions require the separate manifold/MIS/dual-repeller acceptance criteria in validation/wei_thesis_targets.json."
+}

@@ -1,0 +1,25 @@
+{
+  "collected_at_utc": "2026-04-21T17:31:39.571026+00:00",
+  "platform": {
+    "system": "Darwin",
+    "release": "23.6.0",
+    "version": "Darwin Kernel Version 23.6.0: Mon Jul 29 21:14:30 PDT 2024; root:xnu-10063.141.2~1/RELEASE_ARM64_T6000",
+    "machine": "arm64",
+    "processor": "arm"
+  },
+  "python": "3.14.2 (v3.14.2:df793163d58, Dec  5 2025, 12:18:06) [Clang 16.0.0 (clang-1600.0.26.6)]",
+  "tool_versions": {
+    "cargo": "cargo 1.81.0 (2dbb1af80 2024-08-20)",
+    "rustc": "rustc 1.81.0 (eeb90cda1 2024-09-04)",
+    "node": "v24.7.0",
+    "npm": "11.5.1"
+  },
+  "host": {
+    "cpu_model": "Apple M1 Pro",
+    "logical_cores": 8,
+    "memory_bytes": 17179869184,
+    "memory_gib": 16.0,
+    "os_version_raw": "ProductName:\t\tmacOS\nProductVersion:\t\t14.6.1\nBuildVersion:\t\t23G93",
+    "uname": "Darwin Nams-MBP 23.6.0 Darwin Kernel Version 23.6.0: Mon Jul 29 21:14:30 PDT 2024; root:xnu-10063.141.2~1/RELEASE_ARM64_T6000 arm64"
+  }
+}

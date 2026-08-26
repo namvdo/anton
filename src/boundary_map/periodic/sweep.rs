@@ -507,21 +507,17 @@ fn continue_henon_seed_stepped(
     new_params: HenonContinuationParams,
     residual_threshold: f64,
 ) -> Option<ExtendedPoint> {
-    if let Some(fp) = correct_henon_seed_at_params(seed, period, new_params, residual_threshold) {
-        return Some(fp);
-    }
-
     let da = new_params.a - old_params.a;
     let db = new_params.b - old_params.b;
     let de = new_params.epsilon - old_params.epsilon;
 
     let dist = da.abs().max(db.abs()).max(de.abs());
     if dist < 1e-8 {
-        return None;
+        return correct_henon_seed_at_params(seed, period, new_params, residual_threshold);
     }
 
     let step_size = 0.002;
-    let num_steps = ((dist / step_size).ceil() as usize).clamp(2, 100);
+    let num_steps = ((dist / step_size).ceil() as usize).clamp(1, 100);
 
     let mut current_seed = seed;
     for step in 1..=num_steps {

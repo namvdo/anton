@@ -1,0 +1,7 @@
+case_id,category,scenario,duration_ms,params_json,outputs_json
+payload_clone_typical,frontend_runtime_prep,typical,1.1086,"{""orbits"":40,""points_per_orbit"":80}","{""orbits"":40,""points_per_orbit"":80}"
+payload_clone_stress,frontend_runtime_prep,stress,18.1371,"{""orbits"":250,""points_per_orbit"":240}","{""orbits"":250,""points_per_orbit"":240}"
+manifold_geometry_typical,frontend_runtime_prep,typical,2.9299,"{""branches"":12,""points_per_branch"":2000}","{""total_points"":24000,""branches"":12}"
+manifold_geometry_stress,frontend_runtime_prep,stress,11.7699,"{""branches"":40,""points_per_branch"":5000}","{""total_points"":200000,""branches"":40}"
+ulam_overlay_typical,frontend_runtime_prep,typical,0.2918,"{""subdivisions"":64,""boxes"":4096}","{""grid_boxes"":4096}"
+ulam_overlay_stress,frontend_runtime_prep,stress,0.5668,"{""subdivisions"":128,""boxes"":16384}","{""grid_boxes"":16384}"
