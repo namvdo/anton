@@ -18,29 +18,9 @@ $F(A) = \bigcup_{x \in A} F(x)$ In our setting, we model bounded additive noise 
 
 Rather than tracking every possible point within the noise ball $B_\epsilon(f(x))$ which would be computationally expensive to compute as the noise balls grow, we instead track the boundary evolution through an extended boundary map $F(x,y,nx,ny)=\bigl(f(x,y)+\varepsilon\,\mathbf{nx}',\mathbf{ny}'\bigr)$. Since the maximum uncertainty occurs at the boundary $\partial B_\epsilon(f(x))$ (points at distance exactly $\epsilon$ from the deterministic image), we focus exclusively on tracking how these boundary points evolve.
 
-### Unstable manifold visualization for boundary map evolution with a=0.4, b=0.3 and epsilon=0.0625
-
-![Set-valued dynamical system with additive bounded noise Visualization](./images/unstable_manifold_for_boundary_map.png)
-
 ### Bifurcation of the Hénon boundary map with $a \in [0.594, 0.600]$, $b=0.3$, and $\epsilon=0.0625$
 
-![Bifurcation of the Hénon boundary map](./images/henon_boundary_map_bifurcation_a0594_a0600.gif)
-
-### An example of a 4-periodic point found for the boundary map with A = 1.4 and B = 0.3, epsilon=0.0625
-
-![4-periodic point](./images/periodic_orbit_visualization.png)
-
-### ULAM method integration for stationary measure in continuous dynamical systems
-
-![ULAM method integration for stationary measure in continuous dynamical systems](./images/ulam_integration_for_continuous_ds.png)
-
-### Continuous boundary differential equation simulation
-
-![Continuous boundary differential equation simulation](./images/boundary_differential_equation_visualization.png)
-
-### Parameter sweeping for finding fixed and periodic orbits for boundary map of the discrete dynamical systems
-
-![Parameter sweeping for finding fixed and periodic orbits for boundary map of the discrete dynamical systems](./images/parameter_sweep.png)
+![Bifurcation of the Hénon boundary map when the fixed points of the invariant sets collide with fixed points of dual repellers](./images/henon_boundary_map_bifurcation_a0594_a0600.gif)
 
 ## **Getting Started**
 
