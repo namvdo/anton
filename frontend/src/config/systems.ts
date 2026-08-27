@@ -17,7 +17,7 @@ export const SYSTEM_CATALOG = Object.freeze({
       name: 'Hénon Map',
       presets: [
         { name: 'Standard', vals: { a: 1.4, b: 0.3 } },
-        { name: 'Boundary-map demo', vals: { a: 0.4, b: 0.3, epsilon: 0.0625 } },
+        { name: 'Boundary-map demo', vals: { a: 0.45, b: 0.3, epsilon: 0.0133 } },
       ],
     },
     {

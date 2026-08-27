@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MIN_VIEW_SPAN,
+  constrainViewRange,
   normalizeViewRange,
   displayLimitForRange,
   RANGE_LIMIT,
@@ -20,6 +21,23 @@ describe('normalizeViewRange', () => {
     const result = normalizeViewRange({ xMin: 1, xMax: 1, yMin: 2, yMax: 2 });
     expect(result.xMax).toBeGreaterThan(result.xMin);
     expect(result.yMax).toBeGreaterThan(result.yMin);
+  });
+});
+
+describe('constrainViewRange', () => {
+  it('shifts a zoomed camera inside the computation domain without changing its span', () => {
+    expect(constrainViewRange(
+      { xMin: 1, xMax: 4, yMin: -4, yMax: -1 },
+      { xMin: -2, xMax: 2, yMin: -2, yMax: 2 },
+    )).toEqual({ xMin: -1, xMax: 2, yMin: -2, yMax: 1 });
+  });
+
+  it('uses the whole computation domain when the requested camera is larger', () => {
+    const domain = { xMin: -2, xMax: 2, yMin: -1, yMax: 1 };
+    expect(constrainViewRange(
+      { xMin: -8, xMax: 8, yMin: -8, yMax: 8 },
+      domain,
+    )).toEqual(domain);
   });
 });
 

@@ -89,12 +89,17 @@ export interface GeometricOffsetBatchInput {
   epsilon: number;
 }
 
+export interface GeometricOffsetBoundaryInput {
+  points: ExtendedPointTuple[];
+  isClosed: boolean;
+}
+
 export interface GeometricOffsetBatchOutput extends GeometricOffsetBatchInput {
   result: GeometricOffsetResult;
 }
 
 export interface GeometricOffsetBatchComputePayload {
-  boundary: ExtendedPointTuple[];
+  boundaries: GeometricOffsetBoundaryInput[];
   contours: GeometricOffsetBatchInput[];
 }
 
@@ -105,6 +110,7 @@ export interface GeometricOffsetBatchComputeResult {
 export interface InverseGeometricOffsetsComputePayload {
   levels: GeometricOffsetLevel[];
   params: Pick<BistParameters, 'a' | 'b' | 'epsilon'>;
+  domain: ViewRange;
   settings: {
     iterations: number;
     positionTolerance: number;
@@ -122,6 +128,7 @@ export interface InverseGeometricOffsetBatchSource {
 export interface InverseGeometricOffsetBatchComputePayload {
   sources: InverseGeometricOffsetBatchSource[];
   params: Pick<BistParameters, 'a' | 'b' | 'epsilon'>;
+  domain: ViewRange;
   settings: {
     iterations: number;
     normalTolerance: number;

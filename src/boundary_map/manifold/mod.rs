@@ -1,5 +1,5 @@
 use crate::parameters::parameter_set_from_js;
-use crate::range::{clamp_pair, RANGE_LIMIT};
+use crate::range::{clamp_pair, PhaseSpaceBounds, RANGE_LIMIT};
 use nalgebra::{Matrix2, Vector2, Vector4};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -66,6 +66,12 @@ fn normalize_display_range(x_min: f64, x_max: f64, y_min: f64, y_max: f64) -> (f
     let (x_min, x_max) = clamp_pair(x_min, x_max, RANGE_LIMIT);
     let (y_min, y_max) = clamp_pair(y_min, y_max, RANGE_LIMIT);
     (x_min, x_max, y_min, y_max)
+}
+
+fn phase_space_bounds(x_min: f64, x_max: f64, y_min: f64, y_max: f64) -> PhaseSpaceBounds {
+    let (x_min, x_max, y_min, y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
+    PhaseSpaceBounds::try_new(x_min, x_max, y_min, y_max)
+        .expect("normalized phase-space bounds are valid")
 }
 
 fn in_display_range(x: f64, y: f64, x_min: f64, x_max: f64, y_min: f64, y_max: f64) -> bool {
@@ -265,6 +271,7 @@ pub enum StopReason {
     TimeExceeded,
     ApproachedTargetPoint,
     SelfIntersection,
+    LeftDomain,
 }
 
 impl HenonParams {
@@ -421,11 +428,44 @@ impl DynamicalSystem for HenonParams {
 pub struct UnstableManifoldComputer<S: DynamicalSystem> {
     params: S,
     config: ManifoldConfig,
+    bounds: PhaseSpaceBounds,
 }
 
 impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
     pub fn new(params: S, config: ManifoldConfig) -> Self {
-        Self { params, config }
+        Self {
+            params,
+            config,
+            bounds: PhaseSpaceBounds::try_new(-RANGE_LIMIT, RANGE_LIMIT, -RANGE_LIMIT, RANGE_LIMIT)
+                .expect("the global phase-space bounds are valid"),
+        }
+    }
+
+    pub fn with_bounds(mut self, bounds: PhaseSpaceBounds) -> Self {
+        self.bounds = bounds;
+        self
+    }
+
+    fn clipped_domain_exit(
+        &self,
+        inside: ExtendedState,
+        outside: ExtendedState,
+    ) -> Option<ExtendedState> {
+        let (_, t) = self.bounds.clip_segment_parameters(
+            inside.pos.x,
+            inside.pos.y,
+            outside.pos.x,
+            outside.pos.y,
+        )?;
+        let pos = inside.pos + t * (outside.pos - inside.pos);
+        let interpolated_normal = inside.normal + t * (outside.normal - inside.normal);
+        let normal_length = interpolated_normal.norm();
+        let normal = if normal_length.is_finite() && normal_length > 1e-14 {
+            interpolated_normal / normal_length
+        } else {
+            inside.normal
+        };
+        Some(ExtendedState { pos, normal })
     }
 
     fn make_seed_state(saddle: &SaddlePoint, direction_sign: f64, distance: f64) -> ExtendedState {
@@ -623,10 +663,37 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
 
         // main iteration loop
         // trajectory stores all points on the manifold
-        let mut trajectory = self.local_seed_states(saddle, direction_sign, perturb_distance);
-        trajectory.push(state_0);
+        let mut trajectory = self
+            .local_seed_states(saddle, direction_sign, perturb_distance)
+            .into_iter()
+            .filter(|state| self.bounds.contains(state.pos.x, state.pos.y))
+            .collect::<Vec<_>>();
+        if self.bounds.contains(state_0.pos.x, state_0.pos.y) {
+            trajectory.push(state_0);
+        }
         let mut current_state = state_1;
         let mut iteration = 1;
+
+        if !self
+            .bounds
+            .contains(current_state.pos.x, current_state.pos.y)
+        {
+            if self.bounds.contains(state_0.pos.x, state_0.pos.y) {
+                if let Some(exit) = self.clipped_domain_exit(state_0, current_state) {
+                    if trajectory
+                        .last()
+                        .map_or(true, |last| (last.pos - exit.pos).norm() > 1e-12)
+                    {
+                        trajectory.push(exit);
+                    }
+                }
+            }
+            return Ok(Trajectory {
+                points: trajectory,
+                stop_reason: StopReason::LeftDomain,
+                reached_target_id: None,
+            });
+        }
 
         let start_time = get_time_secs();
 
@@ -675,6 +742,31 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
                     });
                 }
             };
+
+            // The computation domain is a hard numerical boundary. Once a
+            // branch exits, retain only its clipped endpoint and stop before
+            // target searches or adaptive midpoint work can grow outside it.
+            if !self.bounds.contains(next_state.pos.x, next_state.pos.y) {
+                if self
+                    .bounds
+                    .contains(current_state.pos.x, current_state.pos.y)
+                {
+                    trajectory.push(current_state);
+                    if let Some(exit) = self.clipped_domain_exit(current_state, next_state) {
+                        if trajectory
+                            .last()
+                            .map_or(true, |last| (last.pos - exit.pos).norm() > 1e-12)
+                        {
+                            trajectory.push(exit);
+                        }
+                    }
+                }
+                return Ok(Trajectory {
+                    points: trajectory,
+                    stop_reason: StopReason::LeftDomain,
+                    reached_target_id: None,
+                });
+            }
 
             // check convergence - distance between consecutive iterations
             let step_distance = (next_state.pos - current_state.pos).norm();
@@ -881,11 +973,7 @@ impl<S: DynamicalSystem> UnstableManifoldComputer<S> {
                 for _ in 0..iteration {
                     match map_fn(intermediate_state, n_period) {
                         Ok(s) => {
-                            if !s.pos.x.is_finite()
-                                || !s.pos.y.is_finite()
-                                || s.pos.x.abs() > 200.0
-                                || s.pos.y.abs() > 200.0
-                            {
+                            if !self.bounds.contains(s.pos.x, s.pos.y) {
                                 valid = false;
                                 break;
                             }
@@ -1003,6 +1091,7 @@ pub fn compute_manifold_simple(
 ) -> Result<JsValue, JsValue> {
     let config = validated_manifold_config(maximum_point_spacing)?;
     let (x_min, x_max, y_min, y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
+    let bounds = phase_space_bounds(x_min, x_max, y_min, y_max);
     // Check cache first
     let key = cache_key(
         a,
@@ -1237,7 +1326,7 @@ pub fn compute_manifold_simple(
     );
 
     let mut manifolds_result = Vec::new();
-    let computer = UnstableManifoldComputer::new(params, config);
+    let computer = UnstableManifoldComputer::new(params, config).with_bounds(bounds);
 
     // Compute manifolds for unstable points
     for idx in unstable_points_indices {
@@ -1442,6 +1531,7 @@ pub fn compute_user_defined_manifold(
     y_max: f64,
 ) -> Result<JsValue, JsValue> {
     let (x_min, x_max, y_min, y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
+    let bounds = phase_space_bounds(x_min, x_max, y_min, y_max);
     console_log!(
         "Computing user defined manifold for x={}, y={}, eps={}",
         x_eq,
@@ -1538,7 +1628,7 @@ pub fn compute_user_defined_manifold(
     let mut fixed_points_result = Vec::new();
     let mut manifolds_result = Vec::new();
     let config = ManifoldConfig::default();
-    let computer = UnstableManifoldComputer::new(system.clone(), config);
+    let computer = UnstableManifoldComputer::new(system.clone(), config).with_bounds(bounds);
 
     for fp_pos in fixed_points {
         if !in_display_range(fp_pos.x, fp_pos.y, x_min, x_max, y_min, y_max) {
@@ -1652,7 +1742,7 @@ pub fn compute_manifold_from_orbits(
     y_max: f64,
     orbits_js: JsValue,
 ) -> Result<JsValue, JsValue> {
-    let (_x_min, _x_max, _y_min, _y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
+    let bounds = phase_space_bounds(x_min, x_max, y_min, y_max);
     console_log!(
         "Computing manifold from {} orbits with a={}, b={}, eps={}",
         if orbits_js.is_array() {
@@ -1783,7 +1873,7 @@ pub fn compute_manifold_from_orbits(
     // Compute manifolds for each saddle orbit
     let mut manifolds_result: Vec<ManifoldResult> = Vec::new();
     let config = ManifoldConfig::default();
-    let computer = UnstableManifoldComputer::new(params, config);
+    let computer = UnstableManifoldComputer::new(params, config).with_bounds(bounds);
 
     for orbit in saddle_orbits {
         if orbit.points.is_empty() {
@@ -2091,7 +2181,7 @@ pub fn compute_stable_and_unstable_manifolds(
     maximum_point_spacing: f64,
 ) -> Result<JsValue, JsValue> {
     let config = validated_manifold_config(maximum_point_spacing)?;
-    let (_x_min, _x_max, _y_min, _y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
+    let bounds = phase_space_bounds(x_min, x_max, y_min, y_max);
     console_log!(
         "Computing stable and unstable manifolds with a={}, b={}, eps={}, threshold={}",
         a,
@@ -2219,7 +2309,7 @@ pub fn compute_stable_and_unstable_manifolds(
     let mut stable_manifolds: Vec<ManifoldResult> = Vec::new();
     let mut intersections: Vec<IntersectionInfo> = Vec::new();
 
-    let computer = UnstableManifoldComputer::new(params, config);
+    let computer = UnstableManifoldComputer::new(params, config).with_bounds(bounds);
 
     for orbit in &saddle_orbits {
         if orbit.points.is_empty() {
@@ -2627,7 +2717,7 @@ pub fn compute_manifold_from_orbits_user_defined(
     y_max: f64,
     orbits_js: JsValue,
 ) -> Result<JsValue, JsValue> {
-    let (_x_min, _x_max, _y_min, _y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
+    let bounds = phase_space_bounds(x_min, x_max, y_min, y_max);
     console_log!(
         "Computing user-defined manifold from orbits: x={}, y={}, eps={}",
         x_eq,
@@ -2701,7 +2791,7 @@ pub fn compute_manifold_from_orbits_user_defined(
 
     let mut manifolds_result: Vec<ManifoldResult> = Vec::new();
     let config = ManifoldConfig::default();
-    let computer = UnstableManifoldComputer::new(system.clone(), config);
+    let computer = UnstableManifoldComputer::new(system.clone(), config).with_bounds(bounds);
 
     for orbit in saddle_orbits {
         if orbit.points.is_empty() {
@@ -2810,7 +2900,7 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
     maximum_point_spacing: f64,
 ) -> Result<JsValue, JsValue> {
     let config = validated_manifold_config(maximum_point_spacing)?;
-    let (_x_min, _x_max, _y_min, _y_max) = normalize_display_range(x_min, x_max, y_min, y_max);
+    let bounds = phase_space_bounds(x_min, x_max, y_min, y_max);
     console_log!(
         "Computing user-defined stable+unstable manifolds: x={}, y={}, eps={}",
         x_eq,
@@ -2905,7 +2995,7 @@ pub fn compute_stable_and_unstable_manifolds_user_defined(
     let mut stable_manifolds: Vec<ManifoldResult> = Vec::new();
     let mut intersections: Vec<IntersectionInfo> = Vec::new();
 
-    let computer = UnstableManifoldComputer::new(system.clone(), config);
+    let computer = UnstableManifoldComputer::new(system.clone(), config).with_bounds(bounds);
 
     for orbit in &saddle_orbits {
         if orbit.points.is_empty() {
@@ -3198,6 +3288,35 @@ mod tests {
             x_positions.windows(2).all(|pair| pair[0] < pair[1]),
             "refined trajectory must not jump backward: {x_positions:?}"
         );
+    }
+
+    #[test]
+    fn manifold_stops_at_the_compact_domain_boundary() {
+        let bounds = PhaseSpaceBounds::try_new(-0.001, 0.001, -0.5, 0.5).unwrap();
+        let config = ManifoldConfig {
+            spacing_tol: 1e-4,
+            max_iter: 100,
+            max_points: 10_000,
+            ..ManifoldConfig::default()
+        };
+        let computer =
+            UnstableManifoldComputer::new(LinearExpandingSystem, config).with_bounds(bounds);
+        let saddle = SaddlePoint::from_2d_eigenvector(
+            Vector2::new(0.0, 0.0),
+            Vector2::new(1.0, 0.0),
+            1,
+            2.0,
+            SaddleType::Regular,
+            None,
+        );
+
+        let trajectory = computer.compute_direction(&saddle, 1.0, &[]).unwrap();
+        assert_eq!(trajectory.stop_reason, StopReason::LeftDomain);
+        assert!(trajectory
+            .points
+            .iter()
+            .all(|state| bounds.contains(state.pos.x, state.pos.y)));
+        assert!((trajectory.points.last().unwrap().pos.x - bounds.x_max).abs() < 1e-12);
     }
 
     #[test]

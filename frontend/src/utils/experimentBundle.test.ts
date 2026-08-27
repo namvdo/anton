@@ -105,6 +105,16 @@ describe('experiment bundle schema v2', () => {
     expect(ui.geometricOffsetSettings.contourEpsilons).toEqual([0.025, 0.05, 0.075]);
   });
 
+  it('keeps saved inverse-step limits aligned with the 100-step solver control', () => {
+    const bundle = buildReferenceBundle();
+    bundle.configuration.solvers.geometricOffsets.inverseIterations = 100;
+    expect(parseExperimentBundle(JSON.stringify(bundle))
+      .configuration.solvers.geometricOffsets.inverseIterations).toBe(100);
+
+    bundle.configuration.solvers.geometricOffsets.inverseIterations = 101;
+    expect(() => parseExperimentBundle(JSON.stringify(bundle))).toThrow('Inverse-offset iterations');
+  });
+
   it('derives residual, normal, Ulam, and geometric diagnostics from results', () => {
     const bundle = buildReferenceBundle({
       commit: 'abc123-dirty',

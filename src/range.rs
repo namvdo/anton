@@ -37,6 +37,65 @@ impl PhaseSpaceBounds {
             y_max,
         })
     }
+
+    #[inline]
+    pub fn contains(&self, x: f64, y: f64) -> bool {
+        x.is_finite()
+            && y.is_finite()
+            && x >= self.x_min
+            && x <= self.x_max
+            && y >= self.y_min
+            && y <= self.y_max
+    }
+
+    #[inline]
+    pub fn same_exterior_half_plane(&self, ax: f64, ay: f64, bx: f64, by: f64) -> bool {
+        (ax < self.x_min && bx < self.x_min)
+            || (ax > self.x_max && bx > self.x_max)
+            || (ay < self.y_min && by < self.y_min)
+            || (ay > self.y_max && by > self.y_max)
+    }
+
+    /// Liang-Barsky clipping parameters for a line segment against these bounds.
+    /// The returned interval lies in `[0, 1]` and describes the part inside the box.
+    pub fn clip_segment_parameters(
+        &self,
+        ax: f64,
+        ay: f64,
+        bx: f64,
+        by: f64,
+    ) -> Option<(f64, f64)> {
+        if ![ax, ay, bx, by].iter().all(|value| value.is_finite()) {
+            return None;
+        }
+        let dx = bx - ax;
+        let dy = by - ay;
+        let mut enter: f64 = 0.0;
+        let mut leave: f64 = 1.0;
+        for (p, q) in [
+            (-dx, ax - self.x_min),
+            (dx, self.x_max - ax),
+            (-dy, ay - self.y_min),
+            (dy, self.y_max - ay),
+        ] {
+            if p.abs() <= f64::EPSILON {
+                if q < 0.0 {
+                    return None;
+                }
+                continue;
+            }
+            let ratio = q / p;
+            if p < 0.0 {
+                enter = enter.max(ratio);
+            } else {
+                leave = leave.min(ratio);
+            }
+            if enter > leave {
+                return None;
+            }
+        }
+        Some((enter.clamp(0.0, 1.0), leave.clamp(0.0, 1.0)))
+    }
 }
 
 pub fn clamp_pair(min_val: f64, max_val: f64, limit: f64) -> (f64, f64) {
@@ -92,5 +151,19 @@ mod tests {
         assert!(PhaseSpaceBounds::try_new(-2.0, 2.0, -1.5, 1.5).is_ok());
         assert!(PhaseSpaceBounds::try_new(2.0, -2.0, -1.5, 1.5).is_err());
         assert!(PhaseSpaceBounds::try_new(f64::NAN, 2.0, -1.5, 1.5).is_err());
+    }
+
+    #[test]
+    fn phase_space_bounds_classify_points_and_prunable_segments() {
+        let bounds = PhaseSpaceBounds::try_new(-2.0, 2.0, -1.5, 1.5).unwrap();
+        assert!(bounds.contains(-2.0, 1.5));
+        assert!(!bounds.contains(2.1, 0.0));
+        assert!(bounds.same_exterior_half_plane(3.0, 0.0, 4.0, 1.0));
+        assert!(!bounds.same_exterior_half_plane(-3.0, 0.0, 3.0, 0.0));
+        assert_eq!(
+            bounds.clip_segment_parameters(0.0, 0.0, 4.0, 0.0),
+            Some((0.0, 0.5))
+        );
+        assert!(bounds.clip_segment_parameters(3.0, 2.0, 4.0, 3.0).is_none());
     }
 }

@@ -53,6 +53,47 @@ export const normalizeViewRange = (range: Partial<ViewRange>, limit = RANGE_LIMI
   return { xMin: loX, xMax: hiX, yMin: loY, yMax: hiY };
 };
 
+const constrainAxis = (
+  min: number,
+  max: number,
+  domainMin: number,
+  domainMax: number,
+): [number, number] => {
+  const domainSpan = domainMax - domainMin;
+  const span = max - min;
+  if (span >= domainSpan) return [domainMin, domainMax];
+  let low = min;
+  let high = max;
+  if (low < domainMin) {
+    high += domainMin - low;
+    low = domainMin;
+  }
+  if (high > domainMax) {
+    low -= high - domainMax;
+    high = domainMax;
+  }
+  return [Math.max(domainMin, low), Math.min(domainMax, high)];
+};
+
+/** Keep a camera viewport compactly inside the canonical computation domain. */
+export const constrainViewRange = (range: Partial<ViewRange>, domain: ViewRange): ViewRange => {
+  const normalizedDomain = normalizeViewRange(domain);
+  const normalized = normalizeViewRange(range);
+  const [xMin, xMax] = constrainAxis(
+    normalized.xMin,
+    normalized.xMax,
+    normalizedDomain.xMin,
+    normalizedDomain.xMax,
+  );
+  const [yMin, yMax] = constrainAxis(
+    normalized.yMin,
+    normalized.yMax,
+    normalizedDomain.yMin,
+    normalizedDomain.yMax,
+  );
+  return { xMin, xMax, yMin, yMax };
+};
+
 const zoomAxis = (
   min: number,
   max: number,

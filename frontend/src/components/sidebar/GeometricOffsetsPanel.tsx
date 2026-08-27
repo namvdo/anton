@@ -15,6 +15,7 @@ import {
   selectGeometricOffsetContour,
 } from '../../utils/geometricOffsetBatch';
 import type { GeometricOffsetState, StateSetter } from '../../types/domain';
+import { MAX_INVERSE_OFFSET_ITERATIONS } from '../../config/numericalSettings';
 
 interface GeometricOffsetsPanelProps {
   state: GeometricOffsetState;
@@ -282,7 +283,7 @@ export const GeometricOffsetsPanel = ({
           <div className="inverse-offset-source-summary">
             {inverseSourceCount} preimage source{inverseSourceCount === 1 ? '' : 's'} selected
           </div>
-          <Slider label="Preimage steps" min={1} max={8} step={1} value={state.inverseIterations}
+          <Slider label="Preimage steps" min={1} max={MAX_INVERSE_OFFSET_ITERATIONS} step={1} value={state.inverseIterations}
             disabled={state.isComputingInverse}
             onChange={inverseIterations => setState(previous => ({
               ...previous,

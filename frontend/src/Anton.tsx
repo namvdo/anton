@@ -12,7 +12,7 @@ import {
     RANGE_LIMIT,
     ZOOM_IN_FACTOR,
     ZOOM_OUT_FACTOR,
-    displayLimitForRange,
+    constrainViewRange,
     normalizeViewRange,
     zoomViewRange
 } from './utils/viewRange';
@@ -28,7 +28,6 @@ import {
 } from './utils/trajectoryState';
 import {
     buildVerifiedBoundaryCycles,
-    collectGeometricOffsetBoundaryPoints,
     collectExtendedManifoldBranches,
 } from './utils/geometricOffsetSeed';
 import {
@@ -136,6 +135,15 @@ const GRID_STYLE = {
 const EMPTY_ARRAY: never[] = [];
 const DEFAULT_VALIDATION: ParameterValidation = { normalized: [], errors: [], valid: true };
 const PARAM_ABS_LIMIT = 10;
+
+const pointInDomain = (point: { x: number; y: number }, domain: ViewRange): boolean => (
+    Number.isFinite(point.x)
+    && Number.isFinite(point.y)
+    && point.x >= domain.xMin
+    && point.x <= domain.xMax
+    && point.y >= domain.yMin
+    && point.y <= domain.yMax
+);
 
 type BdeSimulator =
     | InstanceType<BistWasmModule['BdeSimulatorWasm']>
@@ -504,11 +512,6 @@ const SetValuedViz = () => {
 
     const boundarySourceManifolds = manifoldState.manifolds;
 
-    const geometricOffsetBoundaryPoints = useMemo(
-        () => collectGeometricOffsetBoundaryPoints(boundarySourceManifolds),
-        [boundarySourceManifolds]
-    );
-
     const verifiedBoundaryCycles = useMemo(
         () => buildVerifiedBoundaryCycles(boundarySourceManifolds),
         [boundarySourceManifolds]
@@ -761,7 +764,7 @@ const SetValuedViz = () => {
     }, []);
 
     const transitionViewRange = useCallback((targetRange: ViewRange) => {
-        const target = normalizeViewRange(targetRange, displayLimitForRange(targetRange));
+        const target = constrainViewRange(targetRange, computationViewRangeRef.current);
         const start = { ...viewportRangeRef.current };
         cancelViewRangeTransition();
         viewportRangeTargetRef.current = target;
@@ -1395,12 +1398,12 @@ const SetValuedViz = () => {
                 const worldDx = (dx / (rect.width || 1)) * frustumWidth;
                 const worldDy = (dy / (rect.height || 1)) * frustumHeight;
 
-                const newRange: ViewRange = {
+                const newRange = constrainViewRange({
                     xMin: startRange.xMin - worldDx,
                     xMax: startRange.xMax - worldDx,
                     yMin: startRange.yMin + worldDy,
                     yMax: startRange.yMax + worldDy,
-                };
+                }, computationViewRangeRef.current);
 
                 cancelViewRangeTransition();
                 viewportRangeRef.current = newRange;
@@ -2187,7 +2190,7 @@ const SetValuedViz = () => {
     }, [recordingState.recordingEnabled]);
 
     const computeGeometricOffsets = useCallback(async () => {
-        if (dynamicSystem !== 'henon' || geometricOffsetBoundaryPoints.length === 0) {
+        if (dynamicSystem !== 'henon' || calculatedBoundaryBranches.length === 0) {
             setGeometricOffsetState(prev => ({
                 ...prev,
                 error: 'At least one unstable-manifold boundary point with an attached normal is required.'
@@ -2211,7 +2214,10 @@ const SetValuedViz = () => {
         }));
         try {
             const request = buildGeometricOffsetBatchRequest(
-                geometricOffsetBoundaryPoints,
+                calculatedBoundaryBranches.map(points => ({
+                    points,
+                    isClosed: hasVerifiedBoundaryCycles,
+                })),
                 geometricOffsetState.contours,
             );
             const batch = await runComputeTask('computeGeometricOffsetBatch', request);
@@ -2254,7 +2260,8 @@ const SetValuedViz = () => {
             const viewportSize = readViewportSize();
             const fittedRange = fitInverseOffsetCurveRange(
                 contourCurves,
-                viewportSize.width / viewportSize.height
+                viewportSize.width / viewportSize.height,
+                viewRange,
             );
             if (fittedRange) transitionViewRange(fittedRange);
         } catch (error) {
@@ -2275,10 +2282,12 @@ const SetValuedViz = () => {
         }
     }, [
         dynamicSystem,
-        geometricOffsetBoundaryPoints,
+        calculatedBoundaryBranches,
         geometricOffsetState.contours,
+        hasVerifiedBoundaryCycles,
         readViewportSize,
         runComputeTask,
+        viewRange,
         transitionViewRange
     ]);
 
@@ -2320,6 +2329,7 @@ const SetValuedViz = () => {
             const batch = await runComputeTask('computeInverseGeometricOffsetBatch', {
                 sources: batchSources,
                 params: { a: params.a, b: params.b, epsilon: params.epsilon },
+                domain: viewRange,
                 settings: {
                     iterations: geometricOffsetState.inverseIterations,
                     normalTolerance: DEFAULT_GEOMETRIC_OFFSET_SETTINGS.inverseNormalTolerance,
@@ -2351,7 +2361,8 @@ const SetValuedViz = () => {
             const viewportSize = readViewportSize();
             const fittedRange = fitInverseOffsetCurveRange(
                 visibleCurves,
-                viewportSize.width / viewportSize.height
+                viewportSize.width / viewportSize.height,
+                viewRange,
             );
             if (fittedRange) transitionViewRange(fittedRange);
         } catch (error) {
@@ -2375,6 +2386,7 @@ const SetValuedViz = () => {
         params.a,
         params.b,
         params.epsilon,
+        viewRange,
         readViewportSize,
         runComputeTask,
         transitionViewRange
@@ -2394,7 +2406,8 @@ const SetValuedViz = () => {
         const { width: viewportWidth, height: viewportHeight } = readViewportSize();
         const fittedRange = fitInverseOffsetCurveRange(
             curves,
-            viewportWidth / viewportHeight
+            viewportWidth / viewportHeight,
+            viewRange,
         );
         if (fittedRange) transitionViewRange(fittedRange);
     }, [
@@ -2403,6 +2416,7 @@ const SetValuedViz = () => {
         geometricOffsetState.preimageSourceIds,
         geometricOffsetState.selectedContourId,
         readViewportSize,
+        viewRange,
         transitionViewRange
     ]);
 
@@ -2597,7 +2611,10 @@ const SetValuedViz = () => {
             manifoldState.manifolds.forEach(manifold => {
                 [manifold.plus, manifold.minus].forEach(trajectory => {
                     if (!trajectory?.points || trajectory.points.length <= 1) return;
-                    const points = trajectory.points.map(([x, y]) => ({ x, y }));
+                    const points = trajectory.points
+                        .map(([x, y]) => ({ x, y }))
+                        .filter(point => pointInDomain(point, viewRange));
+                    if (points.length <= 1) return;
                     if (manifoldState.showBoundarySamplePoints) {
                         addBoundarySamplePoints(
                             points,
@@ -2622,7 +2639,10 @@ const SetValuedViz = () => {
             manifoldState.stableManifolds.forEach(manifold => {
                 [manifold.plus, manifold.minus].forEach(trajectory => {
                     if (!trajectory?.points || trajectory.points.length <= 1) return;
-                    const points = trajectory.points.map(([x, y]) => ({ x, y }));
+                    const points = trajectory.points
+                        .map(([x, y]) => ({ x, y }))
+                        .filter(point => pointInDomain(point, viewRange));
+                    if (points.length <= 1) return;
                     if (manifoldState.showBoundarySamplePoints) {
                         addBoundarySamplePoints(
                             points,
@@ -2651,6 +2671,7 @@ const SetValuedViz = () => {
                     const points = (component.points || []).flatMap(point => {
                         const projected = projectedCoordinates(point);
                         return projected
+                            && pointInDomain(projected, viewRange)
                             ? [{ x: projected.x, y: projected.y }]
                             : [];
                     });
@@ -2698,9 +2719,7 @@ const SetValuedViz = () => {
                     geometricOffsetState.inverseDisplayMode,
                 );
                 visibleCurves.forEach(curve => {
-                    const points = (curve.points || []).filter(point => (
-                        Number.isFinite(point.x) && Number.isFinite(point.y)
-                    ));
+                    const points = (curve.points || []).filter(point => pointInDomain(point, viewRange));
                     if (points.length === 0) return;
                     const colorResult = computeInverseCurveVertexColors(curve);
 
@@ -2928,7 +2947,7 @@ const SetValuedViz = () => {
             scene.add(sphere);
         }
 
-    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, viewportRange, readViewportSize, geometricOffsetBoundaryPoints, boundaryLayers, hasBoundarySamples, hasVerifiedBoundaryCycles, params.epsilon, filters, periodicState.isReady, periodicState.orbits]);
+    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, viewportRange, readViewportSize, boundaryLayers, hasBoundarySamples, hasVerifiedBoundaryCycles, params.epsilon, filters, periodicState.isReady, periodicState.orbits]);
 
     useEffect(() => {
         if (!sceneRef.current) return;
@@ -3734,8 +3753,11 @@ const SetValuedViz = () => {
             const nextCustomParams = structuredClone(configuration.customParams);
             const nextParams = { ...configuration.params };
             const nextSearchSettings = { ...configuration.periodicSearchSettings };
-            const nextViewRange = { ...configuration.viewRange };
-            const nextViewportRange = { ...configuration.viewportRange };
+            const nextViewRange = normalizeViewRange(configuration.viewRange);
+            const nextViewportRange = constrainViewRange(
+                configuration.viewportRange,
+                nextViewRange,
+            );
 
             setDynamicSystem(configuration.dynamicSystem);
             setParams(nextParams);
@@ -3870,7 +3892,7 @@ const SetValuedViz = () => {
                     unstable: boundaryLayers.unstableSampling,
                     deterministic: boundaryLayers.deterministicSampling,
                 }}
-                canComputeGeometricOffsets={!manifoldState.isComputing && geometricOffsetBoundaryPoints.length > 0}
+                canComputeGeometricOffsets={!manifoldState.isComputing && calculatedBoundaryBranches.length > 0}
                 computeGeometricOffsets={computeGeometricOffsets}
                 computeInverseGeometricOffsets={computeInverseGeometricOffsets}
                 fitInverseGeometricOffsets={fitInverseGeometricOffsets}

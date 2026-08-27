@@ -37,7 +37,7 @@ describe('inverse offset display utilities', () => {
       { source_relation: 'open_point_set' }
     ])).toEqual({
       passed: false,
-      message: 'Open pointwise preimage computed; polygonal nesting does not apply.'
+      message: 'Open adaptively refined preimage computed; polygonal nesting does not apply.'
     });
   });
 
@@ -62,20 +62,26 @@ describe('inverse offset display utilities', () => {
 
   it('computes finite bounds and an aspect-aware padded camera range', () => {
     expect(inverseOffsetCurveBounds(curves)).toEqual({ xMin: -2, xMax: 2, yMin: -1, yMax: 1 });
-    const range = fitInverseOffsetCurveRange(curves, 2, 0.1);
+    const range = fitInverseOffsetCurveRange(
+      curves,
+      2,
+      { xMin: -3, xMax: 3, yMin: -3, yMax: 3 },
+      0.1,
+    );
     expect(range).toEqual({ xMin: -2.4, xMax: 2.4, yMin: -1.2, yMax: 1.2 });
   });
 
   it('returns null when no finite curve samples exist', () => {
-    expect(fitInverseOffsetCurveRange([], 1)).toBeNull();
+    expect(fitInverseOffsetCurveRange(
+      [],
+      1,
+      { xMin: -3, xMax: 3, yMin: -3, yMax: 3 },
+    )).toBeNull();
   });
 
-  it('lets the camera fit finite curves outside the guarded computation domain', () => {
+  it('keeps fitted inverse curves inside the canonical computation domain', () => {
     const outsideCurve = [{ points: [{ x: -14, y: -2 }, { x: 18, y: 12 }] }];
-    const range = fitInverseOffsetCurveRange(outsideCurve, 2);
-    expect(range).not.toBeNull();
-    expect(range!.xMin).toBeLessThan(-14);
-    expect(range!.xMax).toBeGreaterThan(18);
-    expect(range!.yMax).toBeGreaterThan(12);
+    const domain = { xMin: -3, xMax: 3, yMin: -2, yMax: 2 };
+    expect(fitInverseOffsetCurveRange(outsideCurve, 2, domain)).toEqual(domain);
   });
 });

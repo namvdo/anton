@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildGeometricOffsetBatchRequest,
   buildSingleGeometricOffsetRequest,
-  computeOpenGeometricOffsetPreimages,
   geometricOffsetSampleSpacing,
+  projectGeometricOffsetBoundaries,
   projectGeometricOffsetBoundary,
 } from './geometricOffsetCompute';
 
@@ -23,21 +23,21 @@ describe('single geometric-offset computation settings', () => {
   });
 
   it('validates and sorts a complete contour batch before worker execution', () => {
-    expect(buildGeometricOffsetBatchRequest(boundary, [
+    expect(buildGeometricOffsetBatchRequest([{ points: boundary, isClosed: false }], [
       { id: 'large', epsilon: 0.2 },
       { id: 'small', epsilon: 0.1 },
     ])).toEqual({
-      boundary,
+      boundaries: [{ points: boundary, isClosed: false }],
       contours: [
         { id: 'small', epsilon: 0.1 },
         { id: 'large', epsilon: 0.2 },
       ],
     });
-    expect(() => buildGeometricOffsetBatchRequest(boundary, [
+    expect(() => buildGeometricOffsetBatchRequest([{ points: boundary, isClosed: false }], [
       { id: 'first', epsilon: 0.1 },
       { id: 'duplicate', epsilon: 0.1 },
     ])).toThrow(/unique/);
-    expect(() => buildGeometricOffsetBatchRequest(boundary, [
+    expect(() => buildGeometricOffsetBatchRequest([{ points: boundary, isClosed: false }], [
       { id: 'same', epsilon: 0.1 },
       { id: 'same', epsilon: 0.2 },
     ])).toThrow(/identifiers must be unique/);
@@ -78,47 +78,29 @@ describe('single geometric-offset computation settings', () => {
     expect(component.is_closed).toBe(true);
   });
 
-  it('computes open preimages point to point without closing or resampling', () => {
-    const a = 0.4;
-    const b = 0.3;
-    const epsilon = 0.1;
-    const source = { x: 0.7, y: -0.2, nx: 0.6, ny: 0.8 };
-    const rawNx = source.ny;
-    const rawNy = (source.nx + 2 * a * source.x * source.ny) / b;
-    const normalLength = Math.hypot(rawNx, rawNy);
-    const nx = rawNx / normalLength;
-    const ny = rawNy / normalLength;
-    const mapped = {
-      x: 1 - a * source.x * source.x + source.y + epsilon * nx,
-      y: b * source.x + epsilon * ny,
-      nx,
-      ny,
-    };
-    const result = computeOpenGeometricOffsetPreimages([{
-      level: 1,
-      target_distance: 0.1,
-      boundary_components: [{ is_closed: false, points: [mapped, mapped] }],
-    }], { a, b, epsilon }, 1);
-    const curve = result.curves[0];
-    expect(curve.is_closed).toBe(false);
-    expect(curve.points).toHaveLength(2);
-    expect(curve.output_point_count).toBe(2);
-    curve.points!.forEach(point => {
-      expect(point.x).toBeCloseTo(source.x, 12);
-      expect(point.y).toBeCloseTo(source.y, 12);
-      const extended = point as unknown as { nx: number; ny: number };
-      expect(extended.nx).toBeCloseTo(source.nx, 12);
-      expect(extended.ny).toBeCloseTo(source.ny, 12);
-    });
+  it('keeps separate open branches in separate offset components', () => {
+    const result = projectGeometricOffsetBoundaries([
+      { points: [[0, 0, 1, 0], [1, 0, 1, 0]], isClosed: false },
+      { points: [[10, 0, 0, 1], [11, 0, 0, 1]], isClosed: false },
+    ], 0.25);
+    const components = result.levels[0].boundary_components!;
+
+    expect(components).toHaveLength(2);
+    expect(components.map(component => component.points)).toEqual([
+      [{ x: 0.25, y: 0, nx: 1, ny: 0 }, { x: 1.25, y: 0, nx: 1, ny: 0 }],
+      [{ x: 10, y: 0.25, nx: 0, ny: 1 }, { x: 11, y: 0.25, nx: 0, ny: 1 }],
+    ]);
+    expect(components.every(component => component.is_closed === false)).toBe(true);
   });
 
-  it('uses median projected segment length for inverse-curve refinement', () => {
+  it('uses only real open-curve segments when deriving inverse refinement spacing', () => {
     expect(geometricOffsetSampleSpacing({
       completed_levels: 1,
       levels: [{
         level: 1,
         target_distance: 0.1,
         boundary_components: [{
+          is_closed: false,
           points: [
             { x: 0, y: 0 },
             { x: 1, y: 0 },
@@ -127,6 +109,6 @@ describe('single geometric-offset computation settings', () => {
           ]
         }]
       }]
-    })).toBe(2);
+    })).toBe(1);
   });
 });

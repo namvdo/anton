@@ -41,6 +41,8 @@ export const DEFAULT_GEOMETRIC_OFFSET_SETTINGS = Object.freeze({
   maximumSeedPoints: 4000,
 });
 
+export const MAX_INVERSE_OFFSET_ITERATIONS = 100;
+
 export const INVERSE_OFFSET_POSITION_TOLERANCE_RULE = (
   'max(1e-5, 0.25 * directContourSampleSpacing)'
 );

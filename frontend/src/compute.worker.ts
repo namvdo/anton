@@ -26,7 +26,7 @@ import type {
   UlamTransitionsPayload,
 } from './protocol/computeContracts';
 import {
-  computeOpenGeometricOffsetPreimages,
+  projectGeometricOffsetBoundaries,
   projectGeometricOffsetBoundary,
 } from './utils/geometricOffsetCompute';
 import type {
@@ -44,6 +44,7 @@ import type {
 const MIS_SUPPORT_THRESHOLD = PERIODIC_SUPPORT_FILTER_SETTINGS.supportThreshold;
 const MIS_FILTER_SUBDIVISIONS = PERIODIC_SUPPORT_FILTER_SETTINGS.subdivisions;
 const MIS_FILTER_POINTS_PER_BOX = PERIODIC_SUPPORT_FILTER_SETTINGS.pointsPerBox;
+export const MAX_INVERSE_RESULT_POINTS = 100_000;
 
 interface UlamComputerLike {
   free(): void;
@@ -265,7 +266,7 @@ const computePeriodic = async (payload: PeriodicComputePayload): Promise<Periodi
       const supportSubdivisions = periodicSearchSettings.supportFilterSubdivisions ?? MIS_FILTER_SUBDIVISIONS;
       const supportThreshold = periodicSearchSettings.supportThreshold ?? MIS_SUPPORT_THRESHOLD;
 
-      supportComputer = new wasm.UlamComputer(
+      const ulamComputer = new wasm.UlamComputer(
         params.a,
         params.b,
         supportSubdivisions,
@@ -276,9 +277,10 @@ const computePeriodic = async (payload: PeriodicComputePayload): Promise<Periodi
         viewRange.yMin,
         viewRange.yMax
       );
+      supportComputer = ulamComputer;
 
       support = {
-        invariantMeasure: supportComputer.get_invariant_measure() as number[],
+        invariantMeasure: ulamComputer.get_invariant_measure() as number[],
         subdivisions: supportSubdivisions,
         xMin: viewRange.xMin,
         xMax: viewRange.xMax,
@@ -572,7 +574,7 @@ const computeGeometricOffsetBatch = async (
     contours: payload.contours.map(({ id, epsilon }) => ({
       id,
       epsilon,
-      result: projectGeometricOffsetBoundary(payload.boundary, epsilon),
+      result: projectGeometricOffsetBoundaries(payload.boundaries, epsilon),
     })),
   };
 };
@@ -580,21 +582,11 @@ const computeGeometricOffsetBatch = async (
 const computeInverseGeometricOffsets = async (
   payload: InverseGeometricOffsetsComputePayload,
 ): Promise<InverseOffsetResult> => {
-  const hasOpenComponent = payload.levels.some(level => (
-    (level.boundary_components || []).some(component => component.is_closed !== true)
-  ));
-  if (hasOpenComponent) {
-    return computeOpenGeometricOffsetPreimages(
-      payload.levels,
-      payload.params,
-      payload.settings.iterations,
-    );
-  }
   const wasm = await ensureWasm();
   if (typeof wasm.computeInverseGeometricOffsetContours !== 'function') {
     throw new Error('Inverse geometric offset export is unavailable; rebuild WebAssembly');
   }
-  const { levels, params, settings } = payload;
+  const { levels, params, settings, domain } = payload;
   return wasm.computeInverseGeometricOffsetContours(
     levels,
     params.a,
@@ -603,7 +595,12 @@ const computeInverseGeometricOffsets = async (
     settings.iterations,
     settings.positionTolerance,
     settings.normalTolerance,
-    settings.maxSubdivisionDepth
+    settings.maxSubdivisionDepth,
+    domain.xMin,
+    domain.xMax,
+    domain.yMin,
+    domain.yMax,
+    MAX_INVERSE_RESULT_POINTS,
   ) as InverseOffsetResult;
 };
 
@@ -617,26 +614,30 @@ const computeInverseGeometricOffsetBatch = async (
   if (!Array.isArray(payload.sources) || payload.sources.length === 0) {
     throw new Error('An inverse geometric-offset batch requires at least one source contour.');
   }
-  const { params, settings } = payload;
+  const { params, settings, domain } = payload;
+  const retainedPointBudget = Math.max(
+    1,
+    Math.floor(MAX_INVERSE_RESULT_POINTS / payload.sources.length),
+  );
   return {
     sources: payload.sources.map(source => {
-      const hasOpenComponent = source.levels.some(level => (
-        (level.boundary_components || []).some(component => component.is_closed !== true)
-      ));
       return {
         id: source.id,
-        result: hasOpenComponent
-          ? computeOpenGeometricOffsetPreimages(source.levels, params, settings.iterations)
-          : wasm.computeInverseGeometricOffsetContours(
-            source.levels,
-            params.a,
-            params.b,
-            params.epsilon,
-            settings.iterations,
-            source.positionTolerance,
-            settings.normalTolerance,
-            settings.maxSubdivisionDepth,
-          ) as InverseOffsetResult,
+        result: wasm.computeInverseGeometricOffsetContours(
+          source.levels,
+          params.a,
+          params.b,
+          params.epsilon,
+          settings.iterations,
+          source.positionTolerance,
+          settings.normalTolerance,
+          settings.maxSubdivisionDepth,
+          domain.xMin,
+          domain.xMax,
+          domain.yMin,
+          domain.yMax,
+          retainedPointBudget,
+        ) as InverseOffsetResult,
       };
     }),
   };

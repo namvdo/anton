@@ -42,7 +42,7 @@ describe('compute protocol', () => {
 
   it('accepts direct and inverse geometric batch tasks', () => {
     expect(createComputeRequest(3, 'computeGeometricOffsetBatch', {
-      boundary: [],
+      boundaries: [],
       contours: [],
     }).kind).toBe('computeGeometricOffsetBatch');
     expect(createComputeRequest(4, 'computeInverseGeometricOffsetBatch', {

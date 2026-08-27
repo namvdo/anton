@@ -13,6 +13,7 @@ import {
   DEFAULT_MANIFOLD_SETTINGS,
   DEFAULT_ULAM_SETTINGS,
   INVERSE_OFFSET_POSITION_TOLERANCE_RULE,
+  MAX_INVERSE_OFFSET_ITERATIONS,
   PERIODIC_SUPPORT_FILTER_SETTINGS,
   ULAM_OPERATOR_SETTINGS,
   continuousUlamIntegrationTime,
@@ -685,7 +686,7 @@ const normalizeSolvers = (
       inverseIterations: requireInteger(
         geometric.inverseIterations,
         'Inverse-offset iterations',
-        { minimum: 1, maximum: 8 },
+        { minimum: 1, maximum: MAX_INVERSE_OFFSET_ITERATIONS },
       ),
       inversePositionTolerance: positionTolerance,
       inversePositionToleranceRule: requireImplementedValue(

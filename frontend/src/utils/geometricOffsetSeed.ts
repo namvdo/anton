@@ -162,14 +162,3 @@ export const buildVerifiedBoundaryCycle = (
   const cycles = buildVerifiedBoundaryCycles(manifolds);
   return cycles.length === 1 ? cycles[0] : [];
 };
-
-/**
- * Return every calculated unstable-manifold extended state exactly once.
- *
- * A geometric offset is a pointwise map, not a continuation seeded from a
- * reduced sample. Branch order and repeated calculated samples are therefore
- * retained and no closure is inferred.
- */
-export const collectGeometricOffsetBoundaryPoints = (
-  manifolds: Manifold[],
-): ExtendedPointTuple[] => collectExtendedManifoldBranches(manifolds).flat();

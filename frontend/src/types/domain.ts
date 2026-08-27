@@ -189,6 +189,10 @@ export interface InverseOffsetCurve extends UnknownRecord {
   inverse_iteration: number;
   is_closed?: boolean;
   points?: ProjectedState[];
+  input_point_count?: number;
+  output_point_count?: number;
+  retained_point_count?: number;
+  display_decimated?: boolean;
   source_relation?: string;
   closure_position_residual?: number;
   closure_normal_residual?: number;
@@ -203,6 +207,9 @@ export interface InverseOffsetCurve extends UnknownRecord {
 export interface InverseOffsetResult extends UnknownRecord {
   curves: InverseOffsetCurve[];
   completed_iterations?: number;
+  total_output_points?: number;
+  retained_output_points?: number;
+  result_point_budget?: number;
   max_position_chord_error?: number;
   max_normal_chord_error?: number;
   subdivision_limit_reached?: boolean;

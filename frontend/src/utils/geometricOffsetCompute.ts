@@ -1,14 +1,11 @@
 import type {
   ExtendedPointLike,
   ExtendedPointTuple,
-  GeometricOffsetLevel,
   GeometricOffsetResult,
-  InverseOffsetResult,
   PointLike,
 } from '../types/domain';
 import type { GeometricOffsetBatchComputePayload } from '../protocol/computeContracts';
 import { normalizeContourEpsilons } from './geometricOffsetBatch';
-import { computePointsSpacing } from './inverseOffsetColors';
 
 const coordinatePair = (point: PointLike): [number, number] => (
   Array.isArray(point)
@@ -101,104 +98,40 @@ export const projectGeometricOffsetBoundary = (
   };
 };
 
-const inverseHenonExtendedPoint = (
-  point: ExtendedPointLike,
-  a: number,
-  b: number,
-  epsilon: number,
-): { x: number; y: number; nx: number; ny: number } => {
-  const [mappedX, mappedY, mappedNx, mappedNy] = extendedPoint(point);
-  if (![a, b, epsilon, mappedX, mappedY, mappedNx, mappedNy].every(Number.isFinite)
-    || Math.abs(b) < 1e-12 || epsilon < 0) {
-    throw new Error('Open preimage mapping requires finite parameters and nonzero Hénon b.');
+export const projectGeometricOffsetBoundaries = (
+  boundaries: GeometricOffsetBatchComputePayload['boundaries'],
+  contourEpsilon: number,
+): GeometricOffsetResult => {
+  if (!Array.isArray(boundaries) || boundaries.length === 0) {
+    throw new Error('At least one unstable-manifold boundary branch is required.');
   }
-  const mappedNormalLength = Math.hypot(mappedNx, mappedNy);
-  if (mappedNormalLength < 1e-14) {
-    throw new Error('Open preimage source contains a degenerate normal.');
-  }
-  const mx = mappedNx / mappedNormalLength;
-  const my = mappedNy / mappedNormalLength;
-  const x = (mappedY - epsilon * my) / b;
-  const y = mappedX - epsilon * mx - 1 + a * x * x;
-  const rawNx = -2 * a * x * mx + b * my;
-  const rawNy = mx;
-  const normalLength = Math.hypot(rawNx, rawNy);
-  if (!Number.isFinite(normalLength) || normalLength < 1e-14) {
-    throw new Error('Open preimage mapping produced a degenerate normal.');
-  }
-  return { x, y, nx: rawNx / normalLength, ny: rawNy / normalLength };
-};
-
-/** Map open offset samples through the inverse extended Hénon map point by point. */
-export const computeOpenGeometricOffsetPreimages = (
-  levels: GeometricOffsetLevel[],
-  params: { a: number; b: number; epsilon: number },
-  iterations: number,
-): InverseOffsetResult => {
-  if (!Number.isSafeInteger(iterations) || iterations < 1 || iterations > 8) {
-    throw new Error('Inverse offset iterations must lie between 1 and 8.');
-  }
-  const curves: NonNullable<InverseOffsetResult['curves']> = [];
-  let totalOutputPoints = 0;
-  for (const level of levels) {
-    for (const [componentIndex, component] of (level.boundary_components || []).entries()) {
-      let source = component.points || [];
-      if (source.length === 0) {
-        throw new Error('An open preimage source requires at least one point.');
-      }
-      let previousSpacing = computePointsSpacing(source, component.is_closed ?? false);
-      for (let inverseIteration = 1; inverseIteration <= iterations; inverseIteration += 1) {
-        const points = source.map(point => inverseHenonExtendedPoint(
-          point as ExtendedPointLike,
-          params.a,
-          params.b,
-          params.epsilon,
-        ));
-        const currentSpacing = computePointsSpacing(points, component.is_closed ?? false);
-        const densities = currentSpacing.map(s => (s > 1e-14 ? 1 / s : 0));
-        const stepRatios = previousSpacing.map((prev, idx) => (
-          prev > 1e-14 ? currentSpacing[idx] / prev : 1.0
-        ));
-        totalOutputPoints += points.length;
-        curves.push({
-          source_level: level.level,
-          source_component_id: component.id ?? componentIndex,
-          inverse_iteration: inverseIteration,
-          is_closed: component.is_closed ?? false,
-          points,
-          input_point_count: source.length,
-          output_point_count: points.length,
-          closure_position_residual: 0,
-          closure_normal_residual: 0,
-          max_position_chord_error: 0,
-          max_normal_chord_error: 0,
-          subdivision_limit_reached: false,
-          source_relation: 'open_point_set',
-          local_spacings: currentSpacing,
-          step_ratios: stepRatios,
-          densities,
-        });
-        previousSpacing = currentSpacing;
-        source = points;
-      }
+  const components = boundaries.map(({ points, isClosed }, id) => {
+    const result = projectGeometricOffsetBoundary(points, contourEpsilon);
+    const component = result.levels[0].boundary_components?.[0];
+    if (!component) {
+      throw new Error('Geometric projection did not return a boundary component.');
     }
-  }
+    return {
+      ...component,
+      id,
+      is_closed: isClosed || component.is_closed === true,
+    };
+  });
   return {
-    curves,
-    source_curve_count: levels.reduce(
-      (count, level) => count + (level.boundary_components || []).length,
-      0,
-    ),
-    completed_iterations: iterations,
-    total_output_points: totalOutputPoints,
-    max_position_chord_error: 0,
-    max_normal_chord_error: 0,
-    subdivision_limit_reached: false,
+    levels: [{
+      level: 1,
+      target_distance: contourEpsilon,
+      boundary_components: components,
+      component_count: components.length,
+    }],
+    completed_levels: 1,
+    epsilon: contourEpsilon,
+    stop_reason: 'requested_levels_completed',
   };
 };
 
 export const buildGeometricOffsetBatchRequest = (
-  boundary: ExtendedPointLike[],
+  boundaries: Array<{ points: ExtendedPointLike[]; isClosed: boolean }>,
   contours: Array<{ id: string; epsilon: number }>,
 ): GeometricOffsetBatchComputePayload => {
   if (!Array.isArray(contours) || contours.length === 0) {
@@ -212,13 +145,19 @@ export const buildGeometricOffsetBatchRequest = (
     throw new Error('Geometric contour identifiers must be unique.');
   }
   const epsilonValues = normalizeContourEpsilons(contours.map(contour => contour.epsilon));
-  const normalizedBoundary = buildSingleGeometricOffsetRequest(boundary, epsilonValues[0]).boundary;
+  if (!Array.isArray(boundaries) || boundaries.length === 0) {
+    throw new Error('At least one unstable-manifold boundary branch is required.');
+  }
+  const normalizedBoundaries = boundaries.map(({ points, isClosed }) => ({
+    points: buildSingleGeometricOffsetRequest(points, epsilonValues[0]).boundary,
+    isClosed: isClosed === true,
+  }));
   const contoursByEpsilon = new Map(contours.map(contour => [
     normalizeContourEpsilons([contour.epsilon])[0],
     contour,
   ]));
   return {
-    boundary: normalizedBoundary,
+    boundaries: normalizedBoundaries,
     contours: epsilonValues.map(epsilon => {
       const contour = contoursByEpsilon.get(epsilon);
       if (!contour) {
@@ -234,7 +173,10 @@ export const geometricOffsetSampleSpacing = (result: GeometricOffsetResult | nul
   for (const level of result?.levels || []) {
     for (const component of level?.boundary_components || []) {
       const points = component?.points || [];
-      for (let index = 0; index < points.length; index += 1) {
+      const segmentCount = component.is_closed === true
+        ? points.length
+        : Math.max(0, points.length - 1);
+      for (let index = 0; index < segmentCount; index += 1) {
         const current = coordinatePair(points[index]);
         const next = coordinatePair(points[(index + 1) % points.length]);
         const length = Math.hypot(next[0] - current[0], next[1] - current[1]);

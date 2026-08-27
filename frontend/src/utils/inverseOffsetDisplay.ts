@@ -1,4 +1,4 @@
-import { MIN_VIEW_SPAN, normalizeViewRange, RANGE_LIMIT } from './viewRange';
+import { constrainViewRange, MIN_VIEW_SPAN, normalizeViewRange } from './viewRange';
 import { categoricalCurveColor } from './categoricalCurveColor';
 import type {
   InverseOffsetCurve,
@@ -64,7 +64,7 @@ export const inverseCurveNestingSummary = (
   if (relations.includes('open_point_set')) {
     return {
       passed: false,
-      message: 'Open pointwise preimage computed; polygonal nesting does not apply.'
+      message: 'Open adaptively refined preimage computed; polygonal nesting does not apply.'
     };
   }
   if (relations.includes('source_not_simple')) {
@@ -129,8 +129,8 @@ export const inverseOffsetCurveBounds = (curves: CurveWithPoints[]): ViewRange |
 export const fitInverseOffsetCurveRange = (
   curves: CurveWithPoints[],
   aspectRatio: number,
+  domain: ViewRange,
   paddingRatio = 0.14,
-  limit = RANGE_LIMIT
 ): ViewRange | null => {
   const bounds = inverseOffsetCurveBounds(curves);
   if (!bounds) return null;
@@ -148,9 +148,5 @@ export const fitInverseOffsetCurveRange = (
     yMin: centerY - height / 2,
     yMax: centerY + height / 2
   };
-  const displayLimit = Math.max(
-    limit,
-    ...Object.values(targetRange).map(value => Math.abs(value))
-  );
-  return normalizeViewRange(targetRange, displayLimit);
+  return constrainViewRange(normalizeViewRange(targetRange), domain);
 };
