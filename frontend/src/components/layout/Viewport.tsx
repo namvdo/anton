@@ -10,6 +10,7 @@ import {
 import type {
   GeometricOffsetContour,
   GeometricOffsetState,
+  InvariantSetState,
   ManifoldState,
   SystemType,
   TooltipData,
@@ -43,6 +44,7 @@ interface ViewportProps {
     inverseColorMode?: GeometricOffsetState['inverseColorMode'];
     inverseColormap?: GeometricOffsetState['inverseColormap'];
   };
+  invariantSetState?: Pick<InvariantSetState, 'showResult' | 'result'>;
   ulamState: Pick<UlamState, 'showUlamOverlay'>;
   displayRange?: ViewRange;
   handleZoomIn: () => void;
@@ -53,7 +55,7 @@ interface ViewportProps {
   savePNG: () => void;
 }
 
-export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOffsetState, ulamState, hasBoundarySamples = false, displayRange, handleZoomIn, handleZoomOut, handleResetView, handlePanMode, isPanMode = false, savePNG }: ViewportProps) => {
+export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOffsetState, invariantSetState = { showResult: false, result: null }, ulamState, hasBoundarySamples = false, displayRange, handleZoomIn, handleZoomOut, handleResetView, handlePanMode, isPanMode = false, savePNG }: ViewportProps) => {
   const tooltipData: TooltipData | null = tooltip.data ?? null;
   const tooltipX = tooltip.x ?? 0;
   const tooltipY = tooltip.y ?? 0;
@@ -99,6 +101,12 @@ export const Viewport = ({ type, canvasRef, tooltip, manifoldState, geometricOff
 
       <div className="vp-legend">
         <div className="vp-legend-title">Legend</div>
+        {invariantSetState.showResult && invariantSetState.result && (
+          <div className="lg-item">
+            <div className="lg-dot" style={{ background: '#70a7c4' }}></div>
+            Forward-projected samples
+          </div>
+        )}
         {manifoldState.showUnstableManifold && (
           <div className="lg-item">
             <div

@@ -78,6 +78,7 @@ import {
 import {
     CONTINUOUS_BOUNDARY_FLOW_SETTINGS,
     DEFAULT_GEOMETRIC_OFFSET_SETTINGS,
+    DEFAULT_INVARIANT_SET_SETTINGS,
     DEFAULT_MANIFOLD_SETTINGS,
     DEFAULT_ULAM_SETTINGS,
     INVERSE_OFFSET_POSITION_TOLERANCE_RULE,
@@ -85,6 +86,7 @@ import {
     continuousUlamIntegrationTime,
     inverseOffsetPositionTolerance
 } from './config/numericalSettings';
+import { randomHenonInvariantSeed } from './utils/invariantSetSeed';
 import {
     buildExperimentBundle,
     experimentConfigurationToUiState,
@@ -105,6 +107,7 @@ import type {
     ExtendedPointTuple,
     ExtendedState,
     GeometricOffsetState,
+    InvariantSetState,
     Manifold,
     ManifoldBranch,
     ManifoldState,
@@ -510,6 +513,16 @@ const SetValuedViz = () => {
         };
     });
 
+    const [invariantSetState, setInvariantSetState] = useState<InvariantSetState>({
+        seedMode: 'manual',
+        boundaryPointCount: DEFAULT_INVARIANT_SET_SETTINGS.boundaryPointCount,
+        forwardIterations: DEFAULT_INVARIANT_SET_SETTINGS.forwardIterations,
+        showResult: true,
+        isComputing: false,
+        result: null,
+        error: null,
+    });
+
     const boundarySourceManifolds = manifoldState.manifolds;
 
     const verifiedBoundaryCycles = useMemo(
@@ -697,6 +710,7 @@ const SetValuedViz = () => {
     const periodicComputationRevisionRef = useRef(0);
     const geometricOffsetRequestIdRef = useRef(0);
     const inverseOffsetRequestIdRef = useRef(0);
+    const invariantSetRequestIdRef = useRef(0);
     const ulamDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const ulamSupportRef = useRef<SupportGrid | null>(null);
     const ulamTransitionsRequestRef = useRef(0);
@@ -2189,6 +2203,83 @@ const SetValuedViz = () => {
         }
     }, [recordingState.recordingEnabled]);
 
+    const computeForwardInvariantSet = useCallback(async () => {
+        if (dynamicSystem !== 'henon') return;
+        let seed: ExtendedState;
+        try {
+            if (invariantSetState.seedMode === 'manual') {
+                seed = { ...manifoldState.startPoint };
+            } else {
+                const position = randomHenonInvariantSeed(
+                    viewRange,
+                    params.a,
+                    params.b,
+                    params.epsilon,
+                );
+                seed = {
+                    ...position,
+                    nx: manifoldState.startPoint.nx,
+                    ny: manifoldState.startPoint.ny,
+                };
+            }
+        } catch (error) {
+            setInvariantSetState(previous => ({
+                ...previous,
+                error: error instanceof Error ? error.message : String(error),
+            }));
+            return;
+        }
+
+        const requestId = ++invariantSetRequestIdRef.current;
+        setInvariantSetState(previous => ({
+            ...previous,
+            isComputing: true,
+            result: null,
+            error: null,
+        }));
+        try {
+            const result = await runComputeTask('computeForwardInvariantSet', {
+                seed,
+                params: { a: params.a, b: params.b, epsilon: params.epsilon },
+                domain: viewRange,
+                settings: {
+                    boundaryPointCount: invariantSetState.boundaryPointCount,
+                    forwardIterations: invariantSetState.forwardIterations,
+                },
+            });
+            if (requestId !== invariantSetRequestIdRef.current) return;
+            setInvariantSetState(previous => ({
+                ...previous,
+                isComputing: false,
+                showResult: true,
+                result,
+                error: null,
+            }));
+        } catch (error) {
+            if (requestId !== invariantSetRequestIdRef.current) return;
+            setInvariantSetState(previous => ({
+                ...previous,
+                isComputing: false,
+                result: null,
+                error: error instanceof Error ? error.message : String(error),
+            }));
+        }
+    }, [
+        dynamicSystem,
+        invariantSetState.boundaryPointCount,
+        invariantSetState.forwardIterations,
+        invariantSetState.seedMode,
+        manifoldState.startPoint.x,
+        manifoldState.startPoint.y,
+        manifoldState.startPoint.nx,
+        manifoldState.startPoint.ny,
+        params.a,
+        params.b,
+        params.epsilon,
+        runComputeTask,
+        viewRange,
+    ]);
+
     const computeGeometricOffsets = useCallback(async () => {
         if (dynamicSystem !== 'henon' || calculatedBoundaryBranches.length === 0) {
             setGeometricOffsetState(prev => ({
@@ -2421,6 +2512,31 @@ const SetValuedViz = () => {
     ]);
 
     useEffect(() => {
+        invariantSetRequestIdRef.current += 1;
+        setInvariantSetState(previous => ({
+            ...previous,
+            isComputing: false,
+            result: null,
+            error: null,
+        }));
+    }, [dynamicSystem, params.a, params.b, params.epsilon, viewRange]);
+
+    useEffect(() => {
+        if (invariantSetState.seedMode !== 'manual') return;
+        invariantSetRequestIdRef.current += 1;
+        setInvariantSetState(previous => ({
+            ...previous,
+            isComputing: false,
+            result: null,
+            error: null,
+        }));
+    }, [
+        invariantSetState.seedMode,
+        manifoldState.startPoint.x,
+        manifoldState.startPoint.y,
+    ]);
+
+    useEffect(() => {
         geometricOffsetRequestIdRef.current += 1;
         inverseOffsetRequestIdRef.current += 1;
         setGeometricOffsetState(prev => ({
@@ -2445,7 +2561,7 @@ const SetValuedViz = () => {
 
         const toRemove: THREE.Object3D[] = [];
         scene.traverse(child => {
-            if (child.userData.type === 'trajectory' || child.userData.type === 'manifold' || child.userData.type === 'boundaryLayer' || child.userData.type === 'boundarySamplePoints' || child.userData.type === 'noiseBall' || child.userData.type === 'geometricOffset' || child.userData.type === 'inverseGeometricOffset' || child.userData.type === 'fixedPoint' || child.userData.type === 'bde') {
+            if (child.userData.type === 'trajectory' || child.userData.type === 'manifold' || child.userData.type === 'boundaryLayer' || child.userData.type === 'boundarySamplePoints' || child.userData.type === 'noiseBall' || child.userData.type === 'geometricOffset' || child.userData.type === 'inverseGeometricOffset' || child.userData.type === 'forwardInvariantSet' || child.userData.type === 'fixedPoint' || child.userData.type === 'bde') {
                 toRemove.push(child);
             }
         });
@@ -2510,6 +2626,37 @@ const SetValuedViz = () => {
             samples.userData = { type: 'boundarySamplePoints', boundaryRole };
             scene.add(samples);
         };
+
+        if (invariantSetState.showResult && invariantSetState.result?.point_sets.length) {
+            // Iteration zero is the construction circle, not a forward-projected result.
+            const projectedPointSets = invariantSetState.result.point_sets.filter(pointSet => (
+                pointSet.iteration > 0
+            ));
+            const projectedPoints = projectedPointSets.flatMap(pointSet => pointSet.points);
+            if (projectedPoints.length > 0) {
+                const geometry = new THREE.BufferGeometry().setFromPoints(
+                    projectedPoints.map(point => new THREE.Vector3(point.x, point.y, 0.31)),
+                );
+                const material = new THREE.PointsMaterial({
+                    color: new THREE.Color('#70a7c4'),
+                    size: 4,
+                    sizeAttenuation: false,
+                    transparent: true,
+                    opacity: 0.9,
+                    depthTest: false,
+                    depthWrite: false,
+                });
+                const samples = new THREE.Points(geometry, material);
+                samples.renderOrder = 15;
+                samples.userData = {
+                    type: 'forwardInvariantSet',
+                    role: 'projected-point-samples',
+                    pointSetCount: projectedPointSets.length,
+                    pointCount: projectedPoints.length,
+                };
+                scene.add(samples);
+            }
+        }
 
         if (manifoldState.showUnstableManifold && hasBoundarySamples) {
             boundaryLayers.invariantBranches.forEach(branch => {
@@ -2947,7 +3094,7 @@ const SetValuedViz = () => {
             scene.add(sphere);
         }
 
-    }, [manifoldState, geometricOffsetState, bdeState, dynamicSystem, type, viewRange, viewportRange, readViewportSize, boundaryLayers, hasBoundarySamples, hasVerifiedBoundaryCycles, params.epsilon, filters, periodicState.isReady, periodicState.orbits]);
+    }, [manifoldState, geometricOffsetState, invariantSetState, bdeState, dynamicSystem, type, viewRange, viewportRange, readViewportSize, boundaryLayers, hasBoundarySamples, hasVerifiedBoundaryCycles, params.epsilon, filters, periodicState.isReady, periodicState.orbits]);
 
     useEffect(() => {
         if (!sceneRef.current) return;
@@ -3886,6 +4033,9 @@ const SetValuedViz = () => {
                 setManifoldState={setManifoldState}
                 geometricOffsetState={geometricOffsetState}
                 setGeometricOffsetState={setGeometricOffsetState}
+                invariantSetState={invariantSetState}
+                setInvariantSetState={setInvariantSetState}
+                computeForwardInvariantSet={computeForwardInvariantSet}
                 hasBoundarySamples={hasBoundarySamples}
                 boundaryLayerError={boundaryLayers.error}
                 boundarySampling={{
@@ -3931,6 +4081,7 @@ const SetValuedViz = () => {
                 tooltip={tooltip}
                 manifoldState={manifoldState}
                 geometricOffsetState={geometricOffsetState}
+                invariantSetState={invariantSetState}
                 ulamState={ulamState}
                 hasBoundarySamples={hasBoundarySamples}
                 displayRange={viewportRange}

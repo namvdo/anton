@@ -136,7 +136,7 @@ export const PeriodicSearchPanel = ({
             id="periodic-max-period"
             type="number"
             min="1"
-            max="20"
+            max="50"
             step="1"
             value={maxPeriod}
             onChange={event => updateMaxPeriod(normalizePeriodicMaxPeriod(

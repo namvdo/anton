@@ -310,7 +310,7 @@ const normalizeFiniteParams = (params: unknown): BistParameters => {
     throw new RangeError('Parameter delta must be non-negative.');
   }
   requireInteger(candidate.maxIterations, 'Parameter maxIterations');
-  requireInteger(candidate.maxPeriod, 'Parameter maxPeriod', { minimum: 1, maximum: 20 });
+  requireInteger(candidate.maxPeriod, 'Parameter maxPeriod', { minimum: 1, maximum: 50 });
   return candidate;
 };
 
@@ -556,7 +556,7 @@ const normalizeSolvers = (
   const maximumPeriod = requireInteger(
     periodic.maximumPeriod,
     'Periodic maximum period',
-    { minimum: 1, maximum: 20 },
+    { minimum: 1, maximum: 50 },
   );
   if (maximumPeriod !== parameters.maxPeriod) {
     throw new Error('Periodic maximum period must match parameters.maxPeriod.');

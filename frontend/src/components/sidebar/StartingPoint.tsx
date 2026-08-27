@@ -11,11 +11,18 @@ interface StartingPointProps {
   startPoint: ExtendedState;
   updateStartPoint: (point: ExtendedState) => void;
   disabled?: boolean;
+  embedded?: boolean;
 }
 
 const displayValue = (value: unknown): string => Number.isFinite(Number(value)) ? String(Number(value)) : '';
 
-export const StartingPoint = ({ type, startPoint, updateStartPoint, disabled = false }: StartingPointProps) => {
+export const StartingPoint = ({
+  type,
+  startPoint,
+  updateStartPoint,
+  disabled = false,
+  embedded = false,
+}: StartingPointProps) => {
   const isContinuous = type === 'continuous';
   const [draft, setDraft] = useState(() => ({
     x: displayValue(startPoint.x),
@@ -60,8 +67,8 @@ export const StartingPoint = ({ type, startPoint, updateStartPoint, disabled = f
     if (event.key === 'Enter') apply();
   };
 
-  return (
-    <Collapsible title="Extended start state" defaultOpen={false}>
+  const editor = (
+    <>
       <div className="start-group-label">Position</div>
       <div className="start-grid">
         <div className="start-field">
@@ -122,6 +129,9 @@ export const StartingPoint = ({ type, startPoint, updateStartPoint, disabled = f
       </button>
       <div className="start-hint">The normal is normalized automatically when applied.</div>
       {error && <div className="start-error" role="alert">{error}</div>}
-    </Collapsible>
+    </>
   );
+  return embedded
+    ? <div className="embedded-start-state">{editor}</div>
+    : <Collapsible title="Extended start state" defaultOpen={false}>{editor}</Collapsible>;
 };

@@ -10,14 +10,20 @@ import type {
 
 export const BIST_VERSION = packageMetadata.version;
 
+export const randomHenonPreset = (): Partial<BistParameters> => ({
+  a: Number((Math.random() * 3.0 - 1.5).toFixed(3)),
+  b: Number((Math.random() * 3.0 - 1.5).toFixed(3)),
+  epsilon: Number((Math.random() * 0.5).toFixed(4)),
+});
+
 export const SYSTEM_CATALOG = Object.freeze({
   discrete: Object.freeze([
     {
       id: 'henon',
       name: 'Hénon Map',
       presets: [
-        { name: 'Standard', vals: { a: 1.4, b: 0.3 } },
         { name: 'Boundary-map demo', vals: { a: 0.45, b: 0.3, epsilon: 0.0133 } },
+        { name: 'Random', vals: randomHenonPreset },
       ],
     },
     {

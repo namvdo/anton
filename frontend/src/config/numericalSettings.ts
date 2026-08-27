@@ -43,6 +43,18 @@ export const DEFAULT_GEOMETRIC_OFFSET_SETTINGS = Object.freeze({
 
 export const MAX_INVERSE_OFFSET_ITERATIONS = 100;
 
+export const INVARIANT_SET_LIMITS = Object.freeze({
+  minimumBoundaryPoints: 8,
+  maximumBoundaryPoints: 10_000,
+  minimumForwardIterations: 1,
+  maximumForwardIterations: 100_000,
+});
+
+export const DEFAULT_INVARIANT_SET_SETTINGS = Object.freeze({
+  boundaryPointCount: 256,
+  forwardIterations: 100,
+});
+
 export const INVERSE_OFFSET_POSITION_TOLERANCE_RULE = (
   'max(1e-5, 0.25 * directContourSampleSpacing)'
 );

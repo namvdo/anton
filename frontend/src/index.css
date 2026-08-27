@@ -801,6 +801,32 @@ select:disabled { cursor: not-allowed; }
 .geometric-offset-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; margin-bottom: 12px; border: 1px solid var(--line-hi); border-radius: 5px; background: var(--bg); }
 .geometric-offset-mode button { min-height: 32px; border: 0; border-radius: 3px; background: transparent; color: var(--text-3); font: 700 11px/1 var(--font-sans); cursor: pointer; }
 .geometric-offset-mode button.active { background: var(--surface-hi); color: var(--text); }
+
+.invariant-set-help { margin: 0 0 10px; color: var(--text-3); font-size: 10px; font-weight: 600; line-height: 1.5; }
+.invariant-set-mode,
+.invariant-set-display { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; border: 1px solid var(--line-hi); border-radius: 5px; background: var(--bg); }
+.invariant-set-mode { margin-bottom: 9px; }
+.invariant-set-mode button,
+.invariant-set-display button { min-height: 32px; border: 0; border-radius: 3px; background: transparent; color: var(--text-3); font: 700 10px/1.2 var(--font-sans); cursor: pointer; }
+.invariant-set-mode button.active,
+.invariant-set-display button.active { background: var(--surface-hi); color: var(--text); }
+.invariant-set-seed-readout,
+.invariant-set-note { margin: 0 0 9px; color: var(--text-3); font: 600 9.5px/1.4 var(--font-mono); }
+.invariant-set-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.invariant-set-grid label { min-width: 0; color: var(--text-2); font-size: 9.5px; font-weight: 700; }
+.invariant-set-grid label span { display: block; margin-bottom: 4px; }
+.invariant-set-grid input { width: 100%; min-width: 0; min-height: 32px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 4px; outline: none; background: var(--surface); color: var(--text); font: 650 10.5px/1 var(--font-mono); }
+.invariant-set-grid input:focus { border-color: var(--amber); }
+.invariant-set-compute { width: 100%; min-height: 34px; margin-top: 9px; border: 1px solid #4d4431; border-radius: 4px; background: var(--surface); color: #e5c883; cursor: pointer; }
+.invariant-set-compute:hover:not(:disabled) { border-color: var(--amber); background: var(--surface-hi); color: #f6d898; }
+.invariant-set-compute:disabled { opacity: .5; }
+.invariant-set-error { margin-top: 7px; color: var(--red); font-size: 10px; line-height: 1.4; }
+.invariant-set-note { margin-top: 7px; color: var(--amber); }
+.invariant-set-result { margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--line); }
+.invariant-set-result > div:not(.invariant-set-display):not(.t-row) { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; color: var(--text-3); font-size: 9.5px; }
+.invariant-set-result strong { color: var(--text-2); font: 650 9.5px/1.3 var(--font-mono); }
+.invariant-set-result small { display: block; margin: 5px 0 8px; color: var(--text-3); font-size: 8.5px; line-height: 1.4; }
+.invariant-set-display { margin-bottom: 7px; }
 .geometric-offset-editor { display: grid; gap: 10px; }
 .geometric-offset-series-grid { display: grid; grid-template-columns: 1fr 1fr .76fr; gap: 8px; }
 .geometric-offset-series-grid label,

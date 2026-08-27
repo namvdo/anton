@@ -9,6 +9,7 @@ vi.mock('../sidebar/EquationDisplay', () => ({ EquationDisplay: () => <div data-
 vi.mock('../sidebar/ParametersPanel', () => ({ ParametersPanel: () => <div data-testid="parameters-panel" /> }));
 vi.mock('../sidebar/ManifoldsPanel', () => ({ ManifoldsPanel: () => <div data-testid="manifolds-panel" /> }));
 vi.mock('../sidebar/GeometricOffsetsPanel', () => ({ GeometricOffsetsPanel: () => <div data-testid="geometric-offsets-panel" /> }));
+vi.mock('../sidebar/InvariantSetsPanel', () => ({ InvariantSetsPanel: () => <div data-testid="invariant-sets-panel" /> }));
 vi.mock('../sidebar/VisualizationPanel', () => ({ VisualizationPanel: () => <div data-testid="visualization-panel" /> }));
 vi.mock('../sidebar/StartingPoint', () => ({ StartingPoint: () => <div data-testid="starting-point" /> }));
 vi.mock('../sidebar/PeriodicOrbitsPanel', () => ({ PeriodicOrbitsPanel: () => <div data-testid="periodic-orbits" /> }));
@@ -134,6 +135,17 @@ const baseProps = {
   canComputeInverseGeometricOffsets: false,
   computeInverseGeometricOffsets: vi.fn(),
   fitInverseGeometricOffsets: vi.fn(),
+  invariantSetState: {
+    seedMode: 'random',
+    boundaryPointCount: 256,
+    forwardIterations: 100,
+    showResult: true,
+    isComputing: false,
+    result: null,
+    error: null,
+  },
+  setInvariantSetState: vi.fn(),
+  computeForwardInvariantSet: vi.fn(),
   ORBIT_COLORS: { manifold: '#e67e22', stableManifold: '#3498db' },
   filters: {
     period1: true,
@@ -231,7 +243,7 @@ describe('Sidebar', () => {
   });
 
   it('shows the starting point panel for discrete systems', () => {
-    render(<Sidebar {...baseProps} type="discrete" dynamicSystem="henon" />);
+    render(<Sidebar {...baseProps} type="discrete" dynamicSystem="duffing" />);
     expect(screen.getByTestId('starting-point')).toBeInTheDocument();
   });
 
@@ -246,6 +258,13 @@ describe('Sidebar', () => {
 
     rerender(<Sidebar {...baseProps} type="discrete" dynamicSystem="duffing" />);
     expect(screen.queryByTestId('geometric-offsets-panel')).toBeNull();
+  });
+
+  it('shows forward invariant-set controls only for the Hénon map', () => {
+    const { rerender } = render(<Sidebar {...baseProps} type="discrete" dynamicSystem="henon" />);
+    expect(screen.getByTestId('invariant-sets-panel')).toBeInTheDocument();
+    rerender(<Sidebar {...baseProps} type="discrete" dynamicSystem="duffing" />);
+    expect(screen.queryByTestId('invariant-sets-panel')).toBeNull();
   });
 
   it('passes recompute controls into the bottom controls bar', () => {

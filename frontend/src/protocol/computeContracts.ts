@@ -3,6 +3,8 @@ import type {
   CustomEquation,
   CustomParameter,
   ExtendedPointTuple,
+  ExtendedState,
+  ForwardInvariantSetResult,
   GeometricOffsetLevel,
   GeometricOffsetResult,
   InverseOffsetResult,
@@ -147,6 +149,16 @@ export interface UlamTransitionsPayload {
   index: number;
 }
 
+export interface ForwardInvariantSetComputePayload {
+  seed: ExtendedState;
+  params: Pick<BistParameters, 'a' | 'b' | 'epsilon'>;
+  domain: ViewRange;
+  settings: {
+    boundaryPointCount: number;
+    forwardIterations: number;
+  };
+}
+
 export interface ComputeTaskMap {
   computePeriodic: {
     payload: PeriodicComputePayload;
@@ -179,6 +191,10 @@ export interface ComputeTaskMap {
   getUlamTransitions: {
     payload: UlamTransitionsPayload;
     result: UlamTransition[];
+  };
+  computeForwardInvariantSet: {
+    payload: ForwardInvariantSetComputePayload;
+    result: ForwardInvariantSetResult;
   };
 }
 

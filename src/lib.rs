@@ -49,6 +49,9 @@ pub use continuous_ds::*;
 mod geometric_offsets;
 pub use geometric_offsets::*;
 
+mod invariant_sets;
+pub use invariant_sets::*;
+
 pub mod scientific;
 #[path = "scientific/validation.rs"]
 pub mod validation;

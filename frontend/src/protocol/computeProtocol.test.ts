@@ -51,4 +51,13 @@ describe('compute protocol', () => {
       settings: {},
     }).kind).toBe('computeInverseGeometricOffsetBatch');
   });
+
+  it('accepts the forward invariant-set task', () => {
+    expect(createComputeRequest(5, 'computeForwardInvariantSet', {
+      seed: { x: 0.1, y: 0.1 },
+      params: { a: 0.4, b: 0.3, epsilon: 0.1 },
+      domain: { xMin: -2, xMax: 2, yMin: -2, yMax: 2 },
+      settings: { boundaryPointCount: 128, forwardIterations: 10 },
+    }).kind).toBe('computeForwardInvariantSet');
+  });
 });

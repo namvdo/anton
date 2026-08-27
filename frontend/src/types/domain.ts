@@ -22,6 +22,34 @@ export interface ExtendedState {
   ny: number;
 }
 
+export type InvariantSetSeedMode = 'random' | 'manual';
+
+export interface ForwardInvariantPointSet extends UnknownRecord {
+  iteration: number;
+  points: ExtendedState[];
+}
+
+export interface ForwardInvariantSetResult extends UnknownRecord {
+  seed: ExtendedState;
+  deterministic_image: ProjectedState;
+  epsilon: number;
+  boundary_point_count: number;
+  requested_iterations: number;
+  completed_iterations: number;
+  stop_reason: 'requested_iterations_completed' | 'point_set_left_domain';
+  point_sets: ForwardInvariantPointSet[];
+}
+
+export interface InvariantSetState {
+  seedMode: InvariantSetSeedMode;
+  boundaryPointCount: number;
+  forwardIterations: number;
+  showResult: boolean;
+  isComputing: boolean;
+  result: ForwardInvariantSetResult | null;
+  error: string | null;
+}
+
 export interface ProjectedState {
   x: number;
   y: number;
@@ -404,7 +432,7 @@ export interface OrbitFilters {
 
 export interface SystemPreset {
   name: string;
-  vals: Partial<BistParameters>;
+  vals: Partial<BistParameters> | (() => Partial<BistParameters>);
 }
 
 export interface SystemDefinition {

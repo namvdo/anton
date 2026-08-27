@@ -74,6 +74,26 @@ describe('Viewport', () => {
     expect(screen.getByTestId('geometric-offset-point-swatch')).not.toHaveClass('lg-line');
   });
 
+  it('labels forward-projected invariant set samples', () => {
+    render(<Viewport {...baseProps} type="discrete" invariantSetState={{
+      showResult: true,
+      result: {
+        seed: { x: 0, y: 0, nx: 1, ny: 0 },
+        deterministic_image: { x: 1, y: 0 },
+        epsilon: 0.1,
+        boundary_point_count: 8,
+        requested_iterations: 1,
+        completed_iterations: 1,
+        stop_reason: 'requested_iterations_completed',
+        point_sets: [
+          { iteration: 0, points: [] },
+          { iteration: 1, points: [] },
+        ],
+      },
+    }} />);
+    expect(screen.getByText('Forward-projected samples')).toBeInTheDocument();
+  });
+
   it('labels unstable, deterministic-image, noise-ball, and mapped-point layers', () => {
     render(<Viewport {...baseProps} type="discrete" hasBoundarySamples manifoldState={{
       ...baseProps.manifoldState,

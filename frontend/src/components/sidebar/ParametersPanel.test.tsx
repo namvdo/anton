@@ -68,4 +68,36 @@ describe('ParametersPanel', () => {
     expect(updater(baseProps.params)).toMatchObject({ epsilon: 0 });
     expect(screen.getByText('noise radius')).toBeInTheDocument();
   });
+
+  it('evaluates and applies static and functional presets', () => {
+    const applyPreset = vi.fn();
+    const dynamicPresetVals = vi.fn(() => ({ a: 0.8, b: -0.4, epsilon: 0.05 }));
+    render(
+      <ParametersPanel
+        {...baseProps}
+        applyPreset={applyPreset}
+        systems={{
+          discrete: [
+            {
+              id: 'henon',
+              name: 'Hénon Map',
+              presets: [
+                { name: 'Standard', vals: { a: 1.4, b: 0.3 } },
+                { name: 'Random', vals: dynamicPresetVals },
+              ],
+            },
+          ],
+          continuous: [],
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Standard' }));
+    expect(applyPreset).toHaveBeenCalledWith({ a: 1.4, b: 0.3 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Random' }));
+    expect(dynamicPresetVals).toHaveBeenCalled();
+    expect(applyPreset).toHaveBeenCalledWith({ a: 0.8, b: -0.4, epsilon: 0.05 });
+  });
 });
+

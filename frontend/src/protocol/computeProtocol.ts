@@ -16,6 +16,7 @@ export const COMPUTE_TASK_KINDS = Object.freeze([
   'computeInverseGeometricOffsets',
   'computeInverseGeometricOffsetBatch',
   'getUlamTransitions',
+  'computeForwardInvariantSet',
 ] as const);
 
 type ListedComputeTaskKind = typeof COMPUTE_TASK_KINDS[number];

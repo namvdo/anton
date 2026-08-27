@@ -36,8 +36,8 @@ describe('normalizePeriodicSearchSettings', () => {
 
   it('normalizes maximum period and estimates the complete seed budget', () => {
     expect(normalizePeriodicMaxPeriod(0)).toBe(1);
-    expect(normalizePeriodicMaxPeriod(999)).toBe(20);
-    expect(normalizePeriodicMaxPeriod(Number.NaN, 999)).toBe(20);
+    expect(normalizePeriodicMaxPeriod(999)).toBe(50);
+    expect(normalizePeriodicMaxPeriod(Number.NaN, 999)).toBe(50);
     expect(estimatePeriodicGridSeedCount(5, 10, 10)).toBe(5_000);
   });
 

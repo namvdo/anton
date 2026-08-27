@@ -10,6 +10,7 @@ import {
 import type { ComputeTaskKind } from './protocol/computeProtocol';
 import type {
   ComputeTaskPayload,
+  ForwardInvariantSetComputePayload,
   GeometricOffsetBatchComputePayload,
   GeometricOffsetBatchComputeResult,
   GeometricOffsetsComputePayload,
@@ -33,6 +34,7 @@ import type {
   BistWasmModule,
   GeometricOffsetResult,
   InverseOffsetResult,
+  ForwardInvariantSetResult,
   PeriodicOrbit,
   PeriodicSearchSettings,
   UlamBox,
@@ -557,6 +559,31 @@ const getUlamTransitions = async (payload: UlamTransitionsPayload): Promise<Ulam
   return cachedUlamComputer.get_transitions(payload.index) as UlamTransition[] || [];
 };
 
+const computeForwardInvariantSet = async (
+  payload: ForwardInvariantSetComputePayload,
+): Promise<ForwardInvariantSetResult> => {
+  const wasm = await ensureWasm();
+  if (typeof wasm.computeForwardInvariantSet !== 'function') {
+    throw new Error('Forward invariant-set export is unavailable; rebuild WebAssembly');
+  }
+  const { seed, params, domain, settings } = payload;
+  return wasm.computeForwardInvariantSet(
+    seed.x,
+    seed.y,
+    seed.nx,
+    seed.ny,
+    params.a,
+    params.b,
+    params.epsilon,
+    settings.boundaryPointCount,
+    settings.forwardIterations,
+    domain.xMin,
+    domain.xMax,
+    domain.yMin,
+    domain.yMax,
+  ) as ForwardInvariantSetResult;
+};
+
 const computeGeometricOffsets = async (
   payload: GeometricOffsetsComputePayload,
 ): Promise<GeometricOffsetResult> => {
@@ -663,6 +690,9 @@ const TASK_HANDLERS: Readonly<Record<ComputeTaskKind, TaskHandler>> = Object.fre
   ),
   getUlamTransitions: payload => getUlamTransitions(
     payload as unknown as ComputeTaskPayload<'getUlamTransitions'>,
+  ),
+  computeForwardInvariantSet: payload => computeForwardInvariantSet(
+    payload as unknown as ComputeTaskPayload<'computeForwardInvariantSet'>,
   ),
 });
 

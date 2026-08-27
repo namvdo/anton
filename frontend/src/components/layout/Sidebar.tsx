@@ -12,6 +12,7 @@ import { AnimationPanel } from '../sidebar/AnimationPanel';
 import { ParameterSweepPanel } from '../sidebar/ParameterSweepPanel';
 import { GeometricOffsetsPanel } from '../sidebar/GeometricOffsetsPanel';
 import { ExperimentPanel } from '../sidebar/ExperimentPanel';
+import { InvariantSetsPanel } from '../sidebar/InvariantSetsPanel';
 import { InfoStrip } from './InfoStrip';
 import { ControlsBar } from './ControlsBar';
 import { BIST_VERSION } from '../../config/systems';
@@ -25,6 +26,7 @@ import type {
   CustomParameter,
   ExperimentStatus,
   GeometricOffsetState,
+  InvariantSetState,
   ManifoldState,
   OrbitFilters,
   PeriodicSearchSettings,
@@ -79,6 +81,9 @@ interface SidebarProps {
   canComputeInverseGeometricOffsets: boolean;
   computeInverseGeometricOffsets: () => void;
   fitInverseGeometricOffsets: () => void;
+  invariantSetState: InvariantSetState;
+  setInvariantSetState: StateSetter<InvariantSetState>;
+  computeForwardInvariantSet: () => void;
   ORBIT_COLORS: { manifold: string; stableManifold: string };
   filters: OrbitFilters;
   setFilters: StateSetter<OrbitFilters>;
@@ -182,15 +187,27 @@ export const Sidebar = (props: SidebarProps) => {
           resetViewRange={props.resetViewRange}
         />
 
-        <StartingPoint
-          type={props.type}
-          startPoint={props.manifoldState.startPoint}
-          updateStartPoint={props.updateStartPoint}
-          disabled={props.manifoldState.isRunning || animationLocksConfiguration}
-        />
+        {!(props.type === 'discrete' && props.dynamicSystem === 'henon') && (
+          <StartingPoint
+            type={props.type}
+            startPoint={props.manifoldState.startPoint}
+            updateStartPoint={props.updateStartPoint}
+            disabled={props.manifoldState.isRunning || animationLocksConfiguration}
+          />
+        )}
 
         {props.type === 'discrete' && (
           <>
+            {props.dynamicSystem === 'henon' && (
+              <InvariantSetsPanel
+                state={props.invariantSetState}
+                setState={props.setInvariantSetState}
+                initialState={props.manifoldState.startPoint}
+                updateInitialState={props.updateStartPoint}
+                epsilon={(props.appliedParams || props.params).epsilon}
+                compute={props.computeForwardInvariantSet}
+              />
+            )}
             <ManifoldsPanel
               manifoldState={props.manifoldState}
               setManifoldState={props.setManifoldState}

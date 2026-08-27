@@ -14,7 +14,7 @@ export const DEFAULT_PERIODIC_SEARCH_SETTINGS: PeriodicSearchSettings = {
 
 export const PERIODIC_SEARCH_LIMITS = {
   maxPeriodMin: 1,
-  maxPeriodMax: 20,
+  maxPeriodMax: 50,
   gridSizeMin: 2,
   gridSizeMax: 256,
   thetaGridSizeMin: 2,

@@ -46,7 +46,7 @@ export const ParametersPanel = ({
             <button
               key={p.name}
               className="preset"
-              onClick={() => applyPreset(p.vals)}
+              onClick={() => applyPreset(typeof p.vals === 'function' ? p.vals() : p.vals)}
               disabled={disabled}
             >
               {p.name}
@@ -100,7 +100,7 @@ export const ParametersPanel = ({
                 className={`p-val ${disabled ? 'disabled' : ''}`}
                 style={{ width: '100%' }}
                 type="number"
-                min="1" max="20" step="1"
+                min="1" max="50" step="1"
                 value={params.maxPeriod}
                 onChange={(e) => setParams(prev => ({ ...prev, maxPeriod: parseInt(e.target.value) || 2 }))}
                 disabled={disabled}
