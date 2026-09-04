@@ -1,6 +1,6 @@
-# ANTON
+# BOUNTY
 
-**A numerical toolbox for invariant objects with bounded noise.**
+**Bounded Uncertainty Numerical Toolbox.**
 
 ANTON is an interactive, web-based research tool for exploring invariant objects in set-valued dynamical systems with additive bounded noise. It was developed as part of the Applied Computing Project (ACP2) research course at the University of Oulu.
 
