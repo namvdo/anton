@@ -61,6 +61,7 @@ impl Display for UncertaintyRadiusError {
 
 impl Error for UncertaintyRadiusError {}
 
+/// evaluted 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct UncertaintyRadiusSample {
     radius: f64,
@@ -74,7 +75,7 @@ impl UncertaintyRadiusSample {
             return Err(UncertaintyRadiusError::InvalidRadius { radius });
         }
 
-        if !gradient.x.is_finite() || !gradient.y.is_finite() || gradient.norm().is_finite() {
+        if !gradient.x.is_finite() || !gradient.y.is_finite() || !gradient.norm().is_finite() {
             return Err(UncertaintyRadiusError::InvalidGradient { gx: gradient.x, gy: gradient.y });
         }
 
@@ -158,7 +159,7 @@ pub struct ConstantUncertaintyRadius {
 }
 
 impl ConstantUncertaintyRadius {
-    pub fn new(radius: f64, certificate: UncertaintyRadiusSampleCertificate) -> Result<Self, UncertaintyRadiusError> {
+    pub fn new(radius: f64) -> Result<Self, UncertaintyRadiusError> {
         if !radius.is_finite() || radius < 0.0 {
             return Err(UncertaintyRadiusError::InvalidRadius { radius });
         }

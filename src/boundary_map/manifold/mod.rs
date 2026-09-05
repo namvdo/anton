@@ -164,7 +164,7 @@ impl Default for ManifoldConfig {
             conv_tol: 1e-19,
             stable_tol: 1e-14,
             max_iter: 8000,
-            max_points: 700_000,
+            max_points: 1_000_000,
             time_limit: 10.0,
             inner_max: 2000,
             self_cross_tol: 0.002,

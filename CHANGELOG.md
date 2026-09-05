@@ -8,6 +8,7 @@ All notable BIST changes are recorded here. The project uses semantic versioning
 
 - Experiment bundle schema version 2 with a formal JSON Schema, complete applied solver settings, grouped results, residual diagnostics, clean/dirty source state, and explicit version-1 migration.
 - Periodic-orbit closure, unit-normal, and reduced multiplier-relation diagnostics in the boundary-map WebAssembly result.
+- State-dependent uncertainty radius fields over the unit normal bundle: an `UncertaintyRadiusField2D` trait pairing `epsilon(y)` with `grad epsilon(y)` in a single sample, constant and sinusoidal implementations, and a contractivity certificate with fail-fast validation.
 
 ### Fixed
 

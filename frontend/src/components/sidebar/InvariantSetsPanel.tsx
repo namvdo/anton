@@ -96,7 +96,7 @@ export const InvariantSetsPanel = ({
       </div>
 
       <button type="button" className="invariant-set-compute" disabled={disabled} onClick={compute}>
-        {state.isComputing ? 'Propagating…' : 'Approximate invariant boundary'}
+        {state.isComputing ? 'Computing...' : 'Approximate invariant boundary'}
       </button>
       {epsilon <= 0 && <div className="invariant-set-note">Set ε &gt; 0 before propagation.</div>}
       {state.error && <div className="invariant-set-error" role="alert">{state.error}</div>}
