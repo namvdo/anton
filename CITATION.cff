@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use BIST in research, please cite this software and the accompanying technical report."
-title: "Bounded Invariant Set Toolbox (BIST)"
+title: "Bounded Uncertainty Numerical Toolbox (BOUNTY)"
 type: software
 authors:
   - family-names: "Do"
@@ -15,3 +15,4 @@ keywords:
   - bounded invariant sets
   - boundary maps
   - WebAssembly
+  - bounded uncertainty 
