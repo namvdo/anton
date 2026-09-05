@@ -9,3 +9,4 @@ pub mod linearization;
 
 pub use crate::boundary_periodic as periodic;
 pub use crate::unstable_manifold as manifold;
+pub mod uncertainty_radius;

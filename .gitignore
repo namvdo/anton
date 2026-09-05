@@ -4,7 +4,7 @@
 venv/
 materials/
 ref/
-boundary_map/
+/boundary_map/
 
 # Python caches
 **/__pycache__/
